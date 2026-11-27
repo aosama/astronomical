@@ -100,6 +100,25 @@ impl ScriptedImageEngine {
         self.active_steps.clear();
         self.post_cleanup_memory_telemetry = Some(finalized_memory_telemetry());
     }
+
+    /// The real image engines plan every step against the ceiling they
+    /// started under, so they hold it fixed until the image ends.
+    fn refuse_while_busy_or_adopt_ceiling(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, ImageGenerationFailureReason> {
+        if !self.active_steps.is_empty() {
+            return Err(ImageGenerationFailureReason::EngineBusy);
+        }
+        lock(&self.updated_limits).push(requested_mlx_memory_ceiling_bytes);
+        Ok(MlxMemoryLimitAdjustment::new(
+            requested_mlx_memory_ceiling_bytes,
+            requested_mlx_memory_ceiling_bytes,
+            1_000,
+            ipc_protocol::ExpertMemoryMode::Resident,
+            Some(finalized_memory_telemetry()),
+        ))
+    }
 }
 
 impl ImageGenerationEngine for ScriptedImageEngine {
@@ -171,14 +190,7 @@ impl ImageGenerationEngine for ScriptedImageEngine {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, ImageGenerationFailureReason> {
-        lock(&self.updated_limits).push(requested_mlx_memory_ceiling_bytes);
-        Ok(MlxMemoryLimitAdjustment::new(
-            requested_mlx_memory_ceiling_bytes,
-            requested_mlx_memory_ceiling_bytes,
-            1_000,
-            ipc_protocol::ExpertMemoryMode::Resident,
-            Some(finalized_memory_telemetry()),
-        ))
+        self.refuse_while_busy_or_adopt_ceiling(requested_mlx_memory_ceiling_bytes)
     }
 }
 
@@ -298,6 +310,28 @@ pub(super) async fn start_idle_worker(
         memory_ceiling_bytes,
     ))
     .await
+}
+
+/// Starts an idle worker over one scripted image engine and asks it to swap
+/// the image model in; the caller reads the swap's answer.
+pub(super) async fn start_worker_swapping_in(
+    image_engine: ScriptedImageEngine,
+) -> (
+    ProtocolReader<tokio::io::ReadHalf<tokio::io::DuplexStream>>,
+    ProtocolWriter<tokio::io::WriteHalf<tokio::io::DuplexStream>>,
+    JoinHandle<Result<(), WorkerRuntimeError>>,
+) {
+    let (mut events, mut commands, worker) =
+        start_idle_worker(vec![Ok(ScriptedRuntime::Image(image_engine))], 8_000).await;
+    assert!(matches!(
+        next_event(&mut events).await,
+        WorkerEvent::Idle { .. }
+    ));
+    commands
+        .send_command(&swap_image_command())
+        .await
+        .expect("the image model swap should reach the worker");
+    (events, commands, worker)
 }
 
 /// A worker whose model swaps hand out the scripted chat and image runtimes.

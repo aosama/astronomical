@@ -4,107 +4,132 @@ use std::{
 };
 
 use ipc_protocol::WorkerEvent;
-use tokio::time::{Instant, timeout};
+use tokio::time::timeout;
 
 use crate::worker::event_handler;
-use crate::worker::loop_types::ActiveWorkerRequest;
+use crate::worker::event_reaction::cancel_active_request;
+use crate::worker::loop_types::{ActiveWorkerRequest, WorkerLoopRuntime};
 use crate::worker::process::containment;
-use crate::{
-    CompletionAttributionLog, GenerationPerformanceLog, GenerationStartError, WorkerControlError,
-    WorkerHealthSnapshot, WorkerProcess,
-};
-use tokio::sync::oneshot;
+use crate::{WorkerControlError, WorkerHealthSnapshot, WorkerProcess};
 
 /// Completion state returned by a live MLX memory-limit request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MlxMemoryLimitUpdateOutcome {
     Applied,
-    Queued,
     Rejected,
 }
 
-/// A live ceiling raise that waited because a generation was already running.
-pub(in crate::worker) struct PendingMlxMemoryLimitUpdate {
-    pub effective_mlx_memory_ceiling_bytes: u64,
-    pub configuration_generation: String,
-}
-
-#[allow(clippy::too_many_arguments)]
+/// Sends a live ceiling to the worker and waits for its answer, during a
+/// reply or not (issue #2681).
+///
+/// The worker answers between two steps of a running request, so the wait
+/// keeps handling that request's events: a reply's text still reaches its
+/// client while the limit moves. A client that stops reading during the wait
+/// has its request cancelled once the worker has answered, as the worker loop
+/// would have done, so the answer itself is never lost.
 pub(in crate::worker) async fn apply_mlx_memory_limit(
-    worker_process: &mut WorkerProcess,
+    runtime: &mut WorkerLoopRuntime,
     effective_mlx_memory_ceiling_bytes: u64,
     configuration_generation: String,
-    memory_limit_update_timeout: Duration,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    is_ready: &mut bool,
-    model_load_deadline: &mut Option<Instant>,
-    active_request: &mut Option<ActiveWorkerRequest>,
-    performance_log: &mut GenerationPerformanceLog,
-    completion_log: &mut CompletionAttributionLog,
 ) -> Result<MlxMemoryLimitUpdateOutcome, WorkerControlError> {
+    let memory_limit_update_timeout = runtime.model_load_timeout;
     let configuration_generation_for_relaunch = configuration_generation.clone();
-    let update_outcome = timeout(memory_limit_update_timeout, async {
-        worker_process
-            .update_mlx_memory_limit(effective_mlx_memory_ceiling_bytes, configuration_generation)
-            .await?;
-        loop {
-            let worker_event = worker_process
-                .next_event()
-                .await?
-                .ok_or(WorkerControlError::WorkerEventStreamClosed)?;
-            let memory_limit_update_outcome = match &worker_event {
-                WorkerEvent::MlxMemoryLimitChanged { .. } => {
-                    Some(MlxMemoryLimitUpdateOutcome::Applied)
-                }
-                WorkerEvent::MlxMemoryLimitRejected { .. } => {
-                    Some(MlxMemoryLimitUpdateOutcome::Rejected)
-                }
-                _ => None,
-            };
-            event_handler::handle_worker_event(
-                worker_event,
-                health_snapshot,
-                is_ready,
-                model_load_deadline,
-                active_request,
-                performance_log,
-                completion_log,
-            )?;
-            if let Some(memory_limit_update_outcome) = memory_limit_update_outcome {
-                return Ok(memory_limit_update_outcome);
-            }
-        }
-    })
-    .await;
-    match update_outcome {
-        Ok(memory_limit_update_outcome) => adopt_applied_ceiling_into_relaunch_snapshot(
-            worker_process,
-            memory_limit_update_outcome,
+    let mut reply_stream_stopped_consuming = false;
+    let update_outcome = timeout(
+        memory_limit_update_timeout,
+        send_and_wait_for_memory_limit_answer(
+            runtime,
             effective_mlx_memory_ceiling_bytes,
-            &configuration_generation_for_relaunch,
+            configuration_generation,
+            &mut reply_stream_stopped_consuming,
         ),
-        Err(_) => {
-            let memory_limit_update_timeout_millis = memory_limit_update_timeout.as_millis();
-            containment::contain_worker_failure(
-                worker_process,
-                health_snapshot,
-                active_request,
-                WorkerControlError::MlxMemoryLimitUpdateTimeout {
-                    memory_limit_update_timeout_millis,
-                },
-            )
-            .await;
-            *is_ready = false;
-            Err(WorkerControlError::MlxMemoryLimitUpdateTimeout {
-                memory_limit_update_timeout_millis,
-            })
+    )
+    .await;
+    let Ok(memory_limit_update_outcome) = update_outcome else {
+        return Err(
+            contain_timed_out_memory_limit_update(runtime, memory_limit_update_timeout).await,
+        );
+    };
+    if reply_stream_stopped_consuming {
+        tracing::warn!("HTTP stream stopped consuming output; cancelling request");
+        cancel_active_request(runtime).await;
+    }
+    adopt_applied_ceiling_into_relaunch_snapshot(
+        &mut runtime.worker_process,
+        memory_limit_update_outcome,
+        effective_mlx_memory_ceiling_bytes,
+        &configuration_generation_for_relaunch,
+    )
+}
+
+async fn send_and_wait_for_memory_limit_answer(
+    runtime: &mut WorkerLoopRuntime,
+    effective_mlx_memory_ceiling_bytes: u64,
+    configuration_generation: String,
+    reply_stream_stopped_consuming: &mut bool,
+) -> Result<MlxMemoryLimitUpdateOutcome, WorkerControlError> {
+    runtime
+        .worker_process
+        .update_mlx_memory_limit(effective_mlx_memory_ceiling_bytes, configuration_generation)
+        .await?;
+    loop {
+        let worker_event = runtime
+            .worker_process
+            .next_event()
+            .await?
+            .ok_or(WorkerControlError::WorkerEventStreamClosed)?;
+        let memory_limit_update_outcome = memory_limit_answer(&worker_event);
+        match event_handler::handle_worker_event(
+            worker_event,
+            &runtime.health_snapshot,
+            &mut runtime.is_ready,
+            &mut runtime.model_load_deadline,
+            &mut runtime.active_generation,
+            &mut runtime.performance_log,
+            &mut runtime.completion_log,
+        ) {
+            Ok(()) => {}
+            Err(WorkerControlError::StreamBackpressure) => *reply_stream_stopped_consuming = true,
+            Err(event_handling_error) => return Err(event_handling_error),
+        }
+        if let Some(memory_limit_update_outcome) = memory_limit_update_outcome {
+            return Ok(memory_limit_update_outcome);
         }
     }
 }
 
+/// The worker's answer to a live ceiling, or `None` for any other event.
+fn memory_limit_answer(worker_event: &WorkerEvent) -> Option<MlxMemoryLimitUpdateOutcome> {
+    match worker_event {
+        WorkerEvent::MlxMemoryLimitChanged { .. } => Some(MlxMemoryLimitUpdateOutcome::Applied),
+        WorkerEvent::MlxMemoryLimitRejected { .. } => Some(MlxMemoryLimitUpdateOutcome::Rejected),
+        _ => None,
+    }
+}
+
+async fn contain_timed_out_memory_limit_update(
+    runtime: &mut WorkerLoopRuntime,
+    memory_limit_update_timeout: Duration,
+) -> WorkerControlError {
+    let memory_limit_update_timeout_millis = memory_limit_update_timeout.as_millis();
+    containment::contain_worker_failure(
+        &mut runtime.worker_process,
+        &runtime.health_snapshot,
+        &mut runtime.active_generation,
+        WorkerControlError::MlxMemoryLimitUpdateTimeout {
+            memory_limit_update_timeout_millis,
+        },
+    )
+    .await;
+    runtime.is_ready = false;
+    WorkerControlError::MlxMemoryLimitUpdateTimeout {
+        memory_limit_update_timeout_millis,
+    }
+}
+
 /// Stores the requested ceiling on the launch snapshot only after the worker
-/// adopts it. A queued, rejected, or failed update must leave the snapshot
-/// that the next process boots from unchanged.
+/// adopts it. A rejected or failed update must leave the snapshot that the
+/// next process boots from unchanged.
 fn adopt_applied_ceiling_into_relaunch_snapshot(
     worker_process: &mut WorkerProcess,
     memory_limit_update_outcome: Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>,
@@ -122,8 +147,7 @@ fn adopt_applied_ceiling_into_relaunch_snapshot(
 
 /// Reports whether this update adopted a ceiling the running worker will keep.
 ///
-/// A queued raise has not landed yet, and the pending update still lives on
-/// the worker loop. A rejection or a control error must not overwrite the ceiling the next
+/// A rejection or a control error must not overwrite the ceiling the next
 /// process boots from.
 fn memory_limit_outcome_was_applied(
     memory_limit_update_outcome: &Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>,
@@ -154,98 +178,6 @@ pub(in crate::worker) async fn contain_mlx_memory_limit_failure(
         .await;
     }
     *is_ready = false;
-}
-
-/// Applies a queued live ceiling raise now that the worker is idle.
-///
-/// Issue #515: the next Generate must not be admitted against the old
-/// ceiling after the user has already asked for more RAM. Call this both
-/// at the idle loop head and immediately before starting any generation
-/// (chat, image, embeddings, decisions or speech), because `select` can
-/// deliver a Generate that was sitting in the channel beside the raise.
-#[allow(clippy::too_many_arguments)]
-pub(in crate::worker) async fn apply_pending_mlx_memory_limit_if_idle(
-    pending_mlx_memory_limit_update: &mut Option<PendingMlxMemoryLimitUpdate>,
-    worker_process: &mut WorkerProcess,
-    model_load_timeout: Duration,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    is_ready: &mut bool,
-    model_load_deadline: &mut Option<Instant>,
-    active_generation: &mut Option<ActiveWorkerRequest>,
-    performance_log: &mut GenerationPerformanceLog,
-    completion_log: &mut CompletionAttributionLog,
-) -> Result<Option<MlxMemoryLimitUpdateOutcome>, WorkerControlError> {
-    let Some(pending_memory_limit_update) = pending_mlx_memory_limit_update.take() else {
-        return Ok(None);
-    };
-    let update_outcome = apply_mlx_memory_limit(
-        worker_process,
-        pending_memory_limit_update.effective_mlx_memory_ceiling_bytes,
-        pending_memory_limit_update.configuration_generation,
-        model_load_timeout,
-        health_snapshot,
-        is_ready,
-        model_load_deadline,
-        active_generation,
-        performance_log,
-        completion_log,
-    )
-    .await?;
-    Ok(Some(update_outcome))
-}
-
-/// Applies a queued ceiling raise, then reports whether generation may start.
-///
-/// Returns `Some(start_sender)` when the request may proceed. Returns `None`
-/// after refusing the start (rejected raise or control failure). The caller
-/// must `continue` the worker loop when this returns `None`.
-#[allow(clippy::too_many_arguments)]
-pub(in crate::worker) async fn take_generation_start_after_pending_memory_limit(
-    pending_mlx_memory_limit_update: &mut Option<PendingMlxMemoryLimitUpdate>,
-    worker_process: &mut WorkerProcess,
-    model_load_timeout: Duration,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    is_ready: &mut bool,
-    model_load_deadline: &mut Option<Instant>,
-    active_generation: &mut Option<ActiveWorkerRequest>,
-    performance_log: &mut GenerationPerformanceLog,
-    completion_log: &mut CompletionAttributionLog,
-    start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
-) -> Option<oneshot::Sender<Result<(), GenerationStartError>>> {
-    match apply_pending_mlx_memory_limit_if_idle(
-        pending_mlx_memory_limit_update,
-        worker_process,
-        model_load_timeout,
-        health_snapshot,
-        is_ready,
-        model_load_deadline,
-        active_generation,
-        performance_log,
-        completion_log,
-    )
-    .await
-    {
-        Ok(None)
-        | Ok(Some(MlxMemoryLimitUpdateOutcome::Applied | MlxMemoryLimitUpdateOutcome::Queued)) => {
-            Some(start_sender)
-        }
-        Ok(Some(MlxMemoryLimitUpdateOutcome::Rejected)) => {
-            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-            None
-        }
-        Err(memory_limit_error) => {
-            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-            contain_mlx_memory_limit_failure(
-                worker_process,
-                health_snapshot,
-                active_generation,
-                is_ready,
-                memory_limit_error,
-            )
-            .await;
-            None
-        }
-    }
 }
 
 #[cfg(test)]

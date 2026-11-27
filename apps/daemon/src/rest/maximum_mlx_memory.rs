@@ -21,7 +21,6 @@ struct MaximumMlxMemoryResponse {
     effective_mlx_memory_ceiling_bytes: u64,
     machine_mlx_memory_ceiling_bytes: u64,
     minimum_mlx_memory_ceiling_bytes: u64,
-    pending_mlx_memory_ceiling_bytes: Option<u64>,
     message: String,
 }
 
@@ -37,22 +36,6 @@ pub(crate) async fn update_maximum_mlx_memory(
     };
     let _configuration_transition_guard =
         application_state.configuration_transition_lock.lock().await;
-    let mut pending_memory_config_generation = application_state
-        .pending_memory_config_generation
-        .lock()
-        .await;
-    if pending_memory_config_generation.is_some() {
-        return (
-            StatusCode::CONFLICT,
-            Json(response_document(
-                maximum_mlx_memory_request.maximum_mlx_memory_gb,
-                &worker_handle.worker_health_snapshot(),
-                "Another memory change is waiting for the current reply to finish. Try again after it."
-                    .to_owned(),
-            )),
-        )
-            .into_response();
-    }
     let worker_health_snapshot = worker_handle.worker_health_snapshot();
     let requested_mlx_memory_ceiling_bytes = match requested_ceiling_bytes(
         maximum_mlx_memory_request.maximum_mlx_memory_gb,
@@ -85,8 +68,6 @@ pub(crate) async fn update_maximum_mlx_memory(
         prior_config_bytes: _,
         candidate_config_bytes,
     } = config_update;
-    *pending_memory_config_generation =
-        Some(candidate_resolved_config.configuration_generation.clone());
     worker_handle.stage_memory_configuration_generation(
         candidate_resolved_config.configuration_generation.clone(),
     );
@@ -94,9 +75,7 @@ pub(crate) async fn update_maximum_mlx_memory(
         &application_state,
         worker_handle,
         runtime_config_resolver,
-        &mut pending_memory_config_generation,
         &candidate_resolved_config,
-        prior_resolved_config,
         candidate_config_bytes,
         requested_mlx_memory_ceiling_bytes,
         maximum_mlx_memory_request.maximum_mlx_memory_gb,
@@ -285,18 +264,13 @@ fn commit_candidate_if_memory_only(
     Ok(())
 }
 
-/// Applies the staged memory limit to the live worker and answers with the
-/// outcome-specific response. One unit per update outcome; the shared
-/// pending-generation guard travels by reference so its liveness matches the
-/// inlined flow exactly.
-#[allow(clippy::too_many_arguments)]
+/// Applies the staged memory limit to the live worker, during a reply or
+/// not, and answers with the outcome-specific response.
 async fn apply_worker_memory_update(
     application_state: &ApplicationState,
     worker_handle: &crate::worker::handle::WorkerHandle,
     runtime_config_resolver: &crate::config::config_reload::ResolvedRuntimeConfigResolver,
-    pending_memory_config_generation: &mut tokio::sync::MutexGuard<'_, Option<String>>,
     candidate_resolved_config: &crate::ResolvedRuntimeConfig,
-    prior_resolved_config: Option<crate::ResolvedRuntimeConfig>,
     candidate_config_bytes: Vec<u8>,
     requested_mlx_memory_ceiling_bytes: u64,
     maximum_mlx_memory_gb: Option<u64>,
@@ -308,25 +282,18 @@ async fn apply_worker_memory_update(
         )
         .await
     {
-        Ok(
-            update_outcome @ (MlxMemoryLimitUpdateOutcome::Applied
-            | MlxMemoryLimitUpdateOutcome::Queued),
-        ) => applied_memory_update_response(
+        Ok(MlxMemoryLimitUpdateOutcome::Applied) => applied_memory_update_response(
             application_state,
             worker_handle,
             runtime_config_resolver,
-            pending_memory_config_generation,
             candidate_resolved_config,
-            prior_resolved_config,
-            candidate_config_bytes,
-            update_outcome,
+            &candidate_config_bytes,
             maximum_mlx_memory_gb,
         ),
         Ok(MlxMemoryLimitUpdateOutcome::Rejected) => rejected_memory_update_response(
             application_state,
             worker_handle,
             runtime_config_resolver,
-            pending_memory_config_generation,
             candidate_resolved_config,
             maximum_mlx_memory_gb,
         ),
@@ -334,7 +301,6 @@ async fn apply_worker_memory_update(
             application_state,
             worker_handle,
             runtime_config_resolver,
-            pending_memory_config_generation,
             candidate_resolved_config,
             worker_control_error,
             maximum_mlx_memory_gb,
@@ -342,83 +308,49 @@ async fn apply_worker_memory_update(
     }
 }
 
-/// The applied-or-queued outcome: record the generation, commit the persisted
-/// snapshots, spawn the idle reconciler when queued, and answer with the
-/// queued-vs-applied status. Mirrors the inlined `Applied | Queued` arm.
-#[allow(clippy::too_many_arguments)]
+/// The applied outcome: record the generation, commit the persisted
+/// snapshots, and answer with the ceiling the worker now runs under.
 fn applied_memory_update_response(
     application_state: &ApplicationState,
     worker_handle: &crate::worker::handle::WorkerHandle,
     runtime_config_resolver: &crate::config::config_reload::ResolvedRuntimeConfigResolver,
-    pending_memory_config_generation: &mut tokio::sync::MutexGuard<'_, Option<String>>,
     candidate_resolved_config: &crate::ResolvedRuntimeConfig,
-    prior_resolved_config: Option<crate::ResolvedRuntimeConfig>,
-    candidate_config_bytes: Vec<u8>,
-    update_outcome: MlxMemoryLimitUpdateOutcome,
+    candidate_config_bytes: &[u8],
     maximum_mlx_memory_gb: Option<u64>,
 ) -> Response {
     worker_handle.record_memory_configuration_generation(
         candidate_resolved_config.configuration_generation.clone(),
-        update_outcome,
+        MlxMemoryLimitUpdateOutcome::Applied,
     );
     crate::config::maximum_mlx_memory_transaction::commit_applied_config_snapshots(
         application_state,
         runtime_config_resolver,
         candidate_resolved_config,
-        &candidate_config_bytes,
+        candidate_config_bytes,
     );
-    if update_outcome == MlxMemoryLimitUpdateOutcome::Queued {
-        tokio::spawn(
-            crate::config::maximum_mlx_memory_transaction::reconcile_queued_memory_config(
-                application_state.clone(),
-                candidate_resolved_config.clone(),
-                candidate_config_bytes,
-                prior_resolved_config,
-            ),
-        );
-    } else {
-        **pending_memory_config_generation = None;
-    }
-    let updated_worker_health_snapshot = worker_handle.worker_health_snapshot();
-    let is_queued = updated_worker_health_snapshot
-        .pending_mlx_memory_ceiling_bytes
-        .is_some();
-    let status_code = if is_queued {
-        StatusCode::ACCEPTED
-    } else {
-        StatusCode::OK
-    };
     // Both screens show this sentence to the person who moved the control,
     // so it names the setting as they see it, not the engine's internals.
-    let message = if is_queued {
-        "Maximum model RAM changes when the current reply finishes."
-    } else {
-        "Maximum model RAM updated."
-    };
     (
-        status_code,
+        StatusCode::OK,
         Json(response_document(
             maximum_mlx_memory_gb,
-            &updated_worker_health_snapshot,
-            message.to_owned(),
+            &worker_handle.worker_health_snapshot(),
+            "Maximum model RAM updated.".to_owned(),
         )),
     )
         .into_response()
 }
 
-/// The rejected outcome: the worker refused the ceiling; clear the pending
-/// generation, retain the persisted intent, and answer with the worker's own
-/// limit error. Mirrors the inlined `Rejected` arm.
-#[allow(clippy::too_many_arguments)]
+/// The rejected outcome: the worker refused the ceiling; retain the persisted
+/// intent and answer with the worker's own limit error, which names the
+/// memory the model needs.
 fn rejected_memory_update_response(
     application_state: &ApplicationState,
     worker_handle: &crate::worker::handle::WorkerHandle,
     runtime_config_resolver: &crate::config::config_reload::ResolvedRuntimeConfigResolver,
-    pending_memory_config_generation: &mut tokio::sync::MutexGuard<'_, Option<String>>,
     candidate_resolved_config: &crate::ResolvedRuntimeConfig,
     maximum_mlx_memory_gb: Option<u64>,
 ) -> Response {
-    **pending_memory_config_generation = None;
     worker_handle.record_memory_configuration_generation(
         candidate_resolved_config.configuration_generation.clone(),
         MlxMemoryLimitUpdateOutcome::Rejected,
@@ -438,20 +370,16 @@ fn rejected_memory_update_response(
     )
 }
 
-/// The control-error outcome: the update channel itself failed; clear the
-/// pending generation, retain the persisted intent, and answer 500. Mirrors
-/// the inlined error arm.
-#[allow(clippy::too_many_arguments)]
+/// The control-error outcome: the update channel itself failed; retain the
+/// persisted intent and answer 500.
 fn memory_update_error_response(
     application_state: &ApplicationState,
     worker_handle: &crate::worker::handle::WorkerHandle,
     runtime_config_resolver: &crate::config::config_reload::ResolvedRuntimeConfigResolver,
-    pending_memory_config_generation: &mut tokio::sync::MutexGuard<'_, Option<String>>,
     candidate_resolved_config: &crate::ResolvedRuntimeConfig,
     worker_control_error: crate::WorkerControlError,
     maximum_mlx_memory_gb: Option<u64>,
 ) -> Response {
-    **pending_memory_config_generation = None;
     worker_handle.record_memory_configuration_generation(
         candidate_resolved_config.configuration_generation.clone(),
         MlxMemoryLimitUpdateOutcome::Rejected,
@@ -509,7 +437,6 @@ fn response_document(
         effective_mlx_memory_ceiling_bytes: worker_health_snapshot.mlx_memory_ceiling_bytes,
         machine_mlx_memory_ceiling_bytes: worker_health_snapshot.machine_mlx_memory_ceiling_bytes,
         minimum_mlx_memory_ceiling_bytes: worker_health_snapshot.minimum_mlx_memory_ceiling_bytes,
-        pending_mlx_memory_ceiling_bytes: worker_health_snapshot.pending_mlx_memory_ceiling_bytes,
         message,
     }
 }

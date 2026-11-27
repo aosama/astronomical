@@ -201,7 +201,6 @@ struct DaemonStatusDocument: Codable, Equatable {
   let wiredResidencyBudgetBytes: UInt64?
   let minimumMlxMemoryCeilingBytes: UInt64
   let configuredMaximumMlxMemoryGigabytes: UInt64?
-  let pendingMlxMemoryCeilingBytes: UInt64?
   let mlxMemoryLimitError: String?
   /// The person's choice from config.json: whether progress and speed are written beside the
   /// menu bar icon. An engine that does not report it means the icon alone.
@@ -235,7 +234,6 @@ struct DaemonStatusDocument: Codable, Equatable {
     case wiredResidencyBudgetBytes = "wired_residency_budget_bytes"
     case minimumMlxMemoryCeilingBytes = "minimum_mlx_memory_ceiling_bytes"
     case configuredMaximumMlxMemoryGigabytes = "configured_maximum_mlx_memory_gb"
-    case pendingMlxMemoryCeilingBytes = "pending_mlx_memory_ceiling_bytes"
     case mlxMemoryLimitError = "mlx_memory_limit_error"
     case menuBarShowsProgressAndSpeed = "menu_bar_shows_progress_and_speed"
     case menuBarShowsTechnicalDetails = "menu_bar_shows_technical_details"
@@ -298,8 +296,6 @@ struct DaemonStatusDocument: Codable, Equatable {
     }
     configuredMaximumMlxMemoryGigabytes =
       try container.decodeIfPresent(UInt64.self, forKey: .configuredMaximumMlxMemoryGigabytes)
-    pendingMlxMemoryCeilingBytes =
-      try container.decodeIfPresent(UInt64.self, forKey: .pendingMlxMemoryCeilingBytes)
     mlxMemoryLimitError = try container.decodeIfPresent(String.self, forKey: .mlxMemoryLimitError)
     menuBarShowsProgressAndSpeed =
       try container.decodeIfPresent(Bool.self, forKey: .menuBarShowsProgressAndSpeed) ?? false
@@ -335,7 +331,6 @@ struct DaemonStatusDocument: Codable, Equatable {
     wiredResidencyBudgetBytes: UInt64? = nil,
     minimumMlxMemoryCeilingBytes: UInt64 = 1,
     configuredMaximumMlxMemoryGigabytes: UInt64? = nil,
-    pendingMlxMemoryCeilingBytes: UInt64? = nil,
     mlxMemoryLimitError: String? = nil,
     menuBarShowsProgressAndSpeed: Bool = false,
     menuBarShowsTechnicalDetails: Bool = false,
@@ -361,7 +356,6 @@ struct DaemonStatusDocument: Codable, Equatable {
     self.wiredResidencyBudgetBytes = wiredResidencyBudgetBytes
     self.minimumMlxMemoryCeilingBytes = minimumMlxMemoryCeilingBytes
     self.configuredMaximumMlxMemoryGigabytes = configuredMaximumMlxMemoryGigabytes
-    self.pendingMlxMemoryCeilingBytes = pendingMlxMemoryCeilingBytes
     self.mlxMemoryLimitError = mlxMemoryLimitError
     self.menuBarShowsProgressAndSpeed = menuBarShowsProgressAndSpeed
     self.menuBarShowsTechnicalDetails = menuBarShowsTechnicalDetails

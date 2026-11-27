@@ -101,7 +101,6 @@ pub(crate) async fn run_worker(
         performance_log,
         completion_log,
         model_policy_catalog,
-        pending_mlx_memory_limit_update: None,
         pending_astro_ssd_prompt_cache_clear: None,
         active_generation_permits,
         generation_queue_permits,

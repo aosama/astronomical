@@ -17,6 +17,7 @@ use ipc_protocol::{
 mod scripted_worker_image;
 
 mod fixture_chat_capabilities;
+mod fixture_memory_limit_answers;
 mod scripted_worker_decisions;
 mod scripted_worker_single_shot;
 mod scripted_worker_speech;
@@ -320,23 +321,18 @@ async fn answer_memory_limit_update(
     if effective_mlx_memory_ceiling_bytes == 31 * 1_073_741_824 {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         event_writer
-            .send_event(&WorkerEvent::MlxMemoryLimitRejected {
-                requested_mlx_memory_ceiling_bytes: effective_mlx_memory_ceiling_bytes,
-                minimum_mlx_memory_ceiling_bytes: 1,
-                machine_mlx_memory_ceiling_bytes: 40_000_000_000,
-                reason: "fixture rejected the requested limit".to_owned(),
-            })
+            .send_event(&fixture_memory_limit_answers::refused_memory_limit(
+                effective_mlx_memory_ceiling_bytes,
+                1,
+                "fixture rejected the requested limit",
+            ))
             .await?;
         return Ok(());
     }
     event_writer
-        .send_event(&WorkerEvent::MlxMemoryLimitChanged {
+        .send_event(&fixture_memory_limit_answers::applied_memory_limit(
             effective_mlx_memory_ceiling_bytes,
-            minimum_mlx_memory_ceiling_bytes: 1,
-            expert_memory_mode: ipc_protocol::ExpertMemoryMode::Resident,
-            mlx_memory_snapshot: None,
-            expert_residency: None,
-        })
+        ))
         .await?;
     if let Some(runtime_configuration) = worker_state.acknowledged_runtime_configuration.as_mut() {
         runtime_configuration.configuration_generation = configuration_generation;

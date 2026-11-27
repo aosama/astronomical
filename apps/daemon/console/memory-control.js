@@ -42,25 +42,11 @@ function appliedMaximumGigabytes(statusDocument, bounds) {
     return Math.min(configuredGigabytes, bounds.maximumGigabytes);
 }
 
-// A change waiting for the reply being written to finish. It names the limit
-// the engine will really install, never the raw request: "Use Max" asks for
-// the whole Mac's memory, which the engine lowers to what macOS lets it keep.
-function queuedMemoryLimitNotice(statusDocument) {
-    const pendingBytes = statusDocument.pending_mlx_memory_ceiling_bytes;
-    if (!pendingBytes) { return ""; }
-    const installedBytes = mlxMemoryCeilingTheEngineWillInstall(
-        pendingBytes, statusDocument.wired_residency_budget_bytes);
-    return "Changes to " + formatGigabytes(installedBytes) + " when the current reply finishes.";
-}
-
-// Something worth saying: an error, a queued change, or an explicit request
-// the engine serves below. "Use Max" landing under the machine ceiling is the
-// request being honoured, so it never counts as a cap.
+// Something worth saying: an error, or an explicit request the engine serves
+// below. "Use Max" landing under the machine ceiling is the request being
+// honoured, so it never counts as a cap.
 function memoryLimitNotice(statusDocument) {
     if (statusDocument.mlx_memory_limit_error) { return statusDocument.mlx_memory_limit_error; }
-    if (statusDocument.pending_mlx_memory_ceiling_bytes) {
-        return queuedMemoryLimitNotice(statusDocument);
-    }
     const configuredGigabytes = statusDocument.configured_maximum_mlx_memory_gb;
     const liveCeilingBytes = statusDocument.mlx_memory_ceiling_bytes || 0;
     if (configuredGigabytes === null || configuredGigabytes === undefined || liveCeilingBytes === 0) {
@@ -70,6 +56,13 @@ function memoryLimitNotice(statusDocument) {
         return "Capped at " + formatGigabytes(liveCeilingBytes) + " on this Mac";
     }
     return "";
+}
+
+// The engine answers a limit change at once, even while a reply is being
+// written, so a refusal is known straight away. The field's border turns red
+// until a later change is accepted, beside the notice that says what is needed.
+function memoryLimitWasRefused(statusDocument) {
+    return Boolean(statusDocument.mlx_memory_limit_error);
 }
 
 function renderMemoryLimitButtons(statusDocument) {
@@ -100,23 +93,17 @@ function renderMemoryLimitControl(statusDocument) {
     if (!maximumMlxMemoryEditIsActive) {
         input.value = String(appliedMaximumGigabytes(statusDocument, bounds));
     }
+    input.ariaInvalid = memoryLimitWasRefused(statusDocument) ? "true" : "false";
     renderMemoryLimitButtons(statusDocument);
     document.getElementById("maximum-mlx-memory-status").textContent =
         "Up to " + bounds.maximumGigabytes + " GB on this Mac";
     const noticeElement = document.getElementById("maximum-mlx-memory-notice");
     noticeElement.textContent = memoryLimitNotice(statusDocument);
-    // A queued change is the control working as designed, so it drops the
-    // warning colour an error or a cap keeps.
-    const isOnlyQueued = !statusDocument.mlx_memory_limit_error
-        && Boolean(statusDocument.pending_mlx_memory_ceiling_bytes);
-    noticeElement.className = isOnlyQueued
-        ? "mlx-memory-control-notice mlx-memory-control-notice-calm"
-        : "mlx-memory-control-notice";
     noticeElement.hidden = noticeElement.textContent === "";
 }
 
 // Feedback stays inside the control's own panel, next to the button pressed.
-// An empty message hides it, as for a change the notice already names.
+// An empty message hides it.
 function showMemoryControlFeedback(message, feedbackKind) {
     const feedbackElement = document.getElementById("maximum-mlx-memory-feedback");
     feedbackElement.textContent = message;
@@ -160,13 +147,7 @@ async function updateMaximumMlxMemory(maximumMlxMemoryGigabytes) {
         document.dispatchEvent(new CustomEvent(CONFIG_FILE_WRITTEN_EVENT));
         if (!response.ok) { showMemoryControlFeedback(responseDocument.message || "Memory limit update failed", "error"); return; }
         maximumMlxMemoryEditIsActive = false;
-        // A change that waits for the current reply is already named, quietly,
-        // by the notice under the input, so it gets no second, coloured message.
-        if (response.status === 202) {
-            showMemoryControlFeedback("", "success");
-        } else {
-            showMemoryControlFeedback(responseDocument.message || "Maximum model RAM updated.", "success");
-        }
+        showMemoryControlFeedback(responseDocument.message || "Maximum model RAM updated.", "success");
         await pollStatus();
     } catch (fetchError) {
         showMemoryControlFeedback("Memory limit update failed: " + fetchError.message, "error");

@@ -58,6 +58,8 @@
 //!   reports and sparse-expert ownership. These observe and decide nothing;
 //!   they live here (issue #2340) so engines in crates below the serving
 //!   crate, such as speech, can fill them in.
+//! - `live_memory_limit` — why an engine that holds a model refuses a new
+//!   ceiling (`LiveMemoryLimitRefusal`) and the floor rule they share.
 //! - `utilization` — why part of the ceiling is unused
 //!   (`MemoryCeilingUtilization`), and `forward_pass_utilization`, that split
 //!   for engines whose requests keep nothing between them.
@@ -70,6 +72,7 @@ pub mod forward_pass_utilization;
 pub mod geometry_floor;
 pub mod ledger;
 pub mod linux_memory_bound;
+pub mod live_memory_limit;
 pub mod model_memory;
 pub mod neural_engine_admission;
 pub mod neural_engine_program_memory_watch;
@@ -92,6 +95,8 @@ mod simulation;
 
 #[cfg(test)]
 mod ceiling_boundary_tests;
+#[cfg(test)]
+mod live_memory_limit_tests;
 #[cfg(test)]
 mod memory_policy_tests;
 #[cfg(test)]

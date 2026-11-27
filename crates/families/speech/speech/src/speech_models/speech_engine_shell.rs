@@ -8,7 +8,9 @@
 use std::path::{Path, PathBuf};
 
 use config::SpeechModelCapabilities;
-use memory_policy::telemetry::MlxMemoryTelemetry;
+use memory_policy::live_memory_limit::{LiveMemoryLimitEngine, LiveMemoryLimitRefusal};
+use memory_policy::telemetry::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
+use model_primitives::live_memory_ceiling::move_engine_ceiling;
 use runtime_integration::MlxRuntime;
 use speech_contract::{SpeechFailure, SpeechRequest};
 
@@ -192,6 +194,40 @@ where
     fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         let loaded = self.loaded.as_ref()?;
         loaded.memory_account.observe(&loaded.runtime)
+    }
+}
+
+impl<Family> LiveMemoryLimitEngine for SpeechEngineShell<Family>
+where
+    Family: SpeechFamily,
+    LoadedSpeech<Family::FamilyParts>: SegmentSpeaker<Family::Segment, Family::RequestContext>,
+{
+    fn update_mlx_memory_limit(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, LiveMemoryLimitRefusal> {
+        // Taken between two segments as well as between requests (issue
+        // #2681): what the floor reads as held already counts the request's
+        // own memory, so a ceiling below it is refused and the speech goes on.
+        let loaded_runtime = match self.loaded.as_mut() {
+            Some(loaded) => Some(&mut loaded.runtime),
+            None => None,
+        };
+        let applied_ceiling = move_engine_ceiling(
+            loaded_runtime,
+            &mut self.settings.effective_mlx_memory_ceiling_bytes,
+            &mut self.settings.mlx_buffer_cache_limit_bytes,
+            requested_mlx_memory_ceiling_bytes,
+        )?;
+        if let Some(loaded) = self.loaded.as_mut() {
+            loaded
+                .memory_account
+                .set_effective_mlx_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes);
+        }
+        Ok(applied_ceiling.into_adjustment(
+            requested_mlx_memory_ceiling_bytes,
+            self.collect_mlx_memory_telemetry(),
+        ))
     }
 }
 

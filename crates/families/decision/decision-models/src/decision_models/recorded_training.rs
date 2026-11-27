@@ -53,6 +53,8 @@ impl RecordedTrainingEngine {
     }
 }
 
+impl memory_policy::live_memory_limit::LiveMemoryLimitEngine for RecordedTrainingEngine {}
+
 impl DecisionEngine for RecordedTrainingEngine {
     fn load(&mut self) -> Result<DecisionEngineLoadResult, DecisionFailure> {
         self.family_engine.load()

@@ -80,7 +80,6 @@ struct AstroSsdPromptCacheConfigurationSummary {
 struct MemoryConfigurationSummary {
     configured_maximum_bytes: Option<u64>,
     effective_maximum_bytes: u64,
-    pending_maximum_bytes: Option<u64>,
     error: Option<String>,
 }
 
@@ -120,10 +119,7 @@ impl ConfigurationStatusSummary {
         let restart_required = worker_health_snapshot.status != crate::WorkerHealthStatus::Loading
             && validation_error.is_none()
             && configured_generation.is_some()
-            && !is_effective
-            && worker_health_snapshot
-                .pending_mlx_memory_ceiling_bytes
-                .is_none();
+            && !is_effective;
         Self {
             configured_generation,
             resolved_generation,
@@ -164,7 +160,6 @@ impl ConfigurationStatusSummary {
                     .as_ref()
                     .and_then(|config| config.maximum_mlx_memory_bytes),
                 effective_maximum_bytes: worker_health_snapshot.mlx_memory_ceiling_bytes,
-                pending_maximum_bytes: worker_health_snapshot.pending_mlx_memory_ceiling_bytes,
                 error: worker_health_snapshot.mlx_memory_limit_error.clone(),
             },
         }

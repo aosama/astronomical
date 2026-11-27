@@ -35,9 +35,8 @@ pub(crate) use publisher::{
     publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
     publish_mlx_memory_limit_rejection, publish_model_load_in_flight,
     publish_neural_engine_prefill, publish_pending_astro_ssd_prompt_cache_clear,
-    publish_pending_mlx_memory_ceiling, publish_worker_expert_residency,
-    record_neural_engine_chunk, record_prompt_work_reuse, record_reply_drafting,
-    record_reply_peak_mlx_memory, record_serving_session,
+    publish_worker_expert_residency, record_neural_engine_chunk, record_prompt_work_reuse,
+    record_reply_drafting, record_reply_peak_mlx_memory, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the daemon readiness endpoint.
@@ -330,9 +329,7 @@ pub struct WorkerHealthSnapshot {
     pub wired_residency_budget_bytes: Option<u64>,
     /// Safe idle lower bound reported by the loaded model or idle worker.
     pub minimum_mlx_memory_ceiling_bytes: u64,
-    /// Latest accepted limit queued until the active generation finalizes.
-    pub pending_mlx_memory_ceiling_bytes: Option<u64>,
-    /// Candidate generation waiting for its queued memory update acknowledgement.
+    /// Candidate generation waiting for the worker to answer its memory update.
     pub pending_configuration_generation: Option<String>,
     /// Newest astro SSD prompt cache clear request queued behind the active generation.
     pub pending_astro_ssd_prompt_cache_clear: Option<PendingAstroSsdPromptCacheClear>,
@@ -371,7 +368,6 @@ impl WorkerHealthSnapshot {
             machine_mlx_memory_ceiling_bytes: 0,
             wired_residency_budget_bytes: None,
             minimum_mlx_memory_ceiling_bytes: 1,
-            pending_mlx_memory_ceiling_bytes: None,
             pending_configuration_generation: None,
             pending_astro_ssd_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
@@ -448,7 +444,6 @@ impl WorkerHealthSnapshot {
             machine_mlx_memory_ceiling_bytes,
             wired_residency_budget_bytes,
             minimum_mlx_memory_ceiling_bytes,
-            pending_mlx_memory_ceiling_bytes: None,
             pending_configuration_generation: None,
             pending_astro_ssd_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
@@ -482,7 +477,6 @@ impl WorkerHealthSnapshot {
             machine_mlx_memory_ceiling_bytes: 0,
             wired_residency_budget_bytes: None,
             minimum_mlx_memory_ceiling_bytes: 1,
-            pending_mlx_memory_ceiling_bytes: None,
             pending_configuration_generation: None,
             pending_astro_ssd_prompt_cache_clear: None,
             mlx_memory_limit_error: None,

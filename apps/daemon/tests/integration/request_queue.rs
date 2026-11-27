@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationQueueDepth, GenerationStartError,
-    MlxMemoryLimitUpdateOutcome, WorkerHealthStatus,
+    MlxMemoryLimitUpdateOutcome, WorkerActivity, WorkerHealthStatus,
 };
 use ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
@@ -85,8 +85,13 @@ async fn should_queue_second_request_until_first_completes() {
         .expect("shutdown should succeed");
 }
 
+/// The scripted worker refuses this ceiling the way a real one refuses a lower
+/// that the running request's memory does not fit under (issue #2681). The
+/// fixture binary repeats the value.
+const REFUSED_MLX_MEMORY_LIMIT_BYTES: u64 = 17;
+
 #[tokio::test]
-async fn should_queue_a_memory_limit_while_generation_is_active() {
+async fn should_apply_a_memory_limit_while_generation_is_active() {
     let worker_executor = launch_fixture().await;
     let active_stream = worker_executor
         .start_chat_generation(command_with_request_id(
@@ -98,35 +103,24 @@ async fn should_queue_a_memory_limit_while_generation_is_active() {
 
     assert_eq!(
         worker_executor
-            .update_mlx_memory_limit(32_000_000_000, "queued-memory-generation".to_owned())
+            .update_mlx_memory_limit(32_000_000_000, "live-memory-generation".to_owned())
             .await
-            .expect("the active request should accept a queued limit"),
-        MlxMemoryLimitUpdateOutcome::Queued
+            .expect("the worker should answer the limit during the request"),
+        MlxMemoryLimitUpdateOutcome::Applied
     );
+    let worker_health_snapshot = worker_executor.worker_health_snapshot();
     assert_eq!(
-        worker_executor
-            .worker_health_snapshot()
-            .pending_mlx_memory_ceiling_bytes,
-        Some(32_000_000_000)
+        worker_health_snapshot.mlx_memory_ceiling_bytes,
+        32_000_000_000
+    );
+    assert_ne!(
+        worker_health_snapshot.activity,
+        WorkerActivity::Idle,
+        "the request must keep running after the limit moved"
     );
 
     drop(active_stream);
-    let update_deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        let worker_health_snapshot = worker_executor.worker_health_snapshot();
-        if worker_health_snapshot.mlx_memory_ceiling_bytes == 32_000_000_000
-            && worker_health_snapshot
-                .pending_mlx_memory_ceiling_bytes
-                .is_none()
-        {
-            break;
-        }
-        assert!(
-            Instant::now() < update_deadline,
-            "the queued memory limit was not applied after finalization: {worker_health_snapshot:?}"
-        );
-        sleep(Duration::from_millis(10)).await;
-    }
+    wait_for_idle_activity(&worker_executor).await;
     worker_executor
         .shutdown()
         .await
@@ -134,8 +128,11 @@ async fn should_queue_a_memory_limit_while_generation_is_active() {
 }
 
 #[tokio::test]
-async fn should_apply_a_queued_memory_limit_before_the_next_chat_starts() {
+async fn should_refuse_a_memory_limit_while_generation_is_active_and_keep_the_request() {
     let worker_executor = launch_fixture().await;
+    let ceiling_before_the_refusal = worker_executor
+        .worker_health_snapshot()
+        .mlx_memory_ceiling_bytes;
     let active_stream = worker_executor
         .start_chat_generation(command_with_request_id(
             "astronomical/delayed-fragment-chat-fixture",
@@ -146,51 +143,51 @@ async fn should_apply_a_queued_memory_limit_before_the_next_chat_starts() {
 
     assert_eq!(
         worker_executor
-            .update_mlx_memory_limit(32_000_000_000, "raise-before-next-chat".to_owned())
+            .update_mlx_memory_limit(
+                REFUSED_MLX_MEMORY_LIMIT_BYTES,
+                "refused-memory-generation".to_owned()
+            )
             .await
-            .expect("the active request should accept a queued limit"),
-        MlxMemoryLimitUpdateOutcome::Queued
+            .expect("the worker should answer the limit during the request"),
+        MlxMemoryLimitUpdateOutcome::Rejected
     );
-
-    let executor_for_next_chat = worker_executor.clone();
-    let next_chat_task = tokio::spawn(async move {
-        executor_for_next_chat
-            .start_chat_generation(command_with_request_id("astronomical/test-worker", 2))
-            .await
-    });
-
-    sleep(Duration::from_millis(50)).await;
-    drop(active_stream);
-
-    let mut next_stream = timeout(Duration::from_secs(5), next_chat_task)
-        .await
-        .expect("the next chat should start after the raise")
-        .expect("the next chat task should not panic")
-        .expect("the next chat should be admitted");
-
     let worker_health_snapshot = worker_executor.worker_health_snapshot();
     assert_eq!(
-        worker_health_snapshot.mlx_memory_ceiling_bytes, 32_000_000_000,
-        "the next chat must be admitted against the raised ceiling, not the old one: {worker_health_snapshot:?}"
+        worker_health_snapshot.mlx_memory_ceiling_bytes,
+        ceiling_before_the_refusal
     );
     assert!(
         worker_health_snapshot
-            .pending_mlx_memory_ceiling_bytes
-            .is_none(),
-        "the pending flag must clear once the worker has applied the raise: {worker_health_snapshot:?}"
+            .mlx_memory_limit_error
+            .as_deref()
+            .is_some_and(|refusal_reason| refusal_reason.contains("needs at least")),
+        "the refusal must name the memory needed: {worker_health_snapshot:?}"
     );
+    assert_ne!(worker_health_snapshot.activity, WorkerActivity::Idle);
 
-    let completed_event =
-        receive_event_with_timeout(&mut next_stream, Duration::from_secs(2)).await;
-    assert!(
-        matches!(completed_event, ChatGenerationStreamEvent::Completed { .. }),
-        "the next chat should complete, got {completed_event:?}"
-    );
-
+    drop(active_stream);
+    wait_for_idle_activity(&worker_executor).await;
     worker_executor
         .shutdown()
         .await
         .expect("the worker should shut down");
+}
+
+async fn wait_for_idle_activity(worker_executor: &astronomical_daemon::WorkerHandle) {
+    let idle_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let worker_health_snapshot = worker_executor.worker_health_snapshot();
+        if worker_health_snapshot.activity == WorkerActivity::Idle
+            && worker_health_snapshot.status == WorkerHealthStatus::Ready
+        {
+            return;
+        }
+        assert!(
+            Instant::now() < idle_deadline,
+            "the cancelled request did not end: {worker_health_snapshot:?}"
+        );
+        sleep(Duration::from_millis(10)).await;
+    }
 }
 
 /// The existing behavior of rejecting a request when capacity is full

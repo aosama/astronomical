@@ -10,8 +10,7 @@ use decision_contract::decision_training_job::{
 use ipc_protocol::{DecisionTrainingCommand, RequestId, WorkerCommand, WorkerEvent};
 
 use super::decisions::{
-    DECISION_MODEL_ID, DecisionsWorkerHarness, close, next_event,
-    start_worker_and_swap_in_a_trainable_model,
+    DECISION_MODEL_ID, DecisionsWorkerHarness, close, start_worker_and_swap_in_a_trainable_model,
 };
 use crate::decision_engine::DecisionTrainingStep;
 
@@ -46,6 +45,7 @@ fn trained_outcome() -> DecisionTrainingOutcome {
 
 async fn send_training(harness: &mut DecisionsWorkerHarness, request_number: u64) {
     harness
+        .worker
         .commands
         .send_command(&WorkerCommand::TrainDecisionModel(
             DecisionTrainingCommand {
@@ -63,7 +63,7 @@ async fn swapped_trainable_model(
 ) -> DecisionsWorkerHarness {
     let mut harness = start_worker_and_swap_in_a_trainable_model(scripted_training_steps).await;
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::ModelSwapped { .. }
     ));
     harness
@@ -81,7 +81,7 @@ async fn should_report_each_step_then_the_trained_result_then_finalize() {
 
     let mut reported_steps = Vec::new();
     for _ in 0..2 {
-        let progress_event = next_event(&mut harness.events).await;
+        let progress_event = harness.worker.next_event().await;
         let WorkerEvent::DecisionTrainingProgress {
             request_id,
             stage,
@@ -101,13 +101,13 @@ async fn should_report_each_step_then_the_trained_result_then_finalize() {
             (DecisionTrainingStage::Training, 40, 120)
         ]
     );
-    let trained_event = next_event(&mut harness.events).await;
+    let trained_event = harness.worker.next_event().await;
     let WorkerEvent::DecisionModelTrained { outcome, .. } = trained_event else {
         panic!("the training should end with its result: {trained_event:?}");
     };
     assert_eq!(*outcome, trained_outcome());
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::DecisionsFinalized { request_id, .. } if request_id == RequestId::new(61)
     ));
     close(harness).await;
@@ -118,13 +118,13 @@ async fn should_refuse_to_train_a_model_whose_final_layers_cannot_be_trained() {
     let mut harness = swapped_trainable_model(Vec::new()).await;
     send_training(&mut harness, 62).await;
 
-    let refusal_event = next_event(&mut harness.events).await;
+    let refusal_event = harness.worker.next_event().await;
     let WorkerEvent::DecisionsFailed { reason, .. } = refusal_event else {
         panic!("the worker should refuse the training: {refusal_event:?}");
     };
     assert!(reason.to_string().contains("cannot be trained"), "{reason}");
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::DecisionsFinalized { .. }
     ));
     close(harness).await;
@@ -142,16 +142,16 @@ async fn should_end_a_training_whose_step_fails_and_drop_its_state() {
     send_training(&mut harness, 63).await;
 
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::DecisionTrainingProgress { completed: 1, .. }
     ));
-    let failure_event = next_event(&mut harness.events).await;
+    let failure_event = harness.worker.next_event().await;
     let WorkerEvent::DecisionsFailed { reason, .. } = failure_event else {
         panic!("the failing step should end the training: {failure_event:?}");
     };
     assert!(reason.to_string().contains("0.00876"), "{reason}");
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::DecisionsFinalized { .. }
     ));
     assert!(
@@ -160,6 +160,64 @@ async fn should_end_a_training_whose_step_fails_and_drop_its_state() {
             .lock()
             .expect("the cancellation flag should not be poisoned"),
         "a failed training must not leave its state behind"
+    );
+    close(harness).await;
+}
+
+/// Sends a limit change and returns every event up to the request's
+/// finalization, split into the limit answers and the rest.
+async fn events_after_a_limit_change_until_finalized(
+    harness: &mut DecisionsWorkerHarness,
+) -> (Vec<WorkerEvent>, Vec<WorkerEvent>) {
+    harness
+        .worker
+        .commands
+        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
+            effective_mlx_memory_ceiling_bytes: 4_000,
+            configuration_generation: "generation-during-training".to_owned(),
+        })
+        .await
+        .expect("the limit change should reach the worker");
+    let mut limit_answers = Vec::new();
+    let mut other_events = Vec::new();
+    loop {
+        let worker_event = harness.worker.next_event().await;
+        match worker_event {
+            WorkerEvent::MlxMemoryLimitChanged { .. }
+            | WorkerEvent::MlxMemoryLimitRejected { .. } => limit_answers.push(worker_event),
+            WorkerEvent::DecisionsFinalized { .. } => return (limit_answers, other_events),
+            _ => other_events.push(worker_event),
+        }
+    }
+}
+
+#[tokio::test]
+async fn should_refuse_a_memory_limit_change_during_training_and_finish_the_training() {
+    let mut harness = swapped_trainable_model(vec![
+        Ok(progress(DecisionTrainingStage::Reading, 1, 3)),
+        Ok(progress(DecisionTrainingStage::Training, 2, 3)),
+        Ok(progress(DecisionTrainingStage::Training, 3, 3)),
+        Ok(DecisionTrainingStep::Completed(Box::new(trained_outcome()))),
+    ])
+    .await;
+    send_training(&mut harness, 64).await;
+    assert!(matches!(
+        harness.worker.next_event().await,
+        WorkerEvent::DecisionTrainingProgress { completed: 1, .. }
+    ));
+
+    let (limit_answers, other_events) =
+        events_after_a_limit_change_until_finalized(&mut harness).await;
+
+    let [WorkerEvent::MlxMemoryLimitRejected { reason, .. }] = limit_answers.as_slice() else {
+        panic!("the change should be refused once: {limit_answers:?}");
+    };
+    assert!(reason.contains("try again when it ends"), "{reason}");
+    assert!(
+        other_events
+            .iter()
+            .any(|worker_event| matches!(worker_event, WorkerEvent::DecisionModelTrained { .. })),
+        "the training must complete after the refusal: {other_events:?}"
     );
     close(harness).await;
 }

@@ -14,7 +14,7 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     liveCeilingBytes: UInt64,
     wiredResidencyBudgetBytes: UInt64?,
     configuredMaximumGigabytes: UInt64?,
-    pendingCeilingBytes: UInt64? = nil
+    mlxMemoryLimitError: String? = nil
   ) -> DaemonStatusDocument {
     DaemonStatusDocument(
       status: "ready", activity: "idle", readyModelIdentifier: nil, progress: nil,
@@ -23,7 +23,7 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
       machineMlxMemoryCeilingBytes: machineCeilingBytes,
       wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
       configuredMaximumMlxMemoryGigabytes: configuredMaximumGigabytes,
-      pendingMlxMemoryCeilingBytes: pendingCeilingBytes,
+      mlxMemoryLimitError: mlxMemoryLimitError,
       servingSession: .empty
     )
   }
@@ -67,29 +67,6 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
         chosenWholeGigabytes: 0, previouslyAppliedWholeGigabytes: 0,
         appliedWholeGigabytes: 36, popoverIsVisible: true),
       36)
-  }
-
-  /// While a change waits for the reply being written, a second one would be refused, so
-  /// Apply is withheld even though the thumb differs from the limit in force.
-  func test_should_withhold_apply_while_a_change_is_queued_and_offer_it_again_after() {
-    let queuedStatusDocument = statusDocument(
-      liveCeilingBytes: 34 * mlxMemoryBytesPerGigabyte,
-      wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
-      configuredMaximumGigabytes: 34,
-      pendingCeilingBytes: machineCeilingBytes)
-    let landedStatusDocument = statusDocument(
-      liveCeilingBytes: 34 * mlxMemoryBytesPerGigabyte,
-      wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
-      configuredMaximumGigabytes: 34)
-
-    XCTAssertFalse(
-      MaximumMlxMemoryControlPresentation(
-        statusDocument: queuedStatusDocument, editableMaximumWholeGigabytes: 35
-      ).shouldOfferApply)
-    XCTAssertTrue(
-      MaximumMlxMemoryControlPresentation(
-        statusDocument: landedStatusDocument, editableMaximumWholeGigabytes: 35
-      ).shouldOfferApply)
   }
 
   func test_should_show_only_the_reachable_limit_when_the_request_is_served() {
@@ -193,20 +170,6 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     XCTAssertTrue(controlPresentation.shouldOfferApply)
   }
 
-  func test_should_not_report_a_cap_while_the_requested_change_is_queued() {
-    let queuedStatusDocument = statusDocument(
-      liveCeilingBytes: 30 * mlxMemoryBytesPerGigabyte,
-      wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
-      configuredMaximumGigabytes: 34,
-      pendingCeilingBytes: 34 * mlxMemoryBytesPerGigabyte
-    )
-
-    let controlPresentation = MaximumMlxMemoryControlPresentation(
-      statusDocument: queuedStatusDocument, editableMaximumWholeGigabytes: 34)
-
-    XCTAssertNil(controlPresentation.cappedCeilingCaption)
-  }
-
   func test_should_report_a_cap_when_the_configured_request_overflows_bytes() {
     let overflowingStatusDocument = statusDocument(
       liveCeilingBytes: plannableWiredResidencyBytes,
@@ -231,5 +194,26 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
       statusDocument: unmeasuredStatusDocument, editableMaximumWholeGigabytes: 34)
 
     XCTAssertNil(controlPresentation.cappedCeilingCaption)
+  }
+
+  /// Positive: the engine refused a lower limit while a reply ran, so the slider turns red.
+  func test_should_show_the_slider_refused_while_the_engine_reports_a_limit_error() {
+    XCTAssertTrue(
+      maximumModelMemoryLimitWasRefused(
+        statusDocument: statusDocument(
+          liveCeilingBytes: plannableWiredResidencyBytes,
+          wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
+          configuredMaximumGigabytes: 12,
+          mlxMemoryLimitError: "needs at least 22.4 GB while this request runs")))
+  }
+
+  /// Negative: an accepted limit leaves the slider in its usual colour.
+  func test_should_not_show_the_slider_refused_after_an_accepted_limit() {
+    XCTAssertFalse(
+      maximumModelMemoryLimitWasRefused(
+        statusDocument: statusDocument(
+          liveCeilingBytes: plannableWiredResidencyBytes,
+          wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
+          configuredMaximumGigabytes: 30)))
   }
 }

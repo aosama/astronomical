@@ -20,7 +20,7 @@ use tokenizers::Tokenizer;
 
 use crate::artifact::ModernBertArtifact;
 use crate::embedding_pooling;
-use crate::memory::telemetry::MlxActiveMemoryBreakdown;
+use crate::memory::telemetry::{MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment};
 use crate::modernbert_trunk::configuration::ModernBertConfiguration;
 use crate::modernbert_trunk::trunk::ModernBertTrunk;
 use crate::modernbert_trunk::weight_layout::ModernBertWeightLayout;
@@ -33,6 +33,8 @@ use crate::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, MemoryCeilingUtilization,
 };
 use memory_policy::forward_pass_utilization;
+use memory_policy::live_memory_limit::{LiveMemoryLimitEngine, LiveMemoryLimitRefusal};
+use model_primitives::live_memory_ceiling::move_engine_ceiling;
 
 /// Loaded ModernBERT runtime bound to one artifact directory.
 pub struct ModernBertEmbeddingEngine {
@@ -343,6 +345,28 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
         let loaded_state = self.loaded_state.as_ref()?;
         let memory_snapshot = loaded_state.runtime.memory_snapshot().ok()?;
         Some(self.memory_telemetry_from_snapshot(&memory_snapshot))
+    }
+}
+
+impl LiveMemoryLimitEngine for ModernBertEmbeddingEngine {
+    fn update_mlx_memory_limit(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, LiveMemoryLimitRefusal> {
+        let loaded_runtime = match self.loaded_state.as_mut() {
+            Some(loaded_state) => Some(&mut loaded_state.runtime),
+            None => None,
+        };
+        let applied_ceiling = move_engine_ceiling(
+            loaded_runtime,
+            &mut self.effective_mlx_memory_ceiling_bytes,
+            &mut self.mlx_buffer_cache_limit_bytes,
+            requested_mlx_memory_ceiling_bytes,
+        )?;
+        Ok(applied_ceiling.into_adjustment(
+            requested_mlx_memory_ceiling_bytes,
+            self.collect_mlx_memory_telemetry(),
+        ))
     }
 }
 

@@ -125,44 +125,13 @@ final class TelemetryStoreControlFeedbackTests: XCTestCase {
   }
 
   @MainActor
-  func test_should_wait_for_a_queued_memory_update_to_take_effect_before_dismissing() async throws {
-    let daemonClient = QueuedMaximumMlxMemoryUpdateDaemonClient()
-    let feedbackDismissalGate = FeedbackDismissalGate()
-    let telemetryStore = contractTelemetryStore(
-      daemonClient: daemonClient,
-      feedbackDismissalGate: feedbackDismissalGate
-    )
-
-    await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
-    XCTAssertEqual(
-      telemetryStore.controlActionFeedback,
-      .success("Maximum model RAM changes when the current reply finishes.")
-    )
-    XCTAssertNil(
-      telemetryStore.visibleControlActionFeedback,
-      "the slider's own note names a queued change, so the success line is not shown twice")
-
-    await daemonClient.markMaximumMlxMemoryUpdateAsApplied()
-    telemetryStore.refreshNow()
-    try await Task.sleep(for: .milliseconds(10))
-    XCTAssertNotNil(telemetryStore.controlActionFeedback)
-    XCTAssertEqual(
-      telemetryStore.visibleControlActionFeedback, telemetryStore.controlActionFeedback,
-      "once the change lands, nothing hides the feedback")
-
-    feedbackDismissalGate.release()
-    try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
-  }
-
-  @MainActor
   func test_should_surface_a_late_memory_update_rejection_as_failure_feedback() async {
     let telemetryStore = contractTelemetryStore(
       daemonClient: FixedAnswerDaemonClient(
         statusDocument: maximumMlxMemoryStatusDocument(
           effectiveMlxMemoryCeilingBytes: 30_000_000_000,
           mlxMemoryLimitError: "The worker could not apply the requested MLX memory ceiling"),
-        maximumMlxMemoryUpdateMessage:
-          "Maximum model RAM changes when the current reply finishes.")
+        maximumMlxMemoryUpdateMessage: "Maximum model RAM updated.")
     )
 
     await telemetryStore.performMaximumMlxMemoryLimitUpdate(32)
@@ -414,42 +383,8 @@ private actor OverlappingRestartConfirmationDaemonClient: DaemonClient {
   func healthIsAvailable() async -> Bool { true }
 }
 
-/// Reports the memory change as queued behind a generation until the test
-/// marks it applied.
-private actor QueuedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
-  private var maximumMlxMemoryUpdateHasTakenEffect = false
-
-  func fetchStatus() async throws -> DaemonStatusDocument {
-    if maximumMlxMemoryUpdateHasTakenEffect {
-      return maximumMlxMemoryStatusDocument(effectiveMlxMemoryCeilingBytes: 34_359_738_368)
-    }
-    return maximumMlxMemoryStatusDocument(
-      effectiveMlxMemoryCeilingBytes: 30_000_000_000,
-      pendingMlxMemoryCeilingBytes: 34_359_738_368,
-      activity: "generating"
-    )
-  }
-
-  func reloadConfiguration() async throws -> ConfigurationReloadResult {
-    ConfigurationReloadResult(message: "Config reloaded")
-  }
-
-  func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
-    "Maximum model RAM changes when the current reply finishes."
-  }
-
-  func requestShutdown() async throws {}
-
-  func healthIsAvailable() async -> Bool { true }
-
-  func markMaximumMlxMemoryUpdateAsApplied() {
-    maximumMlxMemoryUpdateHasTakenEffect = true
-  }
-}
-
 private func maximumMlxMemoryStatusDocument(
   effectiveMlxMemoryCeilingBytes: UInt64,
-  pendingMlxMemoryCeilingBytes: UInt64? = nil,
   activity: String = "idle",
   mlxMemoryLimitError: String? = nil,
   wiredResidencyBudgetBytes: UInt64? = nil,
@@ -467,7 +402,6 @@ private func maximumMlxMemoryStatusDocument(
     wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
     minimumMlxMemoryCeilingBytes: 1_000_000_000,
     configuredMaximumMlxMemoryGigabytes: configuredMaximumMlxMemoryGigabytes,
-    pendingMlxMemoryCeilingBytes: pendingMlxMemoryCeilingBytes,
     mlxMemoryLimitError: mlxMemoryLimitError,
     servingSession: .empty
   )

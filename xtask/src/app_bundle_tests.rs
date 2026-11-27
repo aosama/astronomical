@@ -542,7 +542,7 @@ fn should_report_status_with_gigabytes_and_a_matching_build() {
     assert_eq!(status_lines[1], "  model:             qwen-fixture  [-]");
     assert_eq!(
         status_lines[2],
-        "  memory ceiling:    34.00 GB effective of 40.00 GB (configured 34, pending -)"
+        "  memory ceiling:    34.00 GB effective of 40.00 GB (configured 34)"
     );
     assert_eq!(
         status_lines[3],
@@ -570,7 +570,7 @@ fn should_report_unknown_fields_as_dashes_for_a_sparse_status_document() {
     assert_eq!(status_lines[0], "Development instance: - (-)");
     assert_eq!(
         status_lines[2],
-        "  memory ceiling:    - effective of - (configured -, pending -)"
+        "  memory ceiling:    - effective of - (configured -)"
     );
     assert_eq!(status_lines[4], "  build: unknown");
 }

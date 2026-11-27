@@ -72,7 +72,7 @@ async fn should_not_let_a_rejected_update_restore_over_a_newer_memory_setting() 
 }
 
 #[tokio::test]
-async fn should_preserve_persisted_intent_when_queued_application_is_rejected() {
+async fn should_apply_a_memory_setting_while_a_reply_runs() {
     timeout(Duration::from_secs(10), async {
         let MemoryJourney {
             worker_handle,
@@ -85,44 +85,65 @@ async fn should_preserve_persisted_intent_when_queued_application_is_rejected() 
             .await
             .expect("the delayed generation should start");
 
-        let queued_response = put_maximum_mlx_memory(&application, 31).await;
-        assert_eq!(queued_response.status(), StatusCode::ACCEPTED);
-        let conflicting_response = put_maximum_mlx_memory(&application, 32).await;
-        assert_eq!(conflicting_response.status(), StatusCode::CONFLICT);
+        let applied_response = put_maximum_mlx_memory(&application, 32).await;
+
+        assert_eq!(applied_response.status(), StatusCode::OK);
+        assert_eq!(
+            worker_handle
+                .worker_health_snapshot()
+                .mlx_memory_ceiling_bytes,
+            32 * 1_073_741_824
+        );
         generation_events
             .recv()
             .await
-            .expect("the delayed generation should complete");
-        wait_for_memory_rejection(&worker_handle).await;
-        wait_for_persisted_maximum(&config_home_directory, 31).await;
-
-        let mut second_generation_events = worker_handle
-            .start_chat_generation(delayed_memory_generation_command())
-            .await
-            .expect("the second delayed generation should start");
-        assert_eq!(
-            put_maximum_mlx_memory(&application, 31).await.status(),
-            StatusCode::ACCEPTED
-        );
-        write_config_file(
-            &config_home_directory,
-            r#"{"runtime":{"model_directories":[],"maximum_mlx_memory_gb":33}}"#,
-        );
-        second_generation_events
-            .recv()
-            .await
-            .expect("the second delayed generation should complete");
-        wait_for_memory_rejection(&worker_handle).await;
-        wait_for_persisted_maximum(&config_home_directory, 33).await;
-
+            .expect("the reply should still finish after the change");
+        wait_for_persisted_maximum(&config_home_directory, 32).await;
         shut_down_worker(worker_handle).await;
     })
     .await
-    .expect("the queued memory rejection journey should finish");
+    .expect("the mid-reply memory journey should finish");
 }
 
 #[tokio::test]
-async fn should_rollback_live_state_when_a_reloaded_memory_setting_is_rejected_after_queueing() {
+async fn should_refuse_a_memory_setting_during_a_reply_at_once_and_keep_the_reply() {
+    timeout(Duration::from_secs(10), async {
+        let MemoryJourney {
+            worker_handle,
+            application,
+            config_home_directory,
+            ..
+        } = start_memory_journey(MemoryJourneyModels::DelayedCompletion).await;
+        let mut generation_events = worker_handle
+            .start_chat_generation(delayed_memory_generation_command())
+            .await
+            .expect("the delayed generation should start");
+
+        let refused_response = put_maximum_mlx_memory(&application, 31).await;
+
+        assert_eq!(refused_response.status(), StatusCode::BAD_REQUEST);
+        let worker_health_snapshot = worker_handle.worker_health_snapshot();
+        assert_eq!(
+            worker_health_snapshot.mlx_memory_limit_error.as_deref(),
+            Some("fixture rejected the requested limit")
+        );
+        assert_ne!(
+            worker_health_snapshot.mlx_memory_ceiling_bytes,
+            31 * 1_073_741_824
+        );
+        generation_events
+            .recv()
+            .await
+            .expect("the reply should still finish after the refusal");
+        wait_for_persisted_maximum(&config_home_directory, 31).await;
+        shut_down_worker(worker_handle).await;
+    })
+    .await
+    .expect("the mid-reply refusal journey should finish");
+}
+
+#[tokio::test]
+async fn should_accept_the_next_memory_setting_after_a_reloaded_one_is_refused() {
     timeout(Duration::from_secs(10), async {
         let MemoryJourney {
             worker_handle,
@@ -141,22 +162,27 @@ async fn should_rollback_live_state_when_a_reloaded_memory_setting_is_rejected_a
         );
 
         let reload_response = post_config_reload(&application).await;
-        assert_eq!(reload_response.status(), StatusCode::OK);
-        assert_eq!(
-            put_maximum_mlx_memory(&application, 32).await.status(),
-            StatusCode::CONFLICT
-        );
+
+        assert_eq!(reload_response.status(), StatusCode::BAD_REQUEST);
+        let live_configuration_generation = reloadable_config
+            .read()
+            .map(|resolved_config| resolved_config.configuration_generation.clone())
+            .expect("live config should remain readable");
+        assert_eq!(live_configuration_generation, initial_generation);
         generation_events
             .recv()
             .await
-            .expect("the delayed generation should complete");
-        wait_for_resolved_generation(&reloadable_config, &initial_generation).await;
-        wait_for_persisted_maximum(&config_home_directory, 31).await;
-
+            .expect("the reply should still finish after the refusal");
+        // A refused reload once left a marker behind that refused every later
+        // change with a conflict until the daemon restarted.
+        assert_eq!(
+            put_maximum_mlx_memory(&application, 32).await.status(),
+            StatusCode::OK
+        );
         shut_down_worker(worker_handle).await;
     })
     .await
-    .expect("the queued reload rollback journey should finish");
+    .expect("the refused reload journey should finish");
 }
 
 enum MemoryJourneyModels {
@@ -173,8 +199,8 @@ struct MemoryJourney {
 }
 
 /// Brings up an idle worker and a daemon application over an empty config
-/// file, optionally hosting the delayed-completion model so a generation can
-/// hold the memory-limit change in the queue.
+/// file, optionally hosting the delayed-completion model so a memory-limit
+/// change can arrive while a reply runs.
 async fn start_memory_journey(models: MemoryJourneyModels) -> MemoryJourney {
     let worker_executable_path = idle_worker_executable_path();
     let config_home_directory = tempfile::tempdir()
@@ -257,50 +283,6 @@ fn delayed_memory_generation_command() -> ChatGenerationCommand {
             thinking_budget: None,
         },
         structured_generation: None,
-    }
-}
-
-async fn wait_for_resolved_generation(
-    reloadable_config: &Arc<RwLock<ResolvedRuntimeConfig>>,
-    expected_generation: &str,
-) {
-    let reconciliation_deadline = Instant::now() + Duration::from_secs(2);
-    loop {
-        let has_restored_live_configuration = {
-            let resolved_config = reloadable_config
-                .read()
-                .expect("resolved configuration should remain readable");
-            resolved_config.configuration_generation == expected_generation
-                && resolved_config.maximum_mlx_memory_bytes.is_none()
-        };
-        if has_restored_live_configuration {
-            return;
-        }
-        assert!(
-            Instant::now() < reconciliation_deadline,
-            "rejected queued reload did not restore live configuration"
-        );
-        sleep(Duration::from_millis(10)).await;
-    }
-}
-
-async fn wait_for_memory_rejection(worker_handle: &WorkerHandle) {
-    let rejection_deadline = Instant::now() + Duration::from_secs(2);
-    loop {
-        let worker_health_snapshot = worker_handle.worker_health_snapshot();
-        if worker_health_snapshot
-            .pending_mlx_memory_ceiling_bytes
-            .is_none()
-            && worker_health_snapshot.mlx_memory_limit_error.is_some()
-        {
-            sleep(Duration::from_millis(50)).await;
-            return;
-        }
-        assert!(
-            Instant::now() < rejection_deadline,
-            "queued memory rejection was not published"
-        );
-        sleep(Duration::from_millis(10)).await;
     }
 }
 

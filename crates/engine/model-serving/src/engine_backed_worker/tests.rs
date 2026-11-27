@@ -1,8 +1,11 @@
 mod admission;
 mod chat;
+mod daemon_side;
 mod decision_training;
 mod decisions;
+mod embeddings;
 mod image;
+mod live_memory_limit_journeys;
 mod speech;
 
 /// Skips load-progress reports, which every autoregressive load now sends ahead of

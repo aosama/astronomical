@@ -159,7 +159,6 @@ fn assert_common_idle_status(status_document: &Value, expected_ceiling_bytes: u6
         required_u64(status_document, "mlx_memory_ceiling_bytes"),
         expected_ceiling_bytes
     );
-    assert!(status_document["pending_mlx_memory_ceiling_bytes"].is_null());
     assert!(status_document["mlx_memory_limit_error"].is_null());
     assert!(
         memory_bytes(status_document, "active_memory_bytes") <= expected_ceiling_bytes,

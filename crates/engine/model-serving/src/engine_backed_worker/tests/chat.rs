@@ -7,6 +7,7 @@ mod count_chat_tokens;
 mod expert_memory_mode;
 mod generation_lifecycle;
 pub(super) mod ipc_worker_transport;
+mod live_memory_limit_during_reply;
 mod live_memory_limit_wired_budget;
 mod model_visible_correction;
 mod neural_engine_preparation;

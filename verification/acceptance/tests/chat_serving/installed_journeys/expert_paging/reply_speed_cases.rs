@@ -165,9 +165,31 @@ pub(super) struct ReplyCase {
 }
 
 pub(super) async fn run_reply_case(reply_case: ReplyCase) {
+    show_drafting_decision_lines_when_drafting(&reply_case);
     timeout(CASE_TIMEOUT, measure_reply(reply_case))
         .await
         .expect("the reply speed case must finish within its budget");
+}
+
+/// A case the hosted drafter writes shows its drafting decisions.
+fn show_drafting_decision_lines_when_drafting(reply_case: &ReplyCase) {
+    if reply_case.hosted_drafter_writes_replies {
+        show_drafting_decision_lines();
+    }
+}
+
+/// Prints the lines where a drafted reply decides whether its rounds pay,
+/// with the round and plain-token times it decided by, so a reply that
+/// stopped drafting can be traced to the figures behind it.
+fn show_drafting_decision_lines() {
+    let drafting_decision_filter = tracing_subscriber::EnvFilter::new(
+        "qwen35::qwen3_5_text::inference_execution::draft_round_payoff=info,\
+         qwen35::qwen3_5_text::model::draft_round_costs=info",
+    );
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(drafting_decision_filter)
+        .with_writer(std::io::stderr)
+        .try_init();
 }
 
 /// Sets the engine up as the case says, before anything is served.

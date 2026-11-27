@@ -28,6 +28,7 @@ mod demand_phase;
 mod demand_recording;
 mod direct_fetch;
 mod flush;
+mod hot_expert_trim;
 mod insert;
 mod insert_planning;
 mod previous_token_prefetch;

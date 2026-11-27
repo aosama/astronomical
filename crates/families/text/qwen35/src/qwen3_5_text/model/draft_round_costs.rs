@@ -68,7 +68,27 @@ impl DraftRoundCosts {
         let tries_again = replies_since_a_try >= REPLIES_BETWEEN_NEW_TRIES;
         self.replies_since_rounds_were_tried
             .set(if tries_again { 0 } else { replies_since_a_try });
+        // Without this line a reply that never drafts leaves no trace of
+        // why; it fires once a reply, so it costs nothing to keep.
+        tracing::info!(
+            break_even_tokens_a_round = break_even,
+            most_tokens_a_round,
+            round_milliseconds = ?self.round_milliseconds(),
+            plain_token_milliseconds = ?self.plain_token_milliseconds(),
+            tries_again,
+            "draft rounds have not paid on this model as it serves now"
+        );
         tries_again
+    }
+
+    /// The smoothed time of a draft round, once one was timed.
+    pub fn round_milliseconds(&self) -> Option<f64> {
+        self.round_seconds.get().map(seconds_as_milliseconds)
+    }
+
+    /// The smoothed time of a plain reply token, once one was timed.
+    pub fn plain_token_milliseconds(&self) -> Option<f64> {
+        self.plain_token_seconds.get().map(seconds_as_milliseconds)
     }
 
     /// How many reply tokens a round must decide to cost what plain tokens
@@ -78,6 +98,10 @@ impl DraftRoundCosts {
         let round_seconds = self.round_seconds.get()?;
         (plain_token_seconds > 0.0).then_some(round_seconds / plain_token_seconds)
     }
+}
+
+fn seconds_as_milliseconds(seconds: f64) -> f64 {
+    seconds * 1_000.0
 }
 
 fn record(smoothed_seconds: &Cell<Option<f64>>, elapsed: Duration) {

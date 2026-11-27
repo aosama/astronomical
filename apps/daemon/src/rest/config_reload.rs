@@ -79,7 +79,6 @@ pub(crate) async fn reload_config(State(application_state): State<ApplicationSta
                 &candidate_resolved,
                 &candidate_generation,
                 &memory_effective_generation,
-                &current_resolved,
                 discovered_model_count,
             )
             .await
@@ -101,18 +100,9 @@ pub(crate) async fn reload_config(State(application_state): State<ApplicationSta
     .await
 }
 
-/// The busy rejections that apply before any candidate is loaded: a pending
-/// memory transition, or (when no worker handle exists) live generation
-/// activity. Mirrors the inlined precondition checks.
+/// The busy rejection that applies before any candidate is loaded: live
+/// generation activity when no worker handle exists.
 async fn reload_in_progress_response(application_state: &ApplicationState) -> Option<Response> {
-    if application_state
-        .pending_memory_config_generation
-        .lock()
-        .await
-        .is_some()
-    {
-        return Some((StatusCode::CONFLICT, Json(ConfigReloadResponse::busy())).into_response());
-    }
     if application_state.worker_control.is_none()
         && application_state
             .generation_executor

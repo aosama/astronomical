@@ -377,22 +377,19 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
                     WorkerCommand::SampleMlxMemory => {
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
                     }
+                    // Taken between two steps of the reply (issue #2681): the
+                    // engine keeps room for what the reply holds and refuses
+                    // a ceiling below that, and the reply goes on either way.
                     WorkerCommand::UpdateMlxMemoryLimit {
                         effective_mlx_memory_ceiling_bytes,
-                        configuration_generation: _,
+                        configuration_generation,
                     } => {
-                        event_writer
-                            .send_event(&WorkerEvent::MlxMemoryLimitRejected {
-                                requested_mlx_memory_ceiling_bytes:
-                                    effective_mlx_memory_ceiling_bytes,
-                                minimum_mlx_memory_ceiling_bytes:
-                                    self.minimum_mlx_memory_ceiling_bytes,
-                                machine_mlx_memory_ceiling_bytes:
-                                    self.machine_mlx_memory_ceiling_bytes,
-                                reason: "memory limits cannot change during generation"
-                                    .to_owned(),
-                            })
-                            .await?;
+                        self.update_mlx_memory_limit(
+                            effective_mlx_memory_ceiling_bytes,
+                            configuration_generation,
+                            event_writer,
+                        )
+                        .await?;
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
                     }
                     WorkerCommand::ClearAstroSsdPromptCache { .. } => {

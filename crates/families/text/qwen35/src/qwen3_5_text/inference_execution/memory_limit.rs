@@ -36,11 +36,12 @@ impl TextMlxMemoryLimitHooks for Qwen3_5EngineState {
     fn change_model_mlx_memory_ceiling(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
+        request_is_running: bool,
     ) -> Result<(u64, MlxMemoryLimits), InferenceEngineError> {
         self.core
             .model
             .as_mut()
             .ok_or_else(mlx_memory_ceiling_change_before_load_error)?
-            .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
+            .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes, request_is_running)
     }
 }

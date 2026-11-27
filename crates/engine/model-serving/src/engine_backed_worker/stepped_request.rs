@@ -132,9 +132,10 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
         }
     }
 
-    /// Answers a command that arrived while an image or speech request runs:
-    /// another request is refused as busy, a memory limit cannot move, and
-    /// a cancel for this request is handed back to the caller.
+    /// Answers a command that arrived while an image, speech or training
+    /// request runs: another request is refused as busy, a memory limit is
+    /// taken at once by the loaded engine, and a cancel for this request is
+    /// handed back to the caller.
     pub(crate) async fn answer_command_during_request<WriteTransport>(
         &mut self,
         worker_command: WorkerCommand,
@@ -157,12 +158,15 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
                     })
                     .await?;
             }
+            // Taken between two steps of the request (issue #2681); the
+            // engine refuses a ceiling below what the request holds.
             WorkerCommand::UpdateMlxMemoryLimit {
                 effective_mlx_memory_ceiling_bytes,
-                ..
+                configuration_generation,
             } => {
-                self.reject_memory_limit_during_request(
+                self.update_mlx_memory_limit(
                     effective_mlx_memory_ceiling_bytes,
+                    configuration_generation,
                     event_writer,
                 )
                 .await?;
@@ -212,25 +216,6 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
             }
             _ => Ok(()),
         }
-    }
-
-    async fn reject_memory_limit_during_request<WriteTransport>(
-        &self,
-        requested_mlx_memory_ceiling_bytes: u64,
-        event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<(), WorkerRuntimeError>
-    where
-        WriteTransport: AsyncWrite + Unpin,
-    {
-        event_writer
-            .send_event(&WorkerEvent::MlxMemoryLimitRejected {
-                requested_mlx_memory_ceiling_bytes,
-                minimum_mlx_memory_ceiling_bytes: self.minimum_mlx_memory_ceiling_bytes,
-                machine_mlx_memory_ceiling_bytes: self.machine_mlx_memory_ceiling_bytes,
-                reason: "memory limits cannot change during generation".to_owned(),
-            })
-            .await?;
-        Ok(())
     }
 }
 

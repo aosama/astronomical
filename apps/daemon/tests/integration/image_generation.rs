@@ -418,7 +418,8 @@ async fn should_contain_every_non_monotonic_image_progress_dimension() {
 }
 
 #[tokio::test]
-async fn should_keep_memory_cache_and_replacement_controls_busy_until_image_finalization() {
+async fn should_forward_a_memory_limit_but_keep_prompt_cache_and_replacement_busy_during_an_image()
+{
     let worker_handle = launch_scripted_worker().await;
     let image_receiver = worker_handle
         .start_image_generation(image_command(106, "delayed-image-generation-fixture"))
@@ -427,10 +428,10 @@ async fn should_keep_memory_cache_and_replacement_controls_busy_until_image_fina
 
     assert_eq!(
         worker_handle
-            .update_mlx_memory_limit(32_000_000_000, "queued-memory-generation".to_owned())
+            .update_mlx_memory_limit(32_000_000_000, "live-memory-generation".to_owned())
             .await
-            .expect("memory update should queue"),
-        MlxMemoryLimitUpdateOutcome::Queued,
+            .expect("the memory update should reach the worker during the image"),
+        MlxMemoryLimitUpdateOutcome::Applied,
     );
     assert_eq!(
         worker_handle

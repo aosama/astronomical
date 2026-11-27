@@ -161,8 +161,6 @@ fn attach_worker_memory_and_session_facts(
         serde_json::json!(worker_health_snapshot.wired_residency_budget_bytes);
     status_json["minimum_mlx_memory_ceiling_bytes"] =
         serde_json::json!(worker_health_snapshot.minimum_mlx_memory_ceiling_bytes);
-    status_json["pending_mlx_memory_ceiling_bytes"] =
-        serde_json::json!(worker_health_snapshot.pending_mlx_memory_ceiling_bytes);
     status_json["mlx_memory_limit_error"] =
         serde_json::json!(worker_health_snapshot.mlx_memory_limit_error);
     status_json["configured_maximum_mlx_memory_gb"] = serde_json::json!(

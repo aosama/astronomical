@@ -15,15 +15,13 @@ use super::config_reload::{effective_ceiling_violates_worker_limit, effective_wo
 
 /// Validates the reloaded ceiling against the worker's reported limits,
 /// stages the memory-effective generation, and applies the live limit.
-/// `None` means the limit was applied (or queued) and the reload continues;
+/// `None` means the limit was applied and the reload continues;
 /// `Some(response)` ends the reload.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn stage_and_apply_memory_limit(
     application_state: &ApplicationState,
     candidate_resolved: &crate::ResolvedRuntimeConfig,
     candidate_generation: &str,
     memory_effective_generation: &str,
-    current_resolved: &crate::ResolvedRuntimeConfig,
     discovered_model_count: usize,
 ) -> Option<Response> {
     let worker_handle = application_state.worker_control.as_ref()?;
@@ -51,10 +49,6 @@ pub(super) async fn stage_and_apply_memory_limit(
                 .into_response(),
         );
     }
-    *application_state
-        .pending_memory_config_generation
-        .lock()
-        .await = Some(memory_effective_generation.to_owned());
     worker_handle.stage_memory_configuration_generation(memory_effective_generation.to_owned());
     apply_live_memory_limit(
         application_state,
@@ -62,23 +56,20 @@ pub(super) async fn stage_and_apply_memory_limit(
         effective_mlx_memory_ceiling_bytes,
         memory_effective_generation,
         candidate_generation,
-        current_resolved,
         discovered_model_count,
     )
     .await
 }
 
 /// Applies the reloaded memory limit to the live worker and handles every
-/// update outcome. `None` means the limit was applied (or queued for idle
-/// application) and the reload continues; `Some(response)` ends the reload.
-#[allow(clippy::too_many_arguments)]
+/// update outcome. `None` means the limit was applied and the reload
+/// continues; `Some(response)` ends the reload.
 pub(super) async fn apply_live_memory_limit(
     application_state: &ApplicationState,
     worker_handle: &crate::worker::handle::WorkerHandle,
     effective_mlx_memory_ceiling_bytes: u64,
     memory_effective_generation: &str,
     candidate_generation: &str,
-    current_resolved: &crate::ResolvedRuntimeConfig,
     discovered_model_count: usize,
 ) -> Option<Response> {
     // A restart-required candidate is not wholly effective yet. Sending its full
@@ -91,28 +82,11 @@ pub(super) async fn apply_live_memory_limit(
         )
         .await
     {
-        Ok(
-            update_outcome @ (MlxMemoryLimitUpdateOutcome::Applied
-            | MlxMemoryLimitUpdateOutcome::Queued),
-        ) => {
+        Ok(MlxMemoryLimitUpdateOutcome::Applied) => {
             worker_handle.record_memory_configuration_generation(
                 memory_effective_generation.to_owned(),
-                update_outcome,
+                MlxMemoryLimitUpdateOutcome::Applied,
             );
-            if update_outcome == MlxMemoryLimitUpdateOutcome::Queued {
-                tokio::spawn(
-                    crate::config::queued_memory_reload::reconcile_reloaded_memory_config(
-                        application_state.clone(),
-                        memory_effective_generation.to_owned(),
-                        current_resolved.clone(),
-                    ),
-                );
-            } else {
-                *application_state
-                    .pending_memory_config_generation
-                    .lock()
-                    .await = None;
-            }
             None
         }
         Ok(MlxMemoryLimitUpdateOutcome::Rejected) => Some(
@@ -134,10 +108,6 @@ pub(super) async fn apply_live_memory_limit(
                 .into_response(),
         ),
         Err(worker_control_error) => {
-            *application_state
-                .pending_memory_config_generation
-                .lock()
-                .await = None;
             worker_handle.record_memory_configuration_generation(
                 memory_effective_generation.to_owned(),
                 MlxMemoryLimitUpdateOutcome::Rejected,

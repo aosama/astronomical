@@ -275,11 +275,10 @@ pub(crate) fn status_report_lines(
             text_field(status_document, "/expert_memory_mode")
         ),
         format!(
-            "  memory ceiling:    {} effective of {} (configured {}, pending {})",
+            "  memory ceiling:    {} effective of {} (configured {})",
             gigabyte_field(status_document, "/mlx_memory_ceiling_bytes"),
             gigabyte_field(status_document, "/machine_mlx_memory_ceiling_bytes"),
-            text_field(status_document, "/configured_maximum_mlx_memory_gb"),
-            text_field(status_document, "/pending_mlx_memory_ceiling_bytes")
+            text_field(status_document, "/configured_maximum_mlx_memory_gb")
         ),
         format!(
             "  session:           {} requests · {:.0} tok/s prefill · {:.0} tok/s decode",

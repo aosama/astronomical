@@ -10,6 +10,8 @@ const ROMEO_LINE: &str = "But soft, what light through yonder window breaks?";
 /// Answers every request with one yes-or-no outcome.
 struct OneAnswerEngine;
 
+impl memory_policy::live_memory_limit::LiveMemoryLimitEngine for OneAnswerEngine {}
+
 impl DecisionEngine for OneAnswerEngine {
     fn load(&mut self) -> Result<DecisionEngineLoadResult, DecisionFailure> {
         Ok(DecisionEngineLoadResult {

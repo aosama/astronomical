@@ -3,9 +3,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::ImageGenerationEngineStep;
 use crate::{EnginePlacement, FLUX2_KLEIN_OFFICIAL_MODEL_ID, WorkerRuntimeError};
 use ipc_protocol::{
-    ImageGenerationFailureReason, MlxMemorySnapshotSource, RequestId, WorkerCommand, WorkerEvent,
+    ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
+    RequestId, WorkerCommand, WorkerEvent,
 };
 use tokio::time::timeout;
 
@@ -16,7 +18,7 @@ use self::mid_swap_failure_steps::{
 use self::support::{
     ScriptedImageEngine, ScriptedRuntime, ScriptedRuntimeFactory, assert_completed_payload,
     assert_finalized_with_cleanup, close_worker, completed_step, image_command, lock, next_event,
-    progress_step, start_idle_worker, start_worker, swap_image_command,
+    progress_step, start_idle_worker, start_worker, start_worker_swapping_in, swap_image_command,
 };
 use super::chat::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
 use super::chat::support as chat_support;
@@ -31,16 +33,7 @@ async fn should_complete_an_image_before_finalization_without_duplicate_delivery
         })],
         vec![Ok(completed_step())],
     ]);
-    let (mut events, mut commands, worker) =
-        start_idle_worker(vec![Ok(ScriptedRuntime::Image(image_engine))], 8_000).await;
-    assert!(matches!(
-        next_event(&mut events).await,
-        WorkerEvent::Idle { .. }
-    ));
-    commands
-        .send_command(&swap_image_command())
-        .await
-        .expect("the image model should be selected");
+    let (mut events, mut commands, worker) = start_worker_swapping_in(image_engine).await;
     assert!(
         matches!(next_event(&mut events).await, WorkerEvent::ModelSwapped { model_id, .. } if model_id == FLUX2_KLEIN_OFFICIAL_MODEL_ID)
     );
@@ -97,13 +90,7 @@ async fn should_cancel_an_image_and_reuse_the_runtime() {
         vec![Ok(completed_step())],
     ]);
     let cancellation_count = Arc::clone(&image_engine.cancellation_count);
-    let (mut events, mut commands, worker) =
-        start_idle_worker(vec![Ok(ScriptedRuntime::Image(image_engine))], 8_000).await;
-    let _idle = next_event(&mut events).await;
-    commands
-        .send_command(&swap_image_command())
-        .await
-        .expect("swap");
+    let (mut events, mut commands, worker) = start_worker_swapping_in(image_engine).await;
     let _swapped = next_event(&mut events).await;
     let _model_load_memory = next_event(&mut events).await;
     commands
@@ -141,13 +128,7 @@ async fn should_exit_fatally_without_finalizing_when_image_cancellation_cleanup_
         vec![vec![Ok(progress_step())]],
         "scripted image request cleanup failed".to_owned(),
     );
-    let (mut events, mut commands, worker) =
-        start_idle_worker(vec![Ok(ScriptedRuntime::Image(image_engine))], 8_000).await;
-    let _idle = next_event(&mut events).await;
-    commands
-        .send_command(&swap_image_command())
-        .await
-        .expect("swap");
+    let (mut events, mut commands, worker) = start_worker_swapping_in(image_engine).await;
     let _swapped = next_event(&mut events).await;
     let _model_load_memory = next_event(&mut events).await;
     commands
@@ -296,14 +277,7 @@ async fn should_report_a_bounded_actionable_image_engine_load_failure() {
         "x".repeat(600)
     );
     let image_engine = ScriptedImageEngine::failing_load(detailed_failure);
-    let (mut events, mut commands, worker) =
-        start_idle_worker(vec![Ok(ScriptedRuntime::Image(image_engine))], 8_000).await;
-    let _idle = next_event(&mut events).await;
-
-    commands
-        .send_command(&swap_image_command())
-        .await
-        .expect("the rejected image swap should reach the worker");
+    let (mut events, commands, worker) = start_worker_swapping_in(image_engine).await;
     let WorkerEvent::ModelSwapFailed {
         loaded_model_remains_ready,
         model_load_failure_reason,
@@ -324,13 +298,7 @@ async fn should_report_a_bounded_actionable_image_engine_load_failure() {
 async fn should_refuse_a_ceiling_below_the_image_floor_and_keep_serving_at_the_floor() {
     let image_engine = ScriptedImageEngine::new(vec![vec![Ok(completed_step())]]);
     let updated_limits = Arc::clone(&image_engine.updated_limits);
-    let (mut events, mut commands, worker) =
-        start_idle_worker(vec![Ok(ScriptedRuntime::Image(image_engine))], 8_000).await;
-    let _idle = next_event(&mut events).await;
-    commands
-        .send_command(&swap_image_command())
-        .await
-        .expect("image swap");
+    let (mut events, mut commands, worker) = start_worker_swapping_in(image_engine).await;
     let _image_swapped = next_event(&mut events).await;
     let _image_model_load_memory = next_event(&mut events).await;
 
@@ -629,3 +597,5 @@ async fn should_keep_the_previous_raise_limit_when_a_live_update_is_rejected() {
 
 mod mid_swap_failure_steps;
 mod support;
+
+mod live_memory_limit_during_image;

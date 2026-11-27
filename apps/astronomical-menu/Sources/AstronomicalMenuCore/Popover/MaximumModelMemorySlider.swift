@@ -17,10 +17,11 @@ struct MaximumModelMemorySlider: View {
   var macMemoryBytes: UInt64 = ProcessInfo.processInfo.physicalMemory
   @State private var isDragging = false
 
-  /// A change is waiting for the reply being written to finish. The engine holds one such change
-  /// at a time and refuses a second, so the slider rests until it lands rather than letting a
-  /// drag end in a refusal.
-  private var changeIsQueued: Bool { statusDocument.pendingMlxMemoryCeilingBytes != nil }
+  /// The fill and the thumb's ring turn red while the last requested limit stands refused.
+  private var sliderTint: Color {
+    maximumModelMemoryLimitWasRefused(statusDocument: statusDocument)
+      ? .red : AstronomicalBrandPalette.accentColor
+  }
 
   private var sliderPresentation: MaximumModelMemorySliderPresentation {
     MaximumModelMemorySliderPresentation(
@@ -71,7 +72,7 @@ struct MaximumModelMemorySlider: View {
       ZStack(alignment: .leading) {
         Capsule().fill(.secondary.opacity(0.18))
           .frame(height: MaximumModelMemorySliderLayout.trackHeight)
-        Capsule().fill(AstronomicalBrandPalette.accentColor)
+        Capsule().fill(sliderTint)
           .frame(width: thumbCenter, height: MaximumModelMemorySliderLayout.trackHeight)
         if let modelMarkFraction = sliderPresentation.modelMarkFraction {
           Capsule().fill(Color.primary.opacity(0.7))
@@ -79,7 +80,7 @@ struct MaximumModelMemorySlider: View {
             .offset(x: thumbRadius + thumbTravel * modelMarkFraction - 1)
         }
         Circle().fill(Color.white)
-          .overlay(Circle().stroke(AstronomicalBrandPalette.accentColor, lineWidth: 2))
+          .overlay(Circle().stroke(sliderTint, lineWidth: 2))
           .frame(
             width: MaximumModelMemorySliderLayout.thumbDiameter,
             height: MaximumModelMemorySliderLayout.thumbDiameter
@@ -92,8 +93,6 @@ struct MaximumModelMemorySlider: View {
       .gesture(dragGesture(thumbRadius: thumbRadius, thumbTravel: thumbTravel))
     }
     .frame(height: MaximumModelMemorySliderLayout.controlHeight)
-    .opacity(changeIsQueued ? 0.45 : 1)
-    .allowsHitTesting(!changeIsQueued)
     .accessibilityElement()
     .accessibilityLabel("Maximum model RAM")
     .accessibilityValue("\(sliderPresentation.chosenWholeGigabytes) gigabytes")
@@ -121,7 +120,6 @@ struct MaximumModelMemorySlider: View {
   // applying each one would have the engine resize its memory once per gigabyte on the way. The
   // Apply button, which appears as soon as the thumb differs from the limit in force, commits.
   private func stepForAccessibility(_ adjustmentDirection: AccessibilityAdjustmentDirection) {
-    guard !changeIsQueued else { return }
     let chosenWholeGigabytes = telemetryStore.editableMaximumMlxMemoryGigabytes
     switch adjustmentDirection {
     case .increment where chosenWholeGigabytes < telemetryStore.maximumWholeGigabytes:
@@ -180,15 +178,6 @@ struct MaximumModelMemorySlider: View {
     }
     if let cappedCeilingCaption = controlPresentation.cappedCeilingCaption {
       Text(cappedCeilingCaption).font(.caption).foregroundStyle(.orange)
-    }
-    if let pendingMlxMemoryCeilingBytes = statusDocument.pendingMlxMemoryCeilingBytes {
-      // A queued change is the control working as designed, so it reads as a quiet note.
-      Text(
-        queuedMaximumModelMemoryCaption(
-          pendingCeilingBytes: pendingMlxMemoryCeilingBytes,
-          wiredResidencyBudgetBytes: statusDocument.wiredResidencyBudgetBytes)
-      )
-      .font(.caption).foregroundStyle(.secondary)
     }
     if let mlxMemoryLimitError = statusDocument.mlxMemoryLimitError {
       Text(mlxMemoryLimitError).font(.caption).foregroundStyle(.red)

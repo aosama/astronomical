@@ -64,23 +64,17 @@ struct MaximumMlxMemoryControlPresentation: Equatable {
     if let configuredWholeGigabytes = statusDocument.configuredMaximumMlxMemoryGigabytes {
       configurationIsUnreachable = configuredWholeGigabytes > reachableWholeGigabytes
     }
-    // The engine holds one queued change at a time and refuses a second, so Apply waits until
-    // the queued one lands: offering it would only end in that refusal.
-    let changeIsQueued = statusDocument.pendingMlxMemoryCeilingBytes != nil
     shouldOfferApply =
-      !changeIsQueued
-      && (editableMaximumWholeGigabytes != appliedMaximumMlxMemoryWholeGigabytes(for: statusDocument)
-        || configurationIsUnreachable)
+      editableMaximumWholeGigabytes != appliedMaximumMlxMemoryWholeGigabytes(for: statusDocument)
+      || configurationIsUnreachable
     cappedCeilingCaption = Self.cappedCeilingCaption(for: statusDocument)
   }
 
   /// A cap is reported only against an explicit request: the top of the slider asks for
   /// whatever the Mac allows, so landing below the machine ceiling there is
-  /// the request being honoured, not a shortfall. A queued change is skipped
-  /// too, because the live ceiling is still the previous one.
+  /// the request being honoured, not a shortfall.
   private static func cappedCeilingCaption(for statusDocument: DaemonStatusDocument) -> String? {
     guard let configuredWholeGigabytes = statusDocument.configuredMaximumMlxMemoryGigabytes,
-      statusDocument.pendingMlxMemoryCeilingBytes == nil,
       statusDocument.mlxMemoryCeilingBytes > 0
     else { return nil }
     let (configuredCeilingBytes, overflowOccurred) =
@@ -90,3 +84,11 @@ struct MaximumMlxMemoryControlPresentation: Equatable {
     return "Capped at \(gigabyteValueText(byteCount: statusDocument.mlxMemoryCeilingBytes)) on this Mac"
   }
 }
+
+/// Whether the slider shows, in red, that the engine refused the limit it was last asked for.
+/// The engine answers a change at once, even while a reply is being written, so a refusal is
+/// known the moment the thumb is let go; red says so before the caption under it is read.
+func maximumModelMemoryLimitWasRefused(statusDocument: DaemonStatusDocument) -> Bool {
+  statusDocument.mlxMemoryLimitError != nil
+}
+

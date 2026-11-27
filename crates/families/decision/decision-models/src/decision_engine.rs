@@ -14,6 +14,7 @@ use decision_contract::decision_training_job::{
 use decision_contract::{
     DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue, QuestionOutcome,
 };
+use memory_policy::live_memory_limit::LiveMemoryLimitEngine;
 
 /// What one step of a training did.
 #[derive(Clone, Debug, PartialEq)]
@@ -27,7 +28,7 @@ pub enum DecisionTrainingStep {
 }
 
 /// A loaded decision runtime that answers typed questions about a state.
-pub trait DecisionEngine: 'static {
+pub trait DecisionEngine: 'static + LiveMemoryLimitEngine {
     /// Loads model resources and returns the identity and limits to advertise.
     fn load(&mut self) -> Result<DecisionEngineLoadResult, DecisionFailure>;
 
@@ -98,6 +99,8 @@ pub struct DecisionEngineOutput {
 /// Default decision slot used by workers whose models answer no decision requests.
 #[doc(hidden)]
 pub struct DecisionUnavailableEngine;
+
+impl LiveMemoryLimitEngine for DecisionUnavailableEngine {}
 
 impl DecisionEngine for DecisionUnavailableEngine {
     fn load(&mut self) -> Result<DecisionEngineLoadResult, DecisionFailure> {

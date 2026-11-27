@@ -1,10 +1,11 @@
 use std::{error::Error, process::ExitCode, time::Duration};
 
 use ipc_protocol::{
-    ChatGenerationCompletionReason, ChatModelCapabilities, ExpertMemoryMode, ProtocolReader,
-    ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
+    ChatGenerationCompletionReason, ChatModelCapabilities, ProtocolReader, ProtocolWriter,
+    RequestId, WorkerCommand, WorkerEvent,
 };
 
+mod fixture_memory_limit_answers;
 mod scripted_worker_cancellation;
 mod scripted_worker_chat;
 mod scripted_worker_decisions;
@@ -374,6 +375,11 @@ async fn dispatch_unstructured_chat(
 /// is a separate binary.
 const EXIT_ON_MLX_MEMORY_LIMIT_BYTES: u64 = 13;
 
+/// A ceiling of this many bytes is refused the way a real worker refuses a
+/// lower that the running request does not fit under (issue #2681). The
+/// integration test that drives it repeats the value.
+const REFUSED_MLX_MEMORY_LIMIT_BYTES: u64 = 17;
+
 /// Applies any other ceiling as the scripted worker always has. The exit lives
 /// here, not in the command loop, so the loop's branch count stays unchanged.
 async fn answer_mlx_memory_limit_update(
@@ -385,13 +391,22 @@ async fn answer_mlx_memory_limit_update(
         std::process::exit(1);
     }
     event_writer
-        .send_event(&WorkerEvent::MlxMemoryLimitChanged {
+        .send_event(&scripted_memory_limit_answer(
             effective_mlx_memory_ceiling_bytes,
-            minimum_mlx_memory_ceiling_bytes: 1,
-            expert_memory_mode: ExpertMemoryMode::Resident,
-            mlx_memory_snapshot: None,
-            expert_residency: None,
-        })
+        ))
         .await?;
     Ok(())
+}
+
+/// The refusal a real worker gives a lower the running request does not fit
+/// under, for the refused ceiling, and the applied change for any other.
+fn scripted_memory_limit_answer(effective_mlx_memory_ceiling_bytes: u64) -> WorkerEvent {
+    if effective_mlx_memory_ceiling_bytes == REFUSED_MLX_MEMORY_LIMIT_BYTES {
+        return fixture_memory_limit_answers::refused_memory_limit(
+            effective_mlx_memory_ceiling_bytes,
+            8 * 1_073_741_824,
+            "needs at least 8.0 GB while this request runs",
+        );
+    }
+    fixture_memory_limit_answers::applied_memory_limit(effective_mlx_memory_ceiling_bytes)
 }
