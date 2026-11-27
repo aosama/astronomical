@@ -31,7 +31,7 @@
 
 ## Performance Instructions
 
-- A minimal warmup run should be performed before the actual test; t
+- A minimal warmup run should be performed before the actual test.
 - The astro SSD prompt cache must be disabled during performance throughput tests and measurements FOR PROMPT-PREFILL measurements only .. for DECODE having SSD cache saves time and is desired.
 - The skill declaration (`skill.declare_to_models`) must be disabled during performance throughput tests and measurements, because it adds tokens to every prompt.
 
