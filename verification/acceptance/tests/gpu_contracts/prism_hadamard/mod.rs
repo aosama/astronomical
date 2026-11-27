@@ -4,6 +4,8 @@
 //! - `shared_core_validation`: the core validates the pack.
 //! - `decoder_state_dtypes`: decoder state is saved in the precision the
 //!   forward produces.
+//! - `prefill_chunk_breakdown`: where a prompt chunk's GPU time goes, by
+//!   kernel and between layers (any Qwen 3.5 core pack).
 //! - `shared_core_reply_token_profile`: where one reply token's time goes.
 //! - `stacked_sibling_projection_verdict`: stacked sibling matmuls against
 //!   one launch each.
@@ -17,6 +19,7 @@ pub(crate) mod support;
 
 mod decoder_state_dtypes;
 mod elementwise_fusion_parity;
+mod prefill_chunk_breakdown;
 mod shared_core;
 mod shared_core_reply_token_profile;
 mod shared_core_validation;

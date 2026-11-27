@@ -944,8 +944,29 @@ measure-row-exact-attention-verdict = "run -p xtask -- test-run --package astron
 # jobs of the MLX performance profiler, at a 35B-A3B layer's shapes, for a
 # reply token's 8 assignments, a draft round's 32 and a prompt chunk's
 # 16,384. Prints a verdict a cell and writes its comparison page. No model;
-# about a minute.
+# about a minute. The kernel saving does not reach the served engine: a real
+# layer already runs gate and up concurrently (measured 2026-11-27).
 measure-expert-gate-up-fusion-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter fused_gate_and_up_projection_against_two"
+# Where a 2-bit folded ternary projection over a 2,048-token prompt chunk
+# stands against dense float16 arithmetic: MLX's 2-bit multiply, the weight
+# expanded inside the graph then multiplied dense, and the dense multiply on
+# a weight expanded beforehand, at Bonsai 2.5's shapes, with verdicts. No
+# model; about 25 seconds.
+measure-ternary-prompt-projection-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 120 --filter ternary_prompt_projections"
+# Where one prompt chunk's GPU time goes, kernel by kernel: one
+# linear-attention and one full-attention layer over 2,048 tokens of a
+# Qwen 3.5 core pack (Bonsai, Ornith), timed by the MLX performance profiler.
+# Needs --configuration with model_directory. Under a minute.
+measure-prefill-chunk-breakdown = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --ignored --case-budget-seconds 110 --filter should_break_down_one_prompt_chunk_layer_by_kernel"
+# The time a prompt chunk spends between its layers: a 512-token chunk whole,
+# against its layers alone, with the GPU's idle time. Meaningful as a
+# subtraction on a dense pack only. Needs --configuration with
+# model_directory. Under a minute.
+measure-prefill-between-layers = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --ignored --case-budget-seconds 110 --filter should_measure_the_time_a_chunk_spends_between_layers"
+# A served 2,048-token prompt chunk timed whole, with the GPU's busy and
+# idle time and its hand-offs. Needs --configuration with model_directory.
+# About 25 seconds on the 35B-A3B; over two minutes on a dense 27B.
+measure-prefill-served-chunk = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --ignored --case-budget-seconds 170 --filter should_measure_a_served_chunk_whole"
 # What a reply token saves when register-ordered projections that read the
 # same row share one preparation of it (#2568): stock, each copy preparing
 # its own input, and one preparation for all sixteen copies, alternated for
