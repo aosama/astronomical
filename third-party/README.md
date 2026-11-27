@@ -53,9 +53,10 @@ build path: the pin files are the only place a version, URL, or digest
 appears, and every other build file consumes them through CMake variables.
 
 No MLX-C release pairs with the pinned MLX v0.32.5 yet, so MLX-C stays at
-v0.8.0, the release authored against MLX v0.32.4, and carries one flagged
-compatibility bridge patch (`attention-window-size-for-mlx-0.32.5`, in the
-registry below). It is deleted at the next MLX-C bump.
+v0.8.0, the release authored against MLX v0.32.4, and carries two flagged
+compatibility bridge patches (`attention-window-size-for-mlx-0.32.5` and
+`include-format-in-io-header`, in the registry below). Each is deleted at the
+MLX-C release that makes it unnecessary.
 
 ## Patch registry
 
@@ -158,6 +159,17 @@ MLX-C patches (`mlx-c-0.8.0-*.patch`):
   unwindowed behavior. The published `mlx-bridge` crate carries the same
   edit for its own native build. Retires at the MLX-C release that forwards
   `window_size` itself.
+
+- `include-format-in-io-header` — compatibility bridge. MLX-C v0.8.0's
+  `mlx/c/private/io.h` calls `std::format` but includes only `<iostream>`,
+  `<streambuf>` and `mlx/mlx.h`. Against MLX v0.32.4 that compiled because
+  MLX's `mlx/random.h` included `<chrono>`, which in libstdc++ brings in
+  `<format>`; MLX v0.32.5's `mlx/random.h` no longer does, so GCC on Linux
+  stops with `'format' is not a member of 'std'` (issue #2682). The patch adds
+  `#include <format>`. The macOS build compiles against MLX v0.32.5 without
+  it, so with libc++ the header was already reachable and the patch changes
+  nothing there. Retires at the MLX-C release whose `io.h` includes
+  `<format>` itself.
 
 - `gather-qmm-global-scale-compatibility` — retired at the v0.8.0 bump. MLX
   carries, since v0.32.3, a `global_scale` parameter in `gather_qmm` before

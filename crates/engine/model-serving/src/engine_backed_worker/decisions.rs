@@ -1,15 +1,14 @@
 //! Serializes one synchronous decisions request and publishes its cleanup event.
 
+use super::output::finalized_memory_snapshot;
+use super::support::elapsed_millis_since;
 use super::worker_engines::WorkerEngines;
 use crate::DecisionEngine as _;
 use decision_contract::{DecisionFailure, HeadInputRequest};
-use ipc_protocol::{
-    DecisionsCommand, MlxMemorySnapshotSource, ProtocolWriter, RequestId, WorkerEvent,
-};
+use ipc_protocol::{DecisionsCommand, ProtocolWriter, RequestId, WorkerEvent};
 use tokio::io::AsyncWrite;
 
 use super::WorkerRuntimeError;
-use super::output;
 use super::{EngineBackedWorker, LoadedRuntime};
 
 impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
@@ -120,28 +119,19 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     {
         // The engine captured its post-cleanup observation during the decide
         // call, so the finalization publishes what the status surfaces paint.
-        let mlx_memory_snapshot = match self.loaded_runtime.as_mut() {
-            Some(LoadedRuntime::Decisions(decision_engine)) => decision_engine
-                .take_post_cleanup_memory_telemetry()
-                .map(|mlx_memory_telemetry| {
-                    output::worker_memory_snapshot(
-                        MlxMemorySnapshotSource::Finalized,
-                        mlx_memory_telemetry,
-                    )
-                }),
+        let post_cleanup_memory_telemetry = match self.loaded_runtime.as_mut() {
+            Some(LoadedRuntime::Decisions(decision_engine)) => {
+                decision_engine.take_post_cleanup_memory_telemetry()
+            }
             _ => None,
         };
         event_writer
             .send_event(&WorkerEvent::DecisionsFinalized {
                 request_id,
                 elapsed_millis,
-                mlx_memory_snapshot,
+                mlx_memory_snapshot: finalized_memory_snapshot(post_cleanup_memory_telemetry),
             })
             .await?;
         Ok(())
     }
-}
-
-fn elapsed_millis_since(started_at: std::time::Instant) -> u64 {
-    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
 }

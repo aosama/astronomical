@@ -2,6 +2,7 @@ use serial_test::file_serial;
 
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
+use crate::measurement_tests::skip_without_metal;
 use crate::wired_memory::read_wired_memory;
 
 /// MLX creates its Metal device on first use, and only the repository's
@@ -16,6 +17,9 @@ fn started_mlx_runtime() -> MlxRuntime {
 #[test]
 #[file_serial]
 fn should_read_a_wired_total_that_covers_what_it_says_is_outside_mlx() {
+    if skip_without_metal("should_read_a_wired_total_that_covers_what_it_says_is_outside_mlx") {
+        return;
+    }
     let _mlx_runtime = started_mlx_runtime();
     let reading = read_wired_memory().expect("macOS reports its wired memory");
     assert!(reading.system_wired_bytes > 0);
@@ -29,6 +33,9 @@ fn should_read_a_wired_total_that_covers_what_it_says_is_outside_mlx() {
 #[test]
 #[file_serial]
 fn should_give_the_room_under_the_wire_limit_when_the_limit_is_known() {
+    if skip_without_metal("should_give_the_room_under_the_wire_limit_when_the_limit_is_known") {
+        return;
+    }
     let _mlx_runtime = started_mlx_runtime();
     let reading = read_wired_memory().expect("macOS reports its wired memory");
     if reading.wire_limit_bytes == 0 {
@@ -52,6 +59,9 @@ fn should_give_the_room_under_the_wire_limit_when_the_limit_is_known() {
 #[file_serial]
 #[ignore = "allocates and releases 1 GiB on the GPU ten times; run with nothing else using MLX"]
 fn should_measure_how_long_macos_keeps_released_mlx_memory_wired() {
+    if skip_without_metal("should_measure_how_long_macos_keeps_released_mlx_memory_wired") {
+        return;
+    }
     let _mlx_runtime = started_mlx_runtime();
     let release_lag = crate::wired_memory::measure_wire_release_lag(1 << 30, 10)
         .expect("the wire release probe runs");

@@ -29,7 +29,7 @@ pub(crate) struct ActiveDecisionTraining {
 
 impl ActiveDecisionTraining {
     fn elapsed_millis(&self) -> u64 {
-        u64::try_from(self.started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
+        super::support::elapsed_millis_since(self.started_at)
     }
 }
 
