@@ -11,10 +11,9 @@ use std::cell::Cell;
 use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;
-use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::paged_route_resolution::OptimisticLayerServing;
+use super::routed_layer_input::RoutedLayerInput;
 use super::{RequestDecoderStateStack, TextExecutionError};
-use crate::qwen3_5_text::expert_streaming::expert_pager::Qwen3_5ExpertPager;
 use crate::qwen3_5_text::{PagedRouteValidationOutcome, Qwen3_5MoEPagedExecutionMode};
 use crate::{PerformanceAttribution, PerformanceCounter};
 
@@ -50,33 +49,27 @@ impl Qwen3_5Model {
     /// in-graph. `Ok(None)` when the forward is exact, or when the layer
     /// cannot be served the forward's way; an optimistic forward is then
     /// marked to be run again.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_speculative_table_page(
         &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        token_count: i32,
+        routed_layer_input: &RoutedLayerInput<'_>,
         decode_tokens_multiply_packed_pages: bool,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        hidden_states: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            token_count,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+        } = *routed_layer_input;
         let missing_route_collector = &self.paged_forward_missing_route_collector;
         if !missing_route_collector.is_optimistic() {
             // The other speculative way, when this forward is taking it; an
             // exact forward gets `None` from there as it did from here.
-            return self.dispatch_in_graph_table_page(
-                layer_index,
-                selected_indices,
-                selected_scores,
-                hidden_states,
-                mixture_of_experts_weights,
-                should_use_compiled_elementwise_graphs,
-                performance_attribution,
-            );
+            return self.dispatch_in_graph_table_page(routed_layer_input, performance_attribution);
         }
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
@@ -129,44 +122,22 @@ impl Qwen3_5Model {
 
     /// Serves a layer from its table with the route remapped on-device: any
     /// table when the forward is optimistic, otherwise only a whole layer.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_table_page_without_host_route(
         &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        token_count: i32,
+        routed_layer_input: &RoutedLayerInput<'_>,
         decode_tokens_multiply_packed_pages: bool,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        hidden_states: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
         if let Some(handled) = self.dispatch_speculative_table_page(
-            expert_pager,
-            layer_index,
-            token_count,
+            routed_layer_input,
             decode_tokens_multiply_packed_pages,
-            selected_indices,
-            selected_scores,
-            mixture_of_experts_weights,
-            hidden_states,
-            should_use_compiled_elementwise_graphs,
             performance_attribution,
         )? {
             return Ok(Some(handled));
         }
         self.dispatch_retained_full_hit_packed_page(
-            expert_pager,
-            layer_index,
-            token_count,
+            routed_layer_input,
             decode_tokens_multiply_packed_pages,
-            selected_indices,
-            selected_scores,
-            mixture_of_experts_weights,
-            hidden_states,
-            should_use_compiled_elementwise_graphs,
             performance_attribution,
         )
     }
