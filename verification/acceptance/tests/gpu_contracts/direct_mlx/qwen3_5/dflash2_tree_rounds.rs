@@ -37,7 +37,7 @@ const SAMPLED_SEED_COUNT: u64 = 3;
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
-    decode_cells_with_trees(&[CODE_CELL], SAMPLED_SEED_COUNT);
+    decode_cells_with_trees(&[CODE_CELL], 1);
 }
 
 /// A story continued after a long prompt, sampled: the cell a long chat or a
@@ -341,7 +341,8 @@ fn compare_cells_per_seed(cells: &[Cell], seed_count: u64) {
 /// Plain decoding in the same harness, the ladder's baseline: one token a
 /// step through the target's verification forward with no taps and no
 /// drafter, picked as the tree rounds pick, over the same output length.
-pub(super) fn report_plain_decode(cell: &Cell, seed_count: u64) {
+pub(super) fn report_plain_decode(cell: &Cell, sampled_story_seed_count: u64) {
+    let seed_count = cell.seed_count(sampled_story_seed_count);
     let pair = load_pair();
     let (mut emitted_count, mut decode_seconds) = (0, 0.0);
     for seed_offset in 0..seed_count {
@@ -386,11 +387,7 @@ pub(super) fn decode_cells_with_trees(cells: &[Cell], sampled_seed_limit: u64) {
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
     for (cell_index, cell) in cells.iter().enumerate() {
-        let seed_count = if cell.temperature_thousandths == 0 {
-            1
-        } else {
-            SAMPLED_SEED_COUNT.min(sampled_seed_limit)
-        };
+        let seed_count = cell.seed_count(SAMPLED_SEED_COUNT.min(sampled_seed_limit));
         let mut pooled_decode = PooledTreeDecode::default();
         for seed_offset in 0..seed_count {
             let seeded_cell = Cell {

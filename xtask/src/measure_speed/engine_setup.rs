@@ -1,7 +1,8 @@
 //! Whether the engine is fit to be measured, and which build it is, read from
 //! its status. Speed is measured only on Development, with the
-//! `astro_ssd_prompt_cache` and the skill declaration off, as AGENTS.md
-//! requires of throughput measurements; a release ledger also needs a clean
+//! `astro_ssd_prompt_cache` and the skill declaration off: every task reports
+//! prompt reading, which AGENTS.md measures with the `astro_ssd_prompt_cache`
+//! off, since a restored prompt would skip it; a release ledger also needs a clean
 //! build, so its figures belong to one commit.
 
 use serde_json::Value;
