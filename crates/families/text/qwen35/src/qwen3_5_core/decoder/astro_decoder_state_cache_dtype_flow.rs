@@ -41,6 +41,11 @@ pub enum AffineDtypeContract {
 #[derive(Debug, Clone, Copy)]
 pub struct LinearAttentionDtypeFlow {
     pub normalized_input_dtype: MlxDtype,
+    /// The dtype of the invariant query and key scales the graph multiplies
+    /// in before the gated-delta kernel: the model's stored activation dtype
+    /// (`load_invariant_linear_scales`). Bfloat16 for Qwen packs, float16 for
+    /// folded ternary packs, float32 where MLX computes on its CPU.
+    pub invariant_scale_dtype: MlxDtype,
     pub input_queries_keys_values_projection: AffineDtypeContract,
     pub convolution_weight_dtype: MlxDtype,
     pub normalization_weight_dtype: MlxDtype,
@@ -96,10 +101,14 @@ pub fn linear_attention_dtypes(
     let convolution_output_dtype =
         promote_floating_dtypes(convolution_state_dtype, flow.convolution_weight_dtype)?;
     // Qwen multiplies normalized linear-attention queries and keys by retained
-    // BF16 scales before the gated-delta kernel. The kernel declares its sequence
-    // output with the promoted query dtype, independently from its FP32 state.
+    // scales in the model's activation dtype before the gated-delta kernel. The
+    // kernel declares its sequence output with the promoted query dtype,
+    // independently from its FP32 state. Assuming bfloat16 scales here widened
+    // a float16 pack's state to float32, since float16 and bfloat16 promote to
+    // float32, and the astro_ssd_prompt_cache then refused every block the
+    // forward really stored in float16 (Ternary Bonsai 2.5 in 0.2.136).
     let recurrent_output_dtype =
-        promote_floating_dtypes(convolution_output_dtype, MlxDtype::BFloat16)?;
+        promote_floating_dtypes(convolution_output_dtype, flow.invariant_scale_dtype)?;
     let normalized_recurrent_output_dtype =
         promote_floating_dtypes(recurrent_output_dtype, flow.normalization_weight_dtype)?;
     let output_gate_dtype =

@@ -219,6 +219,7 @@ fn should_reject_non_floating_affine_scale_dtypes() {
 fn should_derive_linear_attention_dtypes_across_all_bfloat16_layers() {
     let flow = LinearAttentionDtypeFlow {
         normalized_input_dtype: MlxDtype::BFloat16,
+        invariant_scale_dtype: MlxDtype::BFloat16,
         input_queries_keys_values_projection: native_affine_contract(),
         convolution_weight_dtype: MlxDtype::BFloat16,
         normalization_weight_dtype: MlxDtype::BFloat16,
@@ -244,6 +245,7 @@ fn should_widen_linear_attention_through_the_convolution_and_gate_promotions() {
     // gate widen every later stage to float32.
     let flow = LinearAttentionDtypeFlow {
         normalized_input_dtype: MlxDtype::Float16,
+        invariant_scale_dtype: MlxDtype::BFloat16,
         input_queries_keys_values_projection: quantized_affine_contract(
             MlxDtype::Float16,
             MlxDtype::Float16,
@@ -429,5 +431,65 @@ fn should_follow_a_native_weight_bound_in_float32_through_embedding_and_affine()
             .expect("the dtype should derive"),
         MlxDtype::BFloat16,
         "a BF16 native weight keeps the BF16 contract unchanged"
+    );
+}
+
+/// A folded ternary pack whose every auxiliary is narrowed to float16.
+fn float16_pack_linear_attention_flow(invariant_scale_dtype: MlxDtype) -> LinearAttentionDtypeFlow {
+    LinearAttentionDtypeFlow {
+        normalized_input_dtype: MlxDtype::Float16,
+        invariant_scale_dtype,
+        input_queries_keys_values_projection: quantized_affine_contract(
+            MlxDtype::Float16,
+            MlxDtype::Float16,
+        ),
+        convolution_weight_dtype: MlxDtype::Float16,
+        normalization_weight_dtype: MlxDtype::Float16,
+        output_gate_projection: quantized_affine_contract(MlxDtype::Float16, MlxDtype::Float16),
+        output_projection: quantized_affine_contract(MlxDtype::Float16, MlxDtype::Float16),
+    }
+}
+
+#[test]
+fn should_keep_a_float16_pack_in_float16_when_its_scales_are_float16() {
+    // Ternary Bonsai 2.5: float16 scales keep the layer, and so every later
+    // layer's attention state, in the float16 the forward really stores.
+    let (astro_decoder_state_cache_dtypes, output_dtype) =
+        linear_attention_dtypes(&float16_pack_linear_attention_flow(MlxDtype::Float16)).unwrap();
+
+    assert_eq!(
+        astro_decoder_state_cache_dtypes,
+        Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
+            convolution: AstroDecoderStateCacheTensorDtype::Float16,
+        }
+    );
+    assert_eq!(output_dtype, MlxDtype::Float16);
+}
+
+#[test]
+fn should_widen_a_float16_pack_to_float32_when_its_scales_are_bfloat16() {
+    // The assumption 0.2.136 made for every model: float16 and bfloat16
+    // promote to float32, which no float16 pack's forward does.
+    let (_, output_dtype) =
+        linear_attention_dtypes(&float16_pack_linear_attention_flow(MlxDtype::BFloat16)).unwrap();
+
+    assert_eq!(output_dtype, MlxDtype::Float32);
+}
+
+#[test]
+fn should_follow_float32_scales_where_mlx_computes_on_its_cpu() {
+    let (_, output_dtype) =
+        linear_attention_dtypes(&float16_pack_linear_attention_flow(MlxDtype::Float32)).unwrap();
+
+    assert_eq!(output_dtype, MlxDtype::Float32);
+}
+
+#[test]
+fn should_reject_a_non_floating_invariant_scale_dtype() {
+    let result = linear_attention_dtypes(&float16_pack_linear_attention_flow(MlxDtype::Int32));
+
+    assert_invalid_input_description(
+        result.map(|(_, output_dtype)| output_dtype),
+        "decoder dtype flow encountered an unsupported MLX dtype",
     );
 }
