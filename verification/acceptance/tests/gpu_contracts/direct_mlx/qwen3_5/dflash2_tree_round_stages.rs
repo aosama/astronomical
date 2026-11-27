@@ -18,7 +18,7 @@ use super::dflash2_journey_support::{
     TargetLogitRows, forward_with_taps, story_cell, story_prompt,
 };
 use super::dflash2_kept_per_round::{Cell, JourneyPair, RoundState, load_pair};
-use super::dflash2_tree_oracle::{ORACLE_CELLS, prefill, target_picks};
+use super::dflash2_tree_oracle::{CODE_CELL, prefill, target_picks};
 use super::dflash2_tree_rounds::kept_tap_rows;
 
 const BREAKDOWN_ROUND_COUNT: usize = 24;
@@ -71,7 +71,7 @@ fn should_measure_where_a_tree_round_spends_its_time_after_a_long_prompt() {
             .join(" ")
             .into_boxed_str(),
     );
-    let mut cell = ORACLE_CELLS[2];
+    let mut cell = CODE_CELL;
     cell.prompt = long_prompt;
     print_stage_breakdown(&pair, &cell, "long raw prompt, 1.0");
 }
@@ -89,7 +89,7 @@ fn should_measure_where_a_small_tree_round_spends_its_time_after_a_journey_promp
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
     let journey_prompt = story_prompt();
-    let mut prompts = vec![("short prompt".to_owned(), ORACLE_CELLS[2].prompt)];
+    let mut prompts = vec![("short prompt".to_owned(), CODE_CELL.prompt)];
     for word_count in [750, 2_200, LONG_PROMPT_WORD_COUNT] {
         let prompt: &'static str = Box::leak(
             LONG_PROMPT_SOURCE
@@ -113,7 +113,7 @@ fn should_measure_where_a_small_tree_round_spends_its_time_after_a_journey_promp
             } else {
                 pair.target.set_row_exact_tree_attention_aside();
             }
-            let mut cell = ORACLE_CELLS[2];
+            let mut cell = CODE_CELL;
             cell.prompt = prompt;
             cell.node_budget = 3;
             let path_label = if uses_kernel {
@@ -151,13 +151,13 @@ fn should_separate_a_long_contexts_attention_work_from_copies_of_its_keys() {
             .join(" ")
             .into_boxed_str(),
     );
-    let mut long_cell = ORACLE_CELLS[2];
+    let mut long_cell = CODE_CELL;
     long_cell.prompt = long_prompt;
     let journey_prompt = story_prompt();
-    let mut journey_cell = ORACLE_CELLS[2];
+    let mut journey_cell = CODE_CELL;
     journey_cell.prompt = journey_prompt;
     for (context_label, cell) in [
-        ("short prompt", ORACLE_CELLS[2]),
+        ("short prompt", CODE_CELL),
         ("long prompt", long_cell),
         ("story prompt", journey_cell),
     ] {
@@ -510,12 +510,9 @@ fn should_leave_the_trained_rows_unchanged_when_the_block_is_longer() {
             .join(" ")
             .into_boxed_str(),
     );
-    let mut long_cell = ORACLE_CELLS[2];
+    let mut long_cell = CODE_CELL;
     long_cell.prompt = long_prompt;
-    for (label, cell) in [
-        ("short prompt", ORACLE_CELLS[2]),
-        ("long prompt", long_cell),
-    ] {
+    for (label, cell) in [("short prompt", CODE_CELL), ("long prompt", long_cell)] {
         let (round, _state, first_token_id) = prefill(&pair, &cell);
         let trained_row_count = configuration.block_size as usize;
         let mut trained_rows_by_block = Vec::new();

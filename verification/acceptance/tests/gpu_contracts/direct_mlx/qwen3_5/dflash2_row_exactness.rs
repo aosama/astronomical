@@ -24,11 +24,9 @@ use super::dflash2_journey_support::{
 use super::dflash2_kept_per_round::{
     Cell, JourneyPair, load_pair, load_pair_verifying_trees_as_served,
 };
-use super::dflash2_tree_oracle::{Drafting, ORACLE_CELLS, draft_tree, prefill};
+use super::dflash2_tree_oracle::{CODE_CELL, Drafting, draft_tree, prefill};
 
 const COMPARED_ROW_COUNT: usize = 16;
-/// The oracle's greedy code cell: the short prompt the rows are compared on.
-const GREEDY_CODE_CELL_INDEX: usize = 0;
 
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-row-exactness"]
@@ -38,12 +36,7 @@ fn should_report_how_far_verified_rows_drift_from_the_one_token_step() {
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    report_row_drift(
-        &pair,
-        &ORACLE_CELLS[GREEDY_CODE_CELL_INDEX],
-        COMPARED_ROW_COUNT,
-        "16-row chain",
-    );
+    report_row_drift(&pair, &CODE_CELL, COMPARED_ROW_COUNT, "16-row chain");
 }
 
 /// The same comparison for the 4-row round a mixture-of-experts target
@@ -58,12 +51,7 @@ fn should_report_how_far_four_row_rounds_drift_after_a_short_and_a_journey_promp
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
     let journey_cell = story_cell("story greedy", 0);
-    report_row_drift(
-        &pair,
-        &ORACLE_CELLS[GREEDY_CODE_CELL_INDEX],
-        4,
-        "4-row chain, short prompt",
-    );
+    report_row_drift(&pair, &CODE_CELL, 4, "4-row chain, short prompt");
     report_row_drift(&pair, &journey_cell, 4, "4-row chain, story prompt");
 }
 
@@ -182,7 +170,7 @@ fn labelled_prompts_the_target_reads(
     journey_prompt: &'static str,
 ) -> Vec<(&'static str, &'static str)> {
     vec![
-        ("short prompt", ORACLE_CELLS[GREEDY_CODE_CELL_INDEX].prompt),
+        ("short prompt", CODE_CELL.prompt),
         ("story prompt", journey_prompt),
     ]
 }

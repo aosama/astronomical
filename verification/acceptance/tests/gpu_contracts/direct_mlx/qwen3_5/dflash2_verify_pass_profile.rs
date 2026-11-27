@@ -17,10 +17,8 @@ use model_serving::{Qwen3_5TextModel, RequestDecoderStateStack};
 use serial_test::serial;
 
 use super::dflash2_kept_per_round::load_pair_verifying_trees_as_served;
-use super::dflash2_tree_oracle::{Drafting, ORACLE_CELLS, draft_tree, prefill};
+use super::dflash2_tree_oracle::{CODE_CELL, Drafting, draft_tree, prefill};
 
-/// "code completion 0.7": the served temperature for code.
-const CODE_CELL_INDEX: usize = 1;
 const REPORT_SUBDIRECTORY: &str = "dflash2-verify-pass-profile";
 
 /// One verify pass from the same stored state every time it is built.
@@ -70,7 +68,7 @@ fn should_profile_one_draft_rounds_verify_pass_kernel_by_kernel() {
     // Serving hands the GPU each few layers while it builds the next; the
     // profiler sees only the graph it is handed, so the pass is built whole.
     pair.target.set_tree_pass_built_whole_for_measurement(true);
-    let cell = ORACLE_CELLS[CODE_CELL_INDEX];
+    let cell = CODE_CELL;
     let (mut round, mut decoder_state, _) = prefill(&pair, &cell);
     let tree = draft_tree(&pair, &cell, &mut round, Drafting::Tree);
     let tree_rows = TreeRows::from_draft_tree(round.last_token_id, &tree);

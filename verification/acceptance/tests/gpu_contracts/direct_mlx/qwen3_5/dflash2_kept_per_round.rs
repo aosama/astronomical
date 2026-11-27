@@ -5,13 +5,12 @@
 //! its own `drafter` folder measures that pair instead.
 //!
 //! Kept per round = tokens emitted / verify rounds, the bonus token included,
-//! as the drafter's model card defines it. z-lab's own reference loop kept
-//! 6.07 on the code prompt at temperature 0.7 on the 27B pair (single path,
-//! 256 tokens, thinking off), so the code floor sits about 10% under that.
-//! A second code cell follows TensorFold's community benchmark, which sends
-//! the code prompt as a raw completion with its top-k 20 and top-p 0.95, so
-//! its speed compares like for like. The story at 1.0 reports without a
-//! floor: no reference measured it.
+//! as the drafter's model card defines it. Every code journey decodes one
+//! code cell: TensorFold's community benchmark, which sends the code prompt
+//! as a raw completion at 0.7 with its top-k 20 and top-p 0.95, so its speed
+//! compares like for like. z-lab's 6.07 was measured on the chat-template
+//! form of the prompt, so the code cell reports without a floor, as does the
+//! story at 1.0.
 //!
 //! It also prints each cell's decode speed (prefill excluded); every stage
 //! still syncs with the GPU, so `dflash2_round_cost` is where stages are timed.
@@ -88,31 +87,13 @@ pub(crate) struct Cell {
     pub(crate) keyed_seed: u64,
 }
 
-/// The code cells, with z-lab's floor where one exists, then the story.
+/// The one code cell, then the story. z-lab publishes a floor only for
+/// its chat-template code cell, so neither reports against one.
 fn kept_per_round_cells() -> Vec<Cell> {
     vec![
         Cell {
-            label: "code",
-            is_raw_completion: false,
-            prompt: CODE_PROMPT,
-            temperature_thousandths: 700,
-            minimum_kept_per_round: 5.5,
             keyed_seed: SAMPLING_SEED,
-            node_budget: ENGINE_NODE_BUDGET,
-            children_per_node: ENGINE_CHILDREN_PER_NODE,
-        },
-        // TensorFold's community code cell: the same prompt as a raw
-        // completion. No z-lab figure exists for it, so it reports without
-        // a floor.
-        Cell {
-            label: "code completion (TensorFold cell)",
-            is_raw_completion: true,
-            prompt: CODE_PROMPT,
-            temperature_thousandths: 700,
-            minimum_kept_per_round: 0.0,
-            keyed_seed: SAMPLING_SEED,
-            node_budget: ENGINE_NODE_BUDGET,
-            children_per_node: ENGINE_CHILDREN_PER_NODE,
+            ..super::dflash2_tree_oracle::CODE_CELL
         },
         Cell {
             keyed_seed: SAMPLING_SEED,

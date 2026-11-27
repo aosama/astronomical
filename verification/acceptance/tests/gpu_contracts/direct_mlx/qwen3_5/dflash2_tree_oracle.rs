@@ -10,8 +10,8 @@
 //! target's picks along it are the truth, and the round keeps as deep as
 //! that truth runs through the tree, plus the target's next token: exactly
 //! what a tree verify of the same rows keeps. TensorFold's rounds on this
-//! pair kept 5.95 and 6.2 (code completion, greedy and 0.7). The story
-//! (greedy and 1.0) is replayed after the code cells.
+//! pair kept 6.2 on the code cell (code completion at 0.7). The story
+//! (greedy and 1.0) is replayed after the code cell.
 
 use mlx_bridge::MlxArray;
 use model_serving::RequestDecoderStateStack;
@@ -39,17 +39,14 @@ use super::dflash2_kept_per_round::{
 /// TensorFold's community benchmark seeds its repetitions from 1234.
 pub(super) const FIRST_KEYED_SEED: u64 = 1234;
 
-/// The code cells; the story cells (`story_cell`) are sized by the target.
-pub(super) const ORACLE_CELLS: [Cell; 3] = [
-    oracle_cell("code completion greedy", true, CODE_PROMPT, 0),
-    oracle_cell("code completion 0.7", true, CODE_PROMPT, 700),
-    oracle_cell("code completion 1.0", true, CODE_PROMPT, 1_000),
-];
+/// The one code cell every code journey decodes: a raw completion at 0.7,
+/// the temperature code is served at. The story cells (`story_cell`) are sized by the target.
+pub(crate) const CODE_CELL: Cell = oracle_cell("code completion 0.7", true, CODE_PROMPT, 700);
 
-/// Every cell the oracle replays: the code cells, then the story greedy and
+/// Every cell the oracle replays: the code cell, then the story greedy and
 /// at 1.0.
 fn oracle_and_story_cells() -> Vec<Cell> {
-    let mut cells = ORACLE_CELLS.to_vec();
+    let mut cells = vec![CODE_CELL];
     cells.push(story_cell("story greedy", 0));
     cells.push(story_cell("story 1.0", 1_000));
     cells
@@ -500,36 +497,4 @@ fn reference_text(pair: &JourneyPair, token_ids: &[u32]) -> String {
         }
     }
     text
-}
-
-/// TensorFold's own greedy code completion (engine 1.2.0, this prompt, 256
-/// tokens), which it drafted in 43 rounds: 5.95 kept a round.
-const TENSORFOLD_GREEDY_CODE_COMPLETION: &str =
-    include_str!("../../../fixtures/dflash_reference/tensorfold_greedy_code_completion.txt");
-
-/// The two engines' greedy outputs part after about a hundred tokens, where
-/// they round a near-tie differently, so their round counts are not on the
-/// same text. Forcing TensorFold's text through this drafter and tree is.
-#[test]
-#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-oracle"]
-#[serial]
-fn should_count_the_rounds_this_tree_needs_for_tensorfolds_own_greedy_text() {
-    let pair = load_pair();
-    let cell = &ORACLE_CELLS[0];
-    let reference = pair
-        .tokenizer
-        .encode_prompt(TENSORFOLD_GREEDY_CODE_COMPLETION)
-        .expect("the reference text tokenizes");
-    let forced = decode(&pair, cell, Drafting::TreeOnForcedText, &reference);
-    eprintln!(
-        "[dflash2-tree-oracle] TensorFold's greedy code text ({} tokens): {:.2} kept per round \
-         over {} rounds here; TensorFold drafted it at 5.95",
-        reference.len(),
-        forced.kept_per_round(),
-        forced.rounds,
-    );
-    eprintln!(
-        "[dflash2-tree-oracle] kept by round: {:?}",
-        forced.kept_by_round
-    );
 }

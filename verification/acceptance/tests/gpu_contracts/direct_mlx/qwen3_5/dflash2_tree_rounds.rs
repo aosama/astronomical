@@ -27,7 +27,7 @@ use super::dflash2_kept_per_round::{
     load_pair,
 };
 use super::dflash2_tree_oracle::{
-    Drafting, FIRST_KEYED_SEED, ORACLE_CELLS, draft_tree, prefill, target_picks,
+    CODE_CELL, Drafting, FIRST_KEYED_SEED, draft_tree, prefill, target_picks,
 };
 
 /// Seeds pooled for a sampled cell, as TensorFold's three repetitions.
@@ -37,7 +37,7 @@ const SAMPLED_SEED_COUNT: u64 = 3;
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
-    decode_cells_with_trees(&ORACLE_CELLS[..3], SAMPLED_SEED_COUNT);
+    decode_cells_with_trees(&[CODE_CELL], SAMPLED_SEED_COUNT);
 }
 
 /// A story continued after a long prompt, sampled: the cell a long chat or a
