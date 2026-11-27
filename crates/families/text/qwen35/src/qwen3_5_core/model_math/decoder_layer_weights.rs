@@ -132,6 +132,31 @@ impl Qwen3_5AffineWeights {
         })
     }
 
+    /// These weights read as a compressed lexicon, one entry a row, when
+    /// they are affine-quantized; `None` for any other storage.
+    #[must_use]
+    pub fn as_compressed_lexicon(
+        &self,
+    ) -> Option<super::compressed_lexicon::CompressedLexicon<'_>> {
+        let Self::Quantized {
+            packed_weight,
+            quantization_scales,
+            quantization_biases,
+            quantization_bits,
+            quantization_group_size,
+        } = self
+        else {
+            return None;
+        };
+        Some(super::compressed_lexicon::CompressedLexicon {
+            packed_entries: packed_weight,
+            entry_scales: quantization_scales,
+            entry_offsets: quantization_biases,
+            bits_per_number: *quantization_bits,
+            numbers_per_group: *quantization_group_size,
+        })
+    }
+
     /// Stacks `appended` after this projection on the expert axis.
     ///
     /// A refused prefill completion already holds the missing experts in memory.

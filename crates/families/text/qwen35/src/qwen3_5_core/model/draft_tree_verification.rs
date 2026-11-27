@@ -254,7 +254,7 @@ impl Qwen3_5ModelBase {
         let token_indices = self
             .runtime
             .array_from_i32(&token_ids, &[1, token_ids.len() as i32])?;
-        self.embedding_lookup(&token_indices)
+        self.context_free_token_meanings(&token_indices)
     }
 
     /// The tree's positions, attention mask, convolution windows and row

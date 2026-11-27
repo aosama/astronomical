@@ -54,7 +54,7 @@ impl Qwen3_5Model {
     ) -> Result<Vec<RecordedDecoderLayerInput>, TextExecutionError> {
         let (token_indices, token_count) =
             self.validated_token_indices(token_ids, 0, None, request_decoder_state)?;
-        let embedded_tokens = self.embedding_lookup(&token_indices)?;
+        let embedded_tokens = self.context_free_token_meanings(&token_indices)?;
         let mut recorded_layer_inputs = Vec::new();
         let final_hidden_states = self.run_decoder_layers_from(
             embedded_tokens,

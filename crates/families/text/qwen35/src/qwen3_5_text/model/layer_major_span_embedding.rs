@@ -71,7 +71,7 @@ impl Qwen3_5Model {
         visual_inputs: Option<LayerMajorVisualInputs<'_>>,
         consumed_visual_embedding_count: &mut usize,
     ) -> Result<MlxArray, TextExecutionError> {
-        let text_embeddings = self.embedding_lookup(token_indices)?;
+        let text_embeddings = self.context_free_token_meanings(token_indices)?;
         let Some(visual_inputs) = visual_inputs else {
             return self.decoder_layer_input(text_embeddings);
         };

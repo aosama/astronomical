@@ -294,72 +294,66 @@ impl Qwen3_5ModelBase {
         }
     }
 
-    /// The hidden rows of `token_indices`. A folded pack stores its table in
-    /// the rotated basis, so its rows take the inverse rotation here, where
-    /// every reader of embedding rows (prompt chunks, draft trees, the
-    /// drafter, decision readouts) gets them.
-    pub fn embedding_lookup(
+    /// Each token's meaning before any context: its entry in the model's
+    /// token lexicon (the embedding lookup). The forty layers turn this into
+    /// meaning in context.
+    ///
+    /// A folded pack stores its lexicon in the rotated basis, so its entries
+    /// take the inverse rotation here, where every reader (prompt chunks,
+    /// draft trees, the drafter, decision readouts) gets them.
+    pub fn context_free_token_meanings(
         &self,
-        token_indices: &MlxArray,
+        tokens: &MlxArray,
     ) -> Result<MlxArray, TextExecutionError> {
-        let stored_rows = self.stored_embedding_rows(token_indices)?;
-        self.embedding_rows_in_hidden_basis(stored_rows)
+        let stored_token_meanings = self.stored_token_meanings(tokens)?;
+        self.token_meanings_in_the_layers_basis(stored_token_meanings)
     }
 
-    /// Stored embedding rows in the hidden basis the layers read: as stored,
-    /// or through the inverse rotation of a folded pack's table.
-    fn embedding_rows_in_hidden_basis(
+    /// Token meanings in the basis the layers read: as stored, or through
+    /// the inverse rotation of a folded pack's lexicon.
+    fn token_meanings_in_the_layers_basis(
         &self,
-        stored_rows: MlxArray,
+        stored_token_meanings: MlxArray,
     ) -> Result<MlxArray, TextExecutionError> {
         match &self.weights.embedding_rotation {
             Some(embedding_rotation) => {
-                Ok(embedding_rotation.rotate_inverse(&self.runtime, &stored_rows)?)
+                Ok(embedding_rotation.rotate_inverse(&self.runtime, &stored_token_meanings)?)
             }
-            None => Ok(stored_rows),
+            None => Ok(stored_token_meanings),
         }
     }
 
-    fn stored_embedding_rows(
-        &self,
-        token_indices: &MlxArray,
-    ) -> Result<MlxArray, TextExecutionError> {
+    /// Token meanings as the lexicon stores them: from the part read off
+    /// disk when the lexicon stays on disk, else from the lexicon in memory.
+    fn stored_token_meanings(&self, tokens: &MlxArray) -> Result<MlxArray, TextExecutionError> {
         match &self.disk_embedding_rows {
             Some(disk_embedding_rows) => disk_embedding_rows.embed_tokens(
                 &self.runtime,
-                token_indices,
+                tokens,
                 &self.weights.embedding_weights,
             ),
-            None => self.resident_embedding_lookup(token_indices),
+            None => self.meanings_from_the_resident_token_lexicon(tokens),
         }
     }
 
-    fn resident_embedding_lookup(
+    fn meanings_from_the_resident_token_lexicon(
         &self,
-        token_indices: &MlxArray,
+        tokens: &MlxArray,
     ) -> Result<MlxArray, TextExecutionError> {
-        match &self.weights.embedding_weights {
+        let token_lexicon = &self.weights.embedding_weights;
+        if let Some(compressed_token_lexicon) = token_lexicon.as_compressed_lexicon() {
+            return compressed_token_lexicon.learned_representations_of(&self.runtime, tokens);
+        }
+        match token_lexicon {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
-                Ok(self.runtime.take_axis(weight, token_indices, 0)?)
+                Ok(self.runtime.take_axis(weight, tokens, 0)?)
             }
             Qwen3_5AffineWeights::Jangtq2Codebook { .. } => Err(TextExecutionError::InvalidInput {
                 description: "jangtq2 codebook pages hold routed experts, never embeddings",
             }),
-            Qwen3_5AffineWeights::Quantized {
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                quantization_group_size,
-                quantization_bits,
-            } => gather_quantized_embedding_rows(
-                &self.runtime,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                token_indices,
-                *quantization_group_size,
-                *quantization_bits,
-            ),
+            Qwen3_5AffineWeights::Quantized { .. } => Err(TextExecutionError::InvalidInput {
+                description: "an affine-quantized token lexicon reads as a compressed lexicon",
+            }),
         }
     }
 
@@ -454,25 +448,4 @@ impl Qwen3_5LinearWeights for Qwen3_5AffineWeights {
     ) -> Result<MlxArray, TextExecutionError> {
         model.bound_linear(activations, self)
     }
-}
-
-/// Gathers rows of a quantized embedding and dequantizes them. The resident
-/// and on-disk lookups both call it, so their embeddings are the same
-/// operations by construction.
-pub fn gather_quantized_embedding_rows(
-    runtime: &MlxRuntime,
-    packed_rows: &MlxArray,
-    scale_rows: &MlxArray,
-    bias_rows: &MlxArray,
-    selected_row_indices: &MlxArray,
-    quantization_group_size: i32,
-    quantization_bits: i32,
-) -> Result<MlxArray, TextExecutionError> {
-    Ok(runtime.dequantize_affine(
-        &runtime.take_axis(packed_rows, selected_row_indices, 0)?,
-        &runtime.take_axis(scale_rows, selected_row_indices, 0)?,
-        &runtime.take_axis(bias_rows, selected_row_indices, 0)?,
-        quantization_group_size,
-        quantization_bits,
-    )?)
 }

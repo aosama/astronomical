@@ -94,7 +94,7 @@ impl Qwen3_5Model {
         let token_indices = self
             .runtime
             .array_from_i32(&stand_in_token_ids, &[1, signed_row_count])?;
-        let stand_in_embeddings = self.embedding_lookup(&token_indices)?;
+        let stand_in_embeddings = self.context_free_token_meanings(&token_indices)?;
         let embedding_width = self.config.hidden_size() as i32;
         Ok(self
             .runtime
