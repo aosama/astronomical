@@ -420,6 +420,21 @@ fn batch_gradients(
     batch_question_rows: &[usize],
     row_weights: &[f64],
 ) -> GpuResult<Vec<MlxArray>> {
+    let (question_batch, row_targets) =
+        batch_objective(math, training_set, batch_question_rows, row_weights)?;
+    training_set
+        .scorer
+        .parameter_gradients(math, parameters, &question_batch, &row_targets)
+}
+
+/// A batch's questions and what each row is trained toward, on the GPU: the
+/// two inputs of the batch loss, shared by training and the gradient check.
+pub fn batch_objective(
+    math: GpuMath<'_>,
+    training_set: &GpuTrainingSet,
+    batch_question_rows: &[usize],
+    row_weights: &[f64],
+) -> GpuResult<(QuestionBatch, RowTargets)> {
     let batch_rows = training_set.option_layout.batch_rows(batch_question_rows);
     let question_batch = QuestionBatch::upload(math, &batch_rows)?;
     let mut targets = Vec::with_capacity(batch_question_rows.len());
@@ -435,9 +450,7 @@ fn batch_gradients(
         });
     }
     let row_targets = RowTargets::upload(math, &host_rows, question_batch.widest_option_count)?;
-    training_set
-        .scorer
-        .parameter_gradients(math, parameters, &question_batch, &row_targets)
+    Ok((question_batch, row_targets))
 }
 
 /// A row's target distribution and temperature: a labelled row's answer,

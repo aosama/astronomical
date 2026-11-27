@@ -14,6 +14,9 @@
 //!   freed allocations MLX retains for reuse instead of returning them to the
 //!   operating system.
 //!
+//! On a CUDA build MLX holds both capped at the GPU's own memory, which is
+//! what it allocates from there (`cuda_device_memory`).
+//!
 //! # Reclamation cadence — a measured three-way tradeoff
 //!
 //! When to clear the MLX buffer cache was settled by measurement, and the
@@ -48,7 +51,7 @@ use mlx_bridge::{
     synchronize,
 };
 
-use super::error_classification;
+use super::{cuda_device_memory, error_classification};
 
 /// The process-global memory policy and how many runtimes currently hold it.
 ///
@@ -114,7 +117,7 @@ impl MlxRuntime {
         if self.memory_limits == memory_limits {
             return Ok(());
         }
-        set_memory_limits(memory_limits)?;
+        apply_native_memory_limits(memory_limits)?;
         process_policy.installed_limits = Some(memory_limits);
         self.memory_limits = memory_limits;
         Ok(())
@@ -234,7 +237,11 @@ impl MlxRuntime {
 pub(super) fn configure_runtime_memory_limits(
     memory_limits: MlxMemoryLimits,
 ) -> Result<(), MlxRuntimeError> {
-    admit_runtime_memory_limits(&PROCESS_MEMORY_POLICY, memory_limits, set_memory_limits)
+    admit_runtime_memory_limits(
+        &PROCESS_MEMORY_POLICY,
+        memory_limits,
+        apply_native_memory_limits,
+    )
 }
 
 /// Releases one live runtime's hold on the process policy. Paired with every
@@ -276,6 +283,13 @@ pub(super) fn admit_runtime_memory_limits(
 pub(super) fn release_runtime_from(process_policy: &Mutex<ProcessMemoryPolicy>) {
     let mut process_policy = error_classification::lock_unpoisoned(process_policy);
     process_policy.live_runtime_count = process_policy.live_runtime_count.saturating_sub(1);
+}
+
+/// Hands MLX the limits it should hold on this build: `memory_limits`, capped
+/// at the GPU's own memory on a CUDA build (see `cuda_device_memory`), so
+/// work sized from the configured limit fits the memory MLX allocates from.
+fn apply_native_memory_limits(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeError> {
+    set_memory_limits(cuda_device_memory::native_memory_limits(memory_limits)?)
 }
 
 /// Applies the active-allocation and allocator-retention MLX process controls.

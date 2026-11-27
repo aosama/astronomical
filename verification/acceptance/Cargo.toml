@@ -127,7 +127,7 @@ ipc-protocol = { path = "../../crates/contracts/ipc-protocol" }
 lowercase-hex = { path = "../../crates/foundation/lowercase-hex" }
 memory-policy = { path = "../../crates/foundation/memory-policy" }
 astronomical-neural-engine-research = { path = "../neural-engine" }
-model-serving = { path = "../../crates/engine/model-serving", features = ["direct-mlx"] }
+model-serving = { path = "../../crates/engine/model-serving", features = ["direct-mlx", "gradient-check"] }
 qwen35-quantization-probe = { path = "../../crates/tooling/qwen35-quantization-probe" }
 mlx-c-fork = { path = "../../crates/foundation/mlx-c-fork" }
 mlx-bridge.workspace = true

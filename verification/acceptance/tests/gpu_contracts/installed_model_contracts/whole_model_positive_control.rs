@@ -61,7 +61,7 @@ fn example_role(example_index: usize, correct_option: usize) -> QuestionRole {
     }
 }
 
-fn coded_job() -> DecisionTrainingJob {
+pub(super) fn coded_job() -> DecisionTrainingJob {
     let mut examples = Vec::with_capacity(EXAMPLE_COUNT);
     for example_index in 0..EXAMPLE_COUNT {
         let correct_option = coded_option(example_index);
@@ -79,15 +79,46 @@ fn coded_job() -> DecisionTrainingJob {
     }
 }
 
-/// The share of judged questions whose highest score is the right option,
-/// served and trained.
-fn judged_accuracy(job: &DecisionTrainingJob, outcome: &DecisionTrainingOutcome) -> (f64, f64) {
-    let (mut judged, mut served_right, mut trained_right) = (0, 0, 0);
+/// The lines held back from training, which the trained model scores: the
+/// ones that pick the stopping point and the unseen ones. Training lines are
+/// not among them: the trained model scores only the rows it did not train
+/// on (`judged_rows`), so a training line's returned scores are
+/// placeholders.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HeldBackRole {
+    Choosing,
+    Judging,
+}
+
+impl HeldBackRole {
+    const fn holds(self, question_role: QuestionRole) -> bool {
+        matches!(
+            (self, question_role),
+            (Self::Choosing, QuestionRole::Choosing { .. })
+                | (Self::Judging, QuestionRole::Judging { .. })
+        )
+    }
+}
+
+/// The share of `held_back_role`'s questions whose highest score is the
+/// right option, served and trained. Both held-back roles are reported, so
+/// a run that stopped early reads differently from one that learned but did
+/// not carry the code over.
+fn held_back_accuracy(
+    job: &DecisionTrainingJob,
+    outcome: &DecisionTrainingOutcome,
+    held_back_role: HeldBackRole,
+) -> (f64, f64) {
+    let (mut counted, mut served_right, mut trained_right) = (0, 0, 0);
     for (example, trained_questions) in job.examples.iter().zip(&outcome.examples) {
-        let QuestionRole::Judging { correct_option } = example.question_roles[0] else {
+        let question_role = example.question_roles[0];
+        let Some(correct_option) = question_role.correct_option() else {
             continue;
         };
-        judged += 1;
+        if !held_back_role.holds(question_role) {
+            continue;
+        }
+        counted += 1;
         if highest_scoring(&trained_questions[0].served.option_logits) == correct_option {
             served_right += 1;
         }
@@ -96,9 +127,42 @@ fn judged_accuracy(job: &DecisionTrainingJob, outcome: &DecisionTrainingOutcome)
         }
     }
     (
-        f64::from(served_right) / f64::from(judged),
-        f64::from(trained_right) / f64::from(judged),
+        f64::from(served_right) / f64::from(counted),
+        f64::from(trained_right) / f64::from(counted),
     )
+}
+
+/// Prints the choosing lines' accuracy and every run's summary; the unseen
+/// lines' accuracy is printed with the verdict.
+fn print_training_report(job: &DecisionTrainingJob, outcome: &DecisionTrainingOutcome) {
+    let (served_accuracy, trained_accuracy) =
+        held_back_accuracy(job, outcome, HeldBackRole::Choosing);
+    eprintln!(
+        "[positive-control] choosing_right_served={served_accuracy:.3} choosing_right_trained={trained_accuracy:.3}"
+    );
+    for run_summary in &outcome.runs {
+        eprintln!("[positive-control] run={run_summary:?}");
+    }
+}
+
+/// Prints the largest trained add-on `up` value. Every `up` starts at zero,
+/// so its size after training shows how far training moved the layers at
+/// all: a run that never moved reads near zero.
+fn print_add_on_movement(outcome: &DecisionTrainingOutcome) {
+    let mut largest_up_value = 0.0_f32;
+    let mut up_tensor_count = 0;
+    for adapter_tensor in &outcome.adapter_tensors {
+        if !adapter_tensor.name.ends_with(".adapter_up") {
+            continue;
+        }
+        up_tensor_count += 1;
+        for up_value in &adapter_tensor.values.0 {
+            largest_up_value = largest_up_value.max(up_value.abs());
+        }
+    }
+    eprintln!(
+        "[positive-control] adapter_up_tensors={up_tensor_count} largest_adapter_up_value={largest_up_value:.3e}"
+    );
 }
 
 fn highest_scoring(option_logits: &[f32]) -> usize {
@@ -132,7 +196,10 @@ async fn prove_whole_model_learns_the_code(family: TunableHeadFamily) {
             DecisionTrainingStep::Completed(outcome) => break *outcome,
         }
     };
-    let (served_accuracy, trained_accuracy) = judged_accuracy(&job, &outcome);
+    print_training_report(&job, &outcome);
+    print_add_on_movement(&outcome);
+    let (served_accuracy, trained_accuracy) =
+        held_back_accuracy(&job, &outcome, HeldBackRole::Judging);
     eprintln!(
         "[positive-control] family={family:?} judged_right_served={served_accuracy:.3} judged_right_trained={trained_accuracy:.3} parity_gap={}",
         outcome.largest_parity_gap

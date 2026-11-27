@@ -18,7 +18,9 @@
 //!    before MLX can compile a kernel or run a matrix multiply
 //!    (`cuda_runtime_settings`).
 //! 4. The **memory policy** is applied before any allocation can happen, so
-//!    no transient allocation can escape the ceiling the worker promised.
+//!    no transient allocation can escape the ceiling the worker promised. On
+//!    a CUDA build it first reads the GPU's memory, and MLX holds the limits
+//!    capped at it (`cuda_device_memory`).
 //! 5. Only then is the **bindings context** created.
 //!
 //! Reversing any pair would open a window where MLX runs with default policy
@@ -70,7 +72,10 @@ impl MlxRuntime {
         self.context.version()
     }
 
-    /// Returns the memory policy applied during initialization.
+    /// Returns the memory policy applied during initialization, as
+    /// requested. On a CUDA build MLX holds these limits capped at the GPU's
+    /// memory; [`MlxRuntime::configured_memory_limit_bytes`](super::memory_policy::MlxRuntime::configured_memory_limit_bytes)
+    /// reports what MLX holds (issue #2706).
     ///
     /// This is the policy *this instance* was built with; live updates go
     /// through [`MlxRuntime::update_memory_limits`](super::memory_policy::MlxRuntime::update_memory_limits),
