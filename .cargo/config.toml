@@ -472,14 +472,20 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # with every one of its features on; the pre-commit hook runs it on any
 # staged Rust source, because no default-feature pass and no
 # continuous-integration lane compiles those feature-gated journeys.
-# `cargo xtask function-length-budget` is the pre-commit hook's workspace
-# clippy pass for the 80-line function budget AGENTS.md sets for production
-# and test code alike. It first scans every Rust source without compiling
-# and fails on any `allow` or `expect` of clippy::too_many_lines; then, on
-# macOS, it runs exactly `cargo clippy --workspace --all-targets`, and on
-# other hosts it leaves out crates whose manifest lists only macOS under
-# `package.metadata.astronomical` `host-platforms`, and every workspace crate
-# depending on them.
+# `cargo xtask function-length-budget` is the pre-commit hook's clippy pass
+# for the 80-line function budget AGENTS.md sets for production and test
+# code alike. It first scans every Rust source without compiling and fails
+# on any `allow` or `expect` of clippy::too_many_lines; then it runs
+# `cargo clippy --all-targets -p ...` over only the workspace packages that
+# own the staged Rust files (a lint judges a crate by its own source, so
+# unchanged dependents keep their verdict; it was 36 of a 53-second hook to
+# re-lint them), and the whole workspace when a manifest, Cargo.lock,
+# clippy.toml, the toolchain file or `.cargo/` is staged, when a staged Rust
+# file is outside every package, or when nothing is staged.
+# `cargo xtask function-length-budget --workspace` always lints the whole
+# workspace. On hosts other than macOS it leaves out crates whose manifest
+# lists only macOS under `package.metadata.astronomical` `host-platforms`, and
+# every workspace crate depending on them.
 # `cargo xtask model-serving-default-features` is the hook's default-feature
 # lint of model-serving and the crates split out of it, with the same host
 # awareness; `cargo xtask lint-acceptance-features` skips on a host that

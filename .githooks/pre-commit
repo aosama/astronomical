@@ -114,10 +114,12 @@ if git diff --cached --name-only | grep -q '\.rs$'; then
     # when any function crosses the budget.
     # The pass is `cargo xtask function-length-budget`. It first refuses any
     # allow or expect of clippy::too_many_lines in any Rust source, which
-    # would let a long function through; then, on macOS, exactly
-    # `cargo clippy --workspace --all-targets`; on other hosts it leaves out
-    # the crates whose manifest declares macOS-only host platforms, and
-    # their dependents, which cannot build there.
+    # would let a long function through; then `cargo clippy --all-targets`
+    # over the workspace packages that own the staged Rust files (the whole
+    # workspace when a manifest, Cargo.lock, clippy.toml or .cargo/ is
+    # staged; see xtask/src/staged_package_scope.rs). On other hosts it
+    # leaves out the crates whose manifest declares macOS-only host
+    # platforms, and their dependents, which cannot build there.
     # Default world only: the pass is incremental over warm Cargo build outputs so commits
     # stay fast. Feature-gated acceptance tests get their own pass below;
     # every other feature-gated path stays linted by the developer's own
