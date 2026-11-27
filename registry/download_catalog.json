@@ -721,15 +721,16 @@
         {
             "huggingface_id": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
             "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
-            "summary": "A 27B model squeezed into 8 GB. Text only.",
+            "summary": "A 27B model squeezed into 8 GB that reads pictures.",
             "family": "prism_hadamard_qwen35",
             "approximate_size_bytes": 8595477990,
             "approximate_memory_bytes": 9771050562,
             "role": "chat",
             "public": true,
-            "description": "A 27B dense ternary model folded into a 2-bit pack. Every rotated projection applies its Hadamard transform at run time, so the compressed weights serve full-precision-quality chat with 48 gated-delta layers and 16 full-attention layers.",
+            "description": "A 27B dense ternary model folded into a 2-bit pack, with its float16 vision tower, so it reads pictures as well as text. Every rotated projection applies its Hadamard transform at run time, so the compressed weights serve full-precision-quality chat with 48 gated-delta layers and 16 full-attention layers.",
             "capabilities": {
                 "supports_reasoning": true,
+                "supports_vision": true,
                 "supports_tool_calls": true,
                 "context_window": 262144
             },
@@ -739,13 +740,14 @@
         {
             "huggingface_id": "nathansutton/Qwen3.8-27B-Ternary-Bonsai-2-DFlash2-MLX",
             "revision": "234cc925d77cd94683e47b1493bd964917aaf43b",
-            "summary": "The same squeezed model, with a draft model Astronomical does not use yet. Text only.",
+            "summary": "The same squeezed model, with its draft model built in. Text only.",
             "family": "prism_hadamard_qwen35",
             "approximate_size_bytes": 8840805938,
             "approximate_memory_bytes": 9985798926,
             "role": "chat",
             "public": true,
-            "description": "A 27B dense ternary model folded into a 2-bit Hadamard pack. The download also holds a DFlash2 draft model, about 1.1 GB of it, which Astronomical does not use yet, so replies come at the same speed as the plain Ternary Bonsai 2 27B. Text only, built on Qwen 3.8 27B.",
+            "description": "A 27B dense ternary model folded into a 2-bit Hadamard pack, with a DFlash2 draft model of about 1.1 GB packed in. While the large model writes, the draft model guesses the next few words and the large model checks them all in one step, and every word is still the large model's own. Text only, built on Qwen 3.8 27B.",
+
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
@@ -753,6 +755,35 @@
             },
             "quantization_label": "2-bit ternary affine (group 128) with folded Hadamard transforms",
             "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "ahmedihamdy/Ternary-Bonsai-2.5-27B-MLX-2bit-vision-DFLASH2",
+            "revision": "281b55883c801633002c9d7c6fdee17cf4c7c547",
+            "summary": "A 27B model in under 10 GB that reads pictures, with its draft model built in.",
+            "family": "prism_hadamard_qwen35",
+            "approximate_size_bytes": 10147395527,
+            "approximate_memory_bytes": 9824737690,
+            "role": "chat",
+            "public": true,
+            "description": "Prism ML's Ternary Bonsai 2.5 27B, a Qwen 3.8 27B trained to work with three values in each weight, folded into a 2-bit pack, with its vision tower and a DFlash2 draft model packed in. It reads pictures and text, reasons before answering, and calls tools. While the large model writes, the draft model guesses the next few words and the large model checks them all in one step, and every word is still the large model's own. When a message has a picture in it, it writes one word at a time.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "2-bit ternary (group 128), f16 vision, 4-bit DFlash2 draft model",
+            "upstream_license": "Apache-2.0",
+            "measured_speed": {
+                "measured_on": "Mac with an M5 Pro and 48 GB",
+                "astronomical_version": "0.2.135",
+                "tokens_per_second": {
+                    "essay_short_prompt": 35,
+                    "essay_long_prompt": 25,
+                    "code_short_prompt": 45,
+                    "code_long_prompt": 34
+                }
+            }
         },
         {
             "huggingface_id": "araysuter/Ornith-1.5-122B-MLX-mixed-2bit",

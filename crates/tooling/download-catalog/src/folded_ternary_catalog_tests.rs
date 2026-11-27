@@ -1,51 +1,66 @@
-//! The folded ternary family's catalog entries: the engine that serves them
-//! hosts no drafter, so their text must not promise drafted speed.
+//! The folded ternary family's catalog entries. Since #2595 the shared Qwen
+//! 3.5 core serves these packs, with their vision tower and a bundled DFlash
+//! drafter, so the entries must say what each download really does.
 
 use crate::DownloadCatalog;
 use crate::download_catalog_tests::shipped_entry;
 
-/// Words a catalog text uses to promise that a draft model makes replies
-/// quicker.
-const DRAFTING_SPEED_PROMISES: [&str; 4] = ["speeds it up", "accelerat", "quicker", "faster"];
+const FOLDED_TERNARY_FAMILY: &str = "prism_hadamard_qwen35";
 
-/// The folded ternary engine hosts no drafter (issue #2595), so no entry it
-/// serves may promise drafted speed, and the one that downloads a drafter
-/// says plainly that the drafter goes unused.
+/// The packed drafter alone is about 1.2 GB, so a package that ships one
+/// must declare more than its target's 8 GB of weights.
+const FOLDED_TARGET_WEIGHTS_BYTES: u64 = 8_595_477_990;
+
 #[test]
-fn should_not_promise_drafted_speed_on_the_folded_ternary_family() {
+fn should_offer_the_bonsai_2_5_package_with_vision_and_its_drafter() {
     let download_catalog =
         DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    let folded_ternary_entries: Vec<_> = download_catalog
-        .entries()
-        .iter()
-        .filter(|catalog_entry| catalog_entry.family().as_str() == "prism_hadamard_qwen35")
-        .collect();
-    assert!(!folded_ternary_entries.is_empty());
-    for folded_ternary_entry in folded_ternary_entries {
-        let catalog_text = format!(
-            "{} {}",
-            folded_ternary_entry.summary().unwrap_or_default(),
-            folded_ternary_entry.description().unwrap_or_default()
-        )
-        .to_lowercase();
-        for speed_promise in DRAFTING_SPEED_PROMISES {
-            assert!(
-                !catalog_text.contains(speed_promise),
-                "{} promises drafted speed (`{speed_promise}`): {catalog_text}",
-                folded_ternary_entry.huggingface_id()
-            );
-        }
-    }
+    let package_entry = shipped_entry(
+        &download_catalog,
+        "ahmedihamdy/Ternary-Bonsai-2.5-27B-MLX-2bit-vision-DFLASH2",
+    );
+    assert_eq!(package_entry.family().as_str(), FOLDED_TERNARY_FAMILY);
+    assert_eq!(package_entry.revision().len(), 40);
+    assert!(package_entry.capabilities().supports_vision);
+    let selection = package_entry.download_path_selection();
+    assert!(selection.includes("drafter/model.safetensors"));
+    assert!(selection.includes("drafter/config.json"));
+    assert!(selection.includes("hadamard.json"));
+    assert!(package_entry.approximate_size_bytes() > FOLDED_TARGET_WEIGHTS_BYTES);
+}
+
+/// The community pack's drafter is served now, so its entry no longer says
+/// it goes unused; it has no vision tower, so it still says text only.
+#[test]
+fn should_describe_the_community_bonsai_2_drafter_as_used_and_text_only() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
     let drafter_bundle = shipped_entry(
         &download_catalog,
         "nathansutton/Qwen3.8-27B-Ternary-Bonsai-2-DFlash2-MLX",
     );
-    for unused_drafter_text in [drafter_bundle.summary(), drafter_bundle.description()] {
-        assert!(
-            unused_drafter_text
-                .unwrap_or_default()
-                .contains("does not use yet"),
-            "the drafter bundle must say its draft model is unused: {unused_drafter_text:?}"
-        );
-    }
+    let catalog_text = format!(
+        "{} {}",
+        drafter_bundle.summary().unwrap_or_default(),
+        drafter_bundle.description().unwrap_or_default()
+    );
+    assert!(!catalog_text.contains("does not use"), "{catalog_text}");
+    assert!(catalog_text.contains("Text only"), "{catalog_text}");
+    assert!(!drafter_bundle.capabilities().supports_vision);
+}
+
+/// Prism ML's own Bonsai 2 pack carries a vision tower, which the shared core
+/// serves, so its entry must not call it text only.
+#[test]
+fn should_offer_prism_mls_bonsai_2_pack_with_vision() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let prism_pack = shipped_entry(&download_catalog, "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit");
+    assert!(prism_pack.capabilities().supports_vision);
+    assert!(
+        !prism_pack
+            .summary()
+            .unwrap_or_default()
+            .contains("Text only")
+    );
 }
