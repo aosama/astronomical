@@ -83,3 +83,19 @@ fn should_never_promote_macos_and_treat_both_linux_recipes_as_linux() {
     assert!(NativeTargetPlatform::LinuxCuda.is_linux());
     assert!(!NativeTargetPlatform::MacOs.is_linux());
 }
+
+#[test]
+fn should_keep_macos_and_an_already_promoted_recipe_through_the_host_gpu_check() {
+    assert_eq!(
+        NativeTargetPlatform::MacOs.with_host_gpu_backend(),
+        NativeTargetPlatform::MacOs
+    );
+    assert_eq!(
+        NativeTargetPlatform::LinuxCuda.with_host_gpu_backend(),
+        NativeTargetPlatform::LinuxCuda
+    );
+    assert_eq!(
+        NativeTargetPlatform::for_build("aarch64-apple-darwin"),
+        Ok(NativeTargetPlatform::MacOs)
+    );
+}

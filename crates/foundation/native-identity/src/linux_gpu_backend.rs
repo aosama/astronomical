@@ -102,17 +102,11 @@ pub fn find_executable_in(
 ) -> Option<PathBuf> {
     for search_directory in search_directories {
         let candidate_path = search_directory.join(executable_name);
-        if is_file(&candidate_path) {
+        if candidate_path.is_file() {
             return Some(candidate_path);
         }
     }
     None
-}
-
-fn is_file(candidate_path: &Path) -> bool {
-    candidate_path
-        .metadata()
-        .is_ok_and(|metadata| metadata.is_file())
 }
 
 /// MLX's architecture list from `nvidia-smi`'s compute capabilities, one per

@@ -8,7 +8,7 @@
 //! GPU (the `LinuxCuda` recipe, issue #2699). Keeping each
 //! difference here, behind one [`NativeTargetPlatform`] value, keeps
 //! operating-system checks out of the compile, store and link executors, and
-//! gives later backends (Vulkan, CUDA, Windows) one place to add a recipe.
+//! gives later backends (Vulkan, Windows) one place to add a recipe.
 //! The macOS recipe is the one every existing store entry was built with, so
 //! its arguments and products must stay exactly as they are.
 //!

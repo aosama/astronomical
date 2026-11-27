@@ -66,6 +66,12 @@ impl NativeTargetPlatform {
     /// through this one function, so they always agree on the recipe.
     #[must_use]
     pub fn with_host_gpu_backend(self) -> Self {
+        // Only a Linux target can take a GPU backend, so the host is asked
+        // (a `PATH` search for `nvcc`, then `nvidia-smi`) only for one: a
+        // macOS build never runs the CUDA detection.
+        if self != Self::Linux {
+            return self;
+        }
         let has_cuda_build_target =
             crate::linux_gpu_backend::detected_cuda_build_target().is_some();
         self.with_gpu_backend(has_cuda_build_target)
