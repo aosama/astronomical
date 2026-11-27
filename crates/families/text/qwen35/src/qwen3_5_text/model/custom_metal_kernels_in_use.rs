@@ -39,6 +39,10 @@ impl Qwen3_5TextModel {
                 accelerators.signed_hadamard_rotation_kernel.is_some(),
             ),
             (
+                "sorted_expert_matmul",
+                accelerators.sorted_expert_matmul_kernels.is_some(),
+            ),
+            (
                 "row_batched_matmul",
                 accelerators.register_ordered_matmul_kernels.is_some(),
             ),
