@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CustomMetalKernelReport {
-    /// One verdict per probed kernel family, in family order. The probes
+    /// One verdict per probed kernel family, sorted by family id. The probes
     /// run once per worker process, at its first model load.
     pub probe_verdicts: Vec<CustomMetalKernelProbeVerdict>,
     /// The kernels the loaded model holds, by stable use id, sorted.
