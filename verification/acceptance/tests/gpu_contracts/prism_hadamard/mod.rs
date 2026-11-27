@@ -1,28 +1,22 @@
-//! The folded ternary family's performance tiers, climbing the call stack:
+//! Journeys over a real folded ternary pack (Prism ML's Ternary Bonsai) on the
+//! shared Qwen 3.5 core, which serves these packs since #2595:
 //!
-//! 1. `operation_throughput`: the Hadamard activation transform and the
-//!    folded ternary matmul alone, at the pack's real shapes.
-//! 2. `layer_throughput`: one gated-delta and one full-attention decoder
-//!    layer, prefill-shaped and decode-shaped.
-//! 3. `forward_throughput`: whole-model prefill chunks and decode steps
-//!    through the raw forward pass.
-//! 4. `generation_throughput`: the greedy generation session, whose decode
-//!    loop is the path the serving engine mirrors.
+//! - `shared_core_validation`: the core validates the pack.
+//! - `shared_core_reply_token_profile`: where one reply token's time goes.
+//! - `stacked_sibling_projection_verdict`: stacked sibling matmuls against
+//!   one launch each.
+//! - `elementwise_fusion_parity`: fused elementwise kernels against MLX.
 //!
-//! Every tier loads the real pack, touches the graphics processor, and is
-//! therefore `#[serial]` and `#[ignore]`d; run them through
-//! `cargo test-prism-hadamard-performance` (an optimized build) with
-//! `model_directory` selected in the explicit test-run configuration.
+//! Every journey loads the real pack, touches the graphics processor, and is
+//! therefore `#[serial]` and `#[ignore]`d; name the pack with `model_directory`
+//! in the explicit test-run configuration.
 
 pub(crate) mod support;
 
 mod elementwise_fusion_parity;
-mod forward_throughput;
-mod generation_throughput;
-mod layer_throughput;
-mod operation_throughput;
-mod shared_core_by_layer;
-mod shared_core_parity;
+mod shared_core;
 mod shared_core_reply_token_profile;
 mod shared_core_validation;
 mod stacked_sibling_projection_verdict;
+
+pub(crate) use shared_core::{loaded_shared_core, shared_core_greedy_tokens};

@@ -1,19 +1,12 @@
-//! The PrismML folded ternary Qwen3.5 family.
+//! The PrismML folded ternary pack format.
 //!
 //! Discovery model type `prism_hadamard_qwen35`: dense Qwen3.5-derived hybrid
 //! attention whose ternary weights are stored in a Hadamard-rotated basis.
-//! This family owns the folded-pack contract end to end — the transform is
-//! applied unconditionally by construction here, and the standard qwen3_5
-//! family never branches on folded artifacts.
+//! This module reads and checks the pack: its configuration, its Hadamard
+//! sign table and its files. The shared Qwen 3.5 core serves the pack
+//! (`qwen3_5_core::model_math::folded_ternary_weights`); the separate folded
+//! engine that served it before #2595 is retired.
 pub mod configuration;
 pub mod hadamard;
 
 pub mod artifacts;
-
-pub mod astro_decoder_state_cache_layout;
-
-#[cfg(feature = "direct-mlx")]
-pub mod engine;
-
-#[cfg(feature = "direct-mlx")]
-pub mod model;
