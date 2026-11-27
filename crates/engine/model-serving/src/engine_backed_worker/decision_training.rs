@@ -3,6 +3,8 @@
 //! be cancelled) between steps, and each step's progress goes out as an
 //! event so the person sees how far the training has got.
 
+use super::worker_engines::WorkerEngines;
+use crate::DecisionEngine as _;
 use std::time::Instant;
 
 use decision_contract::DecisionFailure;
@@ -13,12 +15,11 @@ use ipc_protocol::{
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::stepped_request::CommandDuringRequest;
-use super::support::{ActiveWorkerRequest, ModelFactory, WorkerRuntimeError};
+use super::support::{ActiveWorkerRequest, WorkerRuntimeError};
 use super::trained_tensors_handover_writing::{discard_handover_file, hand_over_trained_tensors};
 use super::{EngineBackedWorker, LoadedRuntime};
 use crate::decision_engine::DecisionTrainingStep;
 use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{ImageGenerationEngine, InferenceEngine};
 
 /// A training the worker is running.
 pub(crate) struct ActiveDecisionTraining {
@@ -35,33 +36,7 @@ impl ActiveDecisionTraining {
 type ProcessorActiveRequest<Processor> =
     ActiveWorkerRequest<<Processor as ModelGenerationProcessor>::RequestOutput>;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     /// Starts a training on the loaded decision model, or answers why it cannot.
     pub(crate) async fn start_decision_training<WriteTransport>(
         &mut self,
@@ -209,7 +184,7 @@ where
         active_training: ActiveDecisionTraining,
         command_reader: &mut ProtocolReader<ReadTransport>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ProcessorActiveRequest<Processor>>, WorkerRuntimeError>
+    ) -> Result<Option<ProcessorActiveRequest<Engines::Processor>>, WorkerRuntimeError>
     where
         ReadTransport: AsyncRead + Unpin,
         WriteTransport: AsyncWrite + Unpin,

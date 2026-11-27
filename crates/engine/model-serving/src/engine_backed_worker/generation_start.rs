@@ -1,47 +1,22 @@
+use super::worker_engines::{InferenceRequestOf, RequestOutputOf, WorkerEngines};
 use ipc_protocol::{ChatGenerationFailureReason, ProtocolWriter, WorkerEvent};
 use tokio::io::AsyncWrite;
 
 use super::fatal;
-use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
+use super::support::{ActiveEngineGeneration, WorkerRuntimeError};
 use crate::inference_engine::contract::EngineGenerationStart;
 use crate::inference_engine::contract::PreparedInferenceRequest;
 use crate::model_generation_processor::{ModelGenerationProcessor, PreparedModelGeneration};
-use crate::{ImageGenerationEngine, InferenceEngine, InferenceEngineError};
+use crate::{InferenceEngine, InferenceEngineError};
 
 use super::{EngineBackedWorker, LoadedRuntime};
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     pub(super) async fn start_generation<WriteTransport>(
         &mut self,
         generation_command: ipc_protocol::ChatGenerationCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveEngineGeneration<RequestOutputOf<Engines>>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -109,7 +84,7 @@ where
         request_id: ipc_protocol::RequestId,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
-        Option<PreparedModelGeneration<Processor::InferenceRequest, Processor::RequestOutput>>,
+        Option<PreparedModelGeneration<InferenceRequestOf<Engines>, RequestOutputOf<Engines>>>,
         WorkerRuntimeError,
     >
     where
@@ -166,9 +141,9 @@ where
         generation_command: &ipc_protocol::ChatGenerationCommand,
         generation_start: EngineGenerationStart,
         prompt_token_count: u32,
-        prepared_request_output: Processor::RequestOutput,
+        prepared_request_output: RequestOutputOf<Engines>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveEngineGeneration<RequestOutputOf<Engines>>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {

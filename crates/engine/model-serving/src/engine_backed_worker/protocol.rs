@@ -1,5 +1,8 @@
 //! Protocol startup and command-loop orchestration for the engine-backed worker.
 
+use super::worker_engines::{LoadedRuntimeOf, RequestOutputOf, WorkerEngines};
+use crate::DecisionEngine as _;
+use crate::EmbeddingEngine as _;
 use ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, MlxMemorySnapshotSource,
     ProtocolReader, ProtocolWriter, WorkerCommand, WorkerDecisionCapabilities, WorkerEvent,
@@ -10,8 +13,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use super::load_announcement::announce_load_started;
 use super::stepped_request::CommandDuringRequest;
 use super::support::{
-    ActiveEngineGeneration, ActiveImageGeneration, ActiveWorkerRequest, ModelFactory,
-    WorkerRuntimeError,
+    ActiveEngineGeneration, ActiveImageGeneration, ActiveWorkerRequest, WorkerRuntimeError,
 };
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
 use crate::model_generation_processor::ModelGenerationProcessor;
@@ -41,33 +43,7 @@ fn initialization_failure(engine_error: crate::InferenceEngineError) -> WorkerRu
     }
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     /// Loads the engine, reports readiness, and serves commands until stdin closes.
     pub async fn run<ReadTransport, WriteTransport>(
         self,
@@ -126,7 +102,7 @@ where
     /// feature configuration, and the first memory/astro-ssd-prompt-cache samples.
     async fn announce_autoregressive_readiness<WriteTransport>(
         &mut self,
-        loaded_model: &mut LoadedModel<Processor, Engine>,
+        loaded_model: &mut LoadedModel<Engines::Processor, Engines::Engine>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -170,7 +146,7 @@ where
     /// first memory sample.
     async fn announce_image_readiness<WriteTransport>(
         &mut self,
-        image_engine: &mut ImageEngine,
+        image_engine: &mut Engines::ImageEngine,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -199,7 +175,7 @@ where
     /// first memory sample.
     async fn announce_embeddings_readiness<WriteTransport>(
         &mut self,
-        embedding_engine: &mut EmbeddingsEngine,
+        embedding_engine: &mut Engines::EmbeddingsEngine,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -229,14 +205,7 @@ where
     /// announced by their own arms, so they are left alone here.
     async fn announce_forward_pass_readiness<WriteTransport>(
         &mut self,
-        forward_pass_runtime: &mut LoadedRuntime<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
+        forward_pass_runtime: &mut LoadedRuntimeOf<Engines>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -262,7 +231,7 @@ where
     /// first memory sample.
     async fn announce_decisions_readiness<WriteTransport>(
         &mut self,
-        decision_engine: &mut DecisionsEngine,
+        decision_engine: &mut Engines::DecisionsEngine,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -363,10 +332,10 @@ where
     /// and every otherwise-idle loop tick advances the generation.
     pub(super) async fn serve_active_autoregressive_request<ReadTransport, WriteTransport>(
         &mut self,
-        current_generation: Box<ActiveEngineGeneration<Processor::RequestOutput>>,
+        current_generation: Box<ActiveEngineGeneration<RequestOutputOf<Engines>>>,
         command_reader: &mut ProtocolReader<ReadTransport>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveWorkerRequest<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveWorkerRequest<RequestOutputOf<Engines>>>, WorkerRuntimeError>
     where
         ReadTransport: AsyncRead + Unpin,
         WriteTransport: AsyncWrite + Unpin,
@@ -450,7 +419,7 @@ where
         current_generation: ActiveImageGeneration,
         command_reader: &mut ProtocolReader<ReadTransport>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveWorkerRequest<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveWorkerRequest<RequestOutputOf<Engines>>>, WorkerRuntimeError>
     where
         ReadTransport: AsyncRead + Unpin,
         WriteTransport: AsyncWrite + Unpin,

@@ -1,3 +1,4 @@
+use super::worker_engines::{LoadedRuntimeOf, WorkerEngines};
 use ipc_protocol::{
     ExpertMemoryMode, ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolWriter,
     WorkerEvent,
@@ -15,7 +16,6 @@ use crate::{
 };
 
 use super::{EngineBackedWorker, LoadedRuntime};
-use crate::model_generation_processor::ModelGenerationProcessor;
 
 /// Outcome of planning an MLX memory-limit adoption when no model runtime is
 /// loaded.
@@ -30,33 +30,7 @@ enum FactoryMemoryLimitOutcome {
     LimitAdopted(Box<WorkerEvent>),
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     pub(crate) async fn update_mlx_memory_limit<WriteTransport>(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
@@ -277,14 +251,7 @@ where
 
     /// Dispatches the live memory-limit change to whichever runtime is loaded.
     async fn adjust_loaded_runtime_mlx_memory_limit(
-        loaded_runtime: &mut LoadedRuntime<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
+        loaded_runtime: &mut LoadedRuntimeOf<Engines>,
         effective_requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
         match loaded_runtime {

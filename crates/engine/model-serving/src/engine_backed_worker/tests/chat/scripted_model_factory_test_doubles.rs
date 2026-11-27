@@ -85,3 +85,8 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine>
         ))
     }
 }
+
+/// A chat worker whose model swaps go through a scripted `Factory`.
+pub(super) type ScriptedFactoryWorker<Factory> = crate::EngineBackedWorker<
+    crate::FactoryEngines<ScriptedChatProcessor, ScriptedChatEngine, Factory>,
+>;

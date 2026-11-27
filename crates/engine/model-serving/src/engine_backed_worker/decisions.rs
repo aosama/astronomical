@@ -1,5 +1,7 @@
 //! Serializes one synchronous decisions request and publishes its cleanup event.
 
+use super::worker_engines::WorkerEngines;
+use crate::DecisionEngine as _;
 use decision_contract::{DecisionFailure, HeadInputRequest};
 use ipc_protocol::{
     DecisionsCommand, MlxMemorySnapshotSource, ProtocolWriter, RequestId, WorkerEvent,
@@ -9,38 +11,8 @@ use tokio::io::AsyncWrite;
 use super::WorkerRuntimeError;
 use super::output;
 use super::{EngineBackedWorker, LoadedRuntime};
-use crate::EmbeddingEngine;
-use crate::InferenceEngine;
-use crate::engine_backed_worker::support::ModelFactory;
-use crate::model_generation_processor::ModelGenerationProcessor;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: crate::ImageGenerationEngine,
-    EmbeddingsEngine: EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     /// Answers one decisions command, or reports why it could not be answered.
     ///
     /// The questions are parsed again here although the daemon already

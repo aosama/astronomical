@@ -10,9 +10,9 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::EngineBackedWorker;
 use super::speech::ActiveSpeechGeneration;
-use super::support::{ActiveWorkerRequest, ModelFactory, WorkerRuntimeError};
+use super::support::{ActiveWorkerRequest, WorkerRuntimeError};
+use super::worker_engines::WorkerEngines;
 use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{ImageGenerationEngine, InferenceEngine};
 
 /// What a command that arrived during an image or speech request asks of it.
 pub(crate) enum CommandDuringRequest {
@@ -25,40 +25,14 @@ pub(crate) enum CommandDuringRequest {
 type ProcessorActiveRequest<Processor> =
     ActiveWorkerRequest<<Processor as ModelGenerationProcessor>::RequestOutput>;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     /// Runs the active request to its next yield.
     pub(crate) async fn serve_active_request<ReadTransport, WriteTransport>(
         &mut self,
-        active_request: ProcessorActiveRequest<Processor>,
+        active_request: ProcessorActiveRequest<Engines::Processor>,
         command_reader: &mut ProtocolReader<ReadTransport>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ProcessorActiveRequest<Processor>>, WorkerRuntimeError>
+    ) -> Result<Option<ProcessorActiveRequest<Engines::Processor>>, WorkerRuntimeError>
     where
         ReadTransport: AsyncRead + Unpin,
         WriteTransport: AsyncWrite + Unpin,
@@ -92,7 +66,7 @@ where
         &mut self,
         stepped_command: WorkerCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ProcessorActiveRequest<Processor>>, WorkerRuntimeError>
+    ) -> Result<Option<ProcessorActiveRequest<Engines::Processor>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -126,7 +100,7 @@ where
         active_speech: ActiveSpeechGeneration,
         command_reader: &mut ProtocolReader<ReadTransport>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ProcessorActiveRequest<Processor>>, WorkerRuntimeError>
+    ) -> Result<Option<ProcessorActiveRequest<Engines::Processor>>, WorkerRuntimeError>
     where
         ReadTransport: AsyncRead + Unpin,
         WriteTransport: AsyncWrite + Unpin,

@@ -1,13 +1,11 @@
 use super::ipc_worker_transport::open_ipc_worker_transport;
 use super::scripted_model_factory_test_doubles::{
-    FirstCreationFailsScriptedModelFactory, LazyScriptedModelFactory,
+    FirstCreationFailsScriptedModelFactory, LazyScriptedModelFactory, ScriptedFactoryWorker,
 };
 use super::support::{
     close_worker_transport, next_event, next_raw_event, worker_model_configuration,
 };
-use crate::{
-    EngineBackedWorker, MemoryCeilingUtilization, MlxActiveMemoryBreakdown, MlxMemoryTelemetry,
-};
+use crate::{MemoryCeilingUtilization, MlxActiveMemoryBreakdown, MlxMemoryTelemetry};
 use ipc_protocol::{
     ExpertMemoryMode, MlxMemorySnapshotSource, WorkerCommand, WorkerEvent,
     WorkerExpertResidencySnapshot, WorkerRuntimeFeatureConfiguration,
@@ -20,7 +18,7 @@ use tokio::time::timeout;
 async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
     let model_configurations = Arc::new(Mutex::new(Vec::new()));
-    let engine_worker = EngineBackedWorker::idle_with_model_factory(
+    let engine_worker = ScriptedFactoryWorker::idle_with_model_factory(
         LazyScriptedModelFactory {
             model_factory_call_count: Arc::clone(&model_factory_call_count),
             mlx_memory_limits: (0, 0),
@@ -78,24 +76,25 @@ async fn should_wait_for_a_swap_command_before_loading_an_idle_worker_model() {
 async fn should_apply_a_live_ceiling_within_the_machine_bound_to_the_next_model() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
     let model_creation_memory_limits = Arc::new(Mutex::new(Vec::new()));
-    let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
-        LazyScriptedModelFactory {
-            model_factory_call_count,
-            mlx_memory_limits: (32_000_000_000, 32_000_000_000),
-            model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
-            model_configurations: Arc::new(Mutex::new(Vec::new())),
-            expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Paged),
-            created_engine_idle_mlx_memory_telemetry: None,
-        },
-        40_000_000_000,
-        32_000_000_000,
-    )
-    .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
-        configuration_generation: "generation-before-memory-update".to_owned(),
-        astro_ssd_prompt_cache_enabled: false,
-        astro_ssd_prompt_cache_maximum_size_bytes: 0,
-        loaded_model: None,
-    });
+    let engine_worker =
+        ScriptedFactoryWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
+            LazyScriptedModelFactory {
+                model_factory_call_count,
+                mlx_memory_limits: (32_000_000_000, 32_000_000_000),
+                model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
+                model_configurations: Arc::new(Mutex::new(Vec::new())),
+                expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Paged),
+                created_engine_idle_mlx_memory_telemetry: None,
+            },
+            40_000_000_000,
+            32_000_000_000,
+        )
+        .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
+            configuration_generation: "generation-before-memory-update".to_owned(),
+            astro_ssd_prompt_cache_enabled: false,
+            astro_ssd_prompt_cache_maximum_size_bytes: 0,
+            loaded_model: None,
+        });
     let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
         open_ipc_worker_transport();
     let worker_task =
@@ -180,24 +179,25 @@ fn assert_second_model_was_created_with_the_updated_limit_pair(
 async fn should_apply_live_memory_updates_to_the_idle_worker_up_to_the_machine_bound() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
     let model_creation_memory_limits = Arc::new(Mutex::new(Vec::new()));
-    let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
-        LazyScriptedModelFactory {
-            model_factory_call_count: Arc::clone(&model_factory_call_count),
-            mlx_memory_limits: (35_000_000_000, 35_000_000_000),
-            model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
-            model_configurations: Arc::new(Mutex::new(Vec::new())),
-            expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
-            created_engine_idle_mlx_memory_telemetry: None,
-        },
-        40_000_000_000,
-        35_000_000_000,
-    )
-    .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
-        configuration_generation: "generation-before-live-clamp".to_owned(),
-        astro_ssd_prompt_cache_enabled: false,
-        astro_ssd_prompt_cache_maximum_size_bytes: 0,
-        loaded_model: None,
-    });
+    let engine_worker =
+        ScriptedFactoryWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
+            LazyScriptedModelFactory {
+                model_factory_call_count: Arc::clone(&model_factory_call_count),
+                mlx_memory_limits: (35_000_000_000, 35_000_000_000),
+                model_creation_memory_limits: Arc::clone(&model_creation_memory_limits),
+                model_configurations: Arc::new(Mutex::new(Vec::new())),
+                expert_memory_mode: Some(ipc_protocol::ExpertMemoryMode::Resident),
+                created_engine_idle_mlx_memory_telemetry: None,
+            },
+            40_000_000_000,
+            35_000_000_000,
+        )
+        .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
+            configuration_generation: "generation-before-live-clamp".to_owned(),
+            astro_ssd_prompt_cache_enabled: false,
+            astro_ssd_prompt_cache_maximum_size_bytes: 0,
+            loaded_model: None,
+        });
     let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
         open_ipc_worker_transport();
     let worker_task =
@@ -251,7 +251,7 @@ async fn should_apply_live_memory_updates_to_the_idle_worker_up_to_the_machine_b
 #[tokio::test]
 async fn should_remain_idle_after_the_first_model_creation_fails() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
-    let engine_worker = EngineBackedWorker::idle_with_model_factory(
+    let engine_worker = ScriptedFactoryWorker::idle_with_model_factory(
         FirstCreationFailsScriptedModelFactory {
             model_factory_call_count: Arc::clone(&model_factory_call_count),
         },
@@ -311,26 +311,27 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
 async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjusted_samples() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
     let created_engine_idle_mlx_memory_telemetry = idle_telemetry_with_unused_ceiling_split();
-    let engine_worker = EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
-        LazyScriptedModelFactory {
-            model_factory_call_count,
-            mlx_memory_limits: (38_000_000_000, 38_000_000_000),
-            model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
-            model_configurations: Arc::new(Mutex::new(Vec::new())),
-            expert_memory_mode: Some(ExpertMemoryMode::Paged),
-            created_engine_idle_mlx_memory_telemetry: Some(
-                created_engine_idle_mlx_memory_telemetry,
-            ),
-        },
-        40_000_000_000,
-        38_000_000_000,
-    )
-    .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
-        configuration_generation: "startup-generation".to_owned(),
-        astro_ssd_prompt_cache_enabled: false,
-        astro_ssd_prompt_cache_maximum_size_bytes: 0,
-        loaded_model: None,
-    });
+    let engine_worker =
+        ScriptedFactoryWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
+            LazyScriptedModelFactory {
+                model_factory_call_count,
+                mlx_memory_limits: (38_000_000_000, 38_000_000_000),
+                model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
+                model_configurations: Arc::new(Mutex::new(Vec::new())),
+                expert_memory_mode: Some(ExpertMemoryMode::Paged),
+                created_engine_idle_mlx_memory_telemetry: Some(
+                    created_engine_idle_mlx_memory_telemetry,
+                ),
+            },
+            40_000_000_000,
+            38_000_000_000,
+        )
+        .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
+            configuration_generation: "startup-generation".to_owned(),
+            astro_ssd_prompt_cache_enabled: false,
+            astro_ssd_prompt_cache_maximum_size_bytes: 0,
+            loaded_model: None,
+        });
     let (mut daemon_reader, mut daemon_writer, worker_reader_transport, worker_writer_transport) =
         open_ipc_worker_transport();
     let worker_task =
@@ -443,7 +444,7 @@ fn assert_limit_adjusted_sample_keeps_the_unused_ceiling_split(limit_adjusted_ev
 /// acknowledgement, so the report can never outlive the load it describes.
 #[tokio::test]
 async fn should_open_a_requested_swap_by_naming_the_model() {
-    let engine_worker = EngineBackedWorker::idle_with_model_factory(
+    let engine_worker = ScriptedFactoryWorker::idle_with_model_factory(
         LazyScriptedModelFactory {
             model_factory_call_count: Arc::new(AtomicUsize::new(0)),
             mlx_memory_limits: (0, 0),

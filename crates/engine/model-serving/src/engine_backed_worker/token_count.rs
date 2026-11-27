@@ -9,40 +9,13 @@ use ipc_protocol::{
 use tokio::io::AsyncWrite;
 
 use super::generation_start::protocol_prompt_token_count;
-use super::support::{ModelFactory, WorkerRuntimeError};
+use super::support::WorkerRuntimeError;
 use crate::inference_engine::contract::PreparedInferenceRequest;
-use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{ImageGenerationEngine, InferenceEngine};
 
 use super::EngineBackedWorker;
+use super::worker_engines::WorkerEngines;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     /// Answers with one `Completed` event carrying the prepared prompt's
     /// token count and zero generated tokens. Preparation failures were
     /// already answered with `Failed` by the shared preparation step.

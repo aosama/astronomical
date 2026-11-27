@@ -5,6 +5,8 @@
 //! each turn speaks one segment, so a `Cancel` that arrives between
 //! segments stops it with at most one segment of wasted work.
 
+use super::worker_engines::{LoadedRuntimeOf, WorkerEngines};
+use crate::SpeechEngine as _;
 use std::time::Instant;
 
 use ipc_protocol::{
@@ -14,12 +16,9 @@ use ipc_protocol::{
 use speech_contract::{SpeechFailure, pcm16_bytes};
 use tokio::io::AsyncWrite;
 
-use super::support::{ModelFactory, WorkerRuntimeError};
+use super::support::WorkerRuntimeError;
 use super::{EngineBackedWorker, LoadedRuntime, output};
-use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{
-    ImageGenerationEngine, InferenceEngine, SpeechEngineLoadResult, SpeechEngineStep, StartedSpeech,
-};
+use crate::{SpeechEngineLoadResult, SpeechEngineStep, StartedSpeech};
 
 /// The speech request a worker is speaking, and what its result will say.
 pub(crate) struct ActiveSpeechGeneration {
@@ -67,45 +66,12 @@ impl ActiveSpeechGeneration {
     }
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     /// Loads a speech engine and announces its readiness and first memory
     /// sample. Every other runtime is announced by its own arm.
     pub(crate) async fn announce_speech_readiness<WriteTransport>(
         &mut self,
-        loaded_runtime: &mut LoadedRuntime<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
+        loaded_runtime: &mut LoadedRuntimeOf<Engines>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
@@ -355,7 +321,7 @@ where
         ))
     }
 
-    fn loaded_speech_engine(&mut self) -> Option<&mut TextToSpeechEngine> {
+    fn loaded_speech_engine(&mut self) -> Option<&mut Engines::TextToSpeechEngine> {
         match self.loaded_runtime.as_mut() {
             Some(LoadedRuntime::Speech(speech_engine)) => Some(speech_engine),
             Some(LoadedRuntime::Autoregressive(_))
