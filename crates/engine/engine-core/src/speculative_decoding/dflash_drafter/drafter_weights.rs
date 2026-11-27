@@ -389,8 +389,11 @@ fn served_packed_linear(
     })
 }
 
-/// `tensor` in bf16, the dtype the selector reads its codebooks in.
-fn in_bfloat16(runtime: &MlxRuntime, tensor: MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+/// `tensor` in bf16, the dtype the drafter's weights are stored and run in.
+pub(super) fn in_bfloat16(
+    runtime: &MlxRuntime,
+    tensor: MlxArray,
+) -> Result<MlxArray, MlxRuntimeError> {
     if tensor.dtype() == MlxDtype::BFloat16 {
         return Ok(tensor);
     }
