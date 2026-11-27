@@ -20,7 +20,7 @@ use model_serving::qwen3_5_core::model_math::decoder_layer_weights::{
 use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
-use super::shared_core_parity::loaded_shared_core;
+use super::shared_core::loaded_shared_core;
 use super::support::pack_directory;
 
 const REPORT_SUBDIRECTORY: &str = "prism-stacked-sibling-projections";

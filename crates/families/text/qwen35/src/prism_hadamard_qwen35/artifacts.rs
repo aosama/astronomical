@@ -24,8 +24,6 @@ use super::configuration::{FoldedPackConfig, FoldedPackConfigError};
 use super::hadamard::{HadamardContract, HadamardContractError};
 
 mod module_shape_contract;
-#[cfg(feature = "direct-mlx")]
-mod serving_artifact;
 
 #[cfg(test)]
 pub mod tests;

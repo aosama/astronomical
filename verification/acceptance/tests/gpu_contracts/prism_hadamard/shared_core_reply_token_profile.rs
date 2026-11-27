@@ -18,9 +18,9 @@ use serial_test::serial;
 
 use crate::stored_prompt_state::StoredPromptState;
 
-use super::shared_core_parity::{empty_shared_core_state, loaded_shared_core, picked_on_the_gpu};
+use super::shared_core::{empty_shared_core_state, loaded_shared_core, picked_on_the_gpu};
 use super::support::{
-    PREFILL_CHUNK_TOKENS, WARMUP_INPUT_TOKENS, pack_directory, pack_tokenizer,
+    PREFILL_CHUNK_TOKENS, SHORT_PROMPT_TOKENS, pack_directory, pack_tokenizer,
     romeo_and_juliet_prompt_token_ids,
 };
 
@@ -62,11 +62,17 @@ impl MeasuredJob for ReplyTokenJob {
 fn should_profile_one_reply_token_of_a_folded_pack_on_the_shared_core() {
     let tokenizer = pack_tokenizer();
     let prompt_token_ids: Vec<u32> =
-        romeo_and_juliet_prompt_token_ids(&tokenizer, WARMUP_INPUT_TOKENS)
+        romeo_and_juliet_prompt_token_ids(&tokenizer, SHORT_PROMPT_TOKENS)
             .iter()
             .map(|token_id| *token_id as u32)
             .collect();
-    let shared_core = loaded_shared_core(&pack_directory());
+    let mut shared_core = loaded_shared_core(&pack_directory());
+    // The profiler times the graph it is handed, so the token is built as one
+    // graph: serving's submission every few layers would leave it only the
+    // last group.
+    shared_core
+        .chunking
+        .experimental_ssd_paging_generation_graph_submission_layer_interval = 0;
     let mut decoder_state = empty_shared_core_state(&shared_core);
     let mut last_logits = None;
     for (chunk_index, prompt_chunk) in prompt_token_ids.chunks(PREFILL_CHUNK_TOKENS).enumerate() {

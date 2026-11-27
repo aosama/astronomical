@@ -61,13 +61,6 @@ pub use engine_core::expert_paging::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use prism_hadamard_qwen35::engine::{
-    PrismHadamardQwen35Engine, PrismHadamardQwen35InferenceExecution,
-    PrismHadamardQwen35ServingSettings, PrismHadamardQwen35StartupError,
-    initialize_prism_hadamard_qwen35_model_with_serving_settings,
-};
-
-#[cfg(feature = "direct-mlx")]
 pub use kernel_capability::SortedExpertWeightedSumProbe;
 
 #[cfg(feature = "direct-mlx")]

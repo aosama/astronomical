@@ -6,13 +6,10 @@ use std::path::PathBuf;
 use config::AstroSsdPromptCacheConfig;
 use ipc_protocol::{WorkerAutoregressiveModelConfiguration, WorkerDecodeAstroExpertCachePolicy};
 
-use crate::{
-    EnginePlacement, PrismHadamardQwen35ServingSettings, Qwen3_5GenerationProcessor,
-    initialize_prism_hadamard_qwen35_model_with_serving_settings,
-};
+use crate::{EnginePlacement, Qwen3_5GenerationProcessor};
 
+use super::ModelFamilyInferenceEngine;
 use super::qwen3_5_model_startup::initialize_qwen3_5_model;
-use super::{ModelFamilyInferenceEngine, boxed_chat_engine};
 
 /// The worker's settings every chat family's startup reads.
 #[derive(Clone)]
@@ -72,53 +69,5 @@ impl ChatFamilyConstruction for Qwen3_5ChatFamily {
             model_configuration,
         )
         .map_err(|startup_error| startup_error.public_model_load_failure_reason())
-    }
-}
-
-/// The folded-ternary Prism Hadamard chat family. The folded pack is dense,
-/// so complete residency is not a sparse-expert concern and the placement
-/// records that the whole model fits by construction.
-pub struct PrismHadamardQwen35ChatFamily;
-
-impl ChatFamilyConstruction for PrismHadamardQwen35ChatFamily {
-    const INITIALIZATION_TASK_FAILURE: &'static str = "folded ternary initialization task failed";
-
-    fn build_chat_runtime(
-        chat_family_settings: ChatFamilySettings,
-        model_directory_path: PathBuf,
-        model_configuration: WorkerAutoregressiveModelConfiguration,
-    ) -> Result<ChatRuntimeParts, String> {
-        let astro_ssd_prompt_cache_enabled = chat_family_settings.astro_ssd_prompt_cache_enabled;
-        let (generation_processor, prism_engine) =
-            initialize_prism_hadamard_qwen35_model_with_serving_settings(
-                &model_directory_path,
-                chat_family_settings.effective_mlx_memory_ceiling_bytes,
-                chat_family_settings.mlx_buffer_cache_limit_bytes,
-                chat_family_settings.performance_attribution_enabled,
-                PrismHadamardQwen35ServingSettings {
-                    maximum_context_tokens: Some(model_configuration.maximum_context_tokens),
-                    maximum_output_tokens: Some(model_configuration.maximum_output_tokens),
-                    prompt_processing_chunk_tokens: model_configuration
-                        .chunking
-                        .fixed_prompt_processing_chunk_size_tokens,
-                    // The folded pack ships the Qwen thinking template and
-                    // the shared processor honors per-request thinking
-                    // budgets.
-                    enable_thinking: true,
-                    chunking: model_configuration.chunking,
-                    astro_ssd_prompt_cache_enabled,
-                    astro_ssd_prompt_cache_config: astro_ssd_prompt_cache_enabled
-                        .then_some(chat_family_settings.astro_ssd_prompt_cache_config),
-                    performance_attribution_log_path: Some(
-                        chat_family_settings.performance_attribution_log_path,
-                    ),
-                },
-            )
-            .map_err(|startup_error| startup_error.to_string())?;
-        Ok(ChatRuntimeParts {
-            generation_processor,
-            inference_engine: boxed_chat_engine(prism_engine),
-            engine_placement: EnginePlacement::CompleteResidencyFits,
-        })
     }
 }
