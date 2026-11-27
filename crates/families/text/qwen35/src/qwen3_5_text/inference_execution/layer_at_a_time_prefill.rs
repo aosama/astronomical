@@ -48,14 +48,12 @@ impl LayerAtATimePrefillInFlight {
     /// The report of a finished layer with more to come: the layers done
     /// and the prompt time since the last report, which this one now covers.
     fn layer_finished_step(&mut self, layer_count: u32) -> LayerAtATimePrefillStep {
-        let layer_finished_at = Instant::now();
-        let unreported_elapsed_millis = u64::try_from(
-            layer_finished_at
-                .duration_since(self.time_reported_until)
-                .as_millis(),
-        )
-        .unwrap_or(u64::MAX);
-        self.time_reported_until = layer_finished_at;
+        let unreported_elapsed_millis =
+            u64::try_from(self.time_reported_until.elapsed().as_millis()).unwrap_or(u64::MAX);
+        // Advance by exactly the whole milliseconds reported, not to now: the
+        // sub-millisecond rest stays unreported and is counted by the next
+        // report, so forty layers do not drop up to forty milliseconds.
+        self.time_reported_until += std::time::Duration::from_millis(unreported_elapsed_millis);
         LayerAtATimePrefillStep::LayerFinished {
             prompt_layer_progress: WorkerPromptLayerProgress {
                 completed_layer_count: u32::try_from(
