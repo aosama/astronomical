@@ -15,9 +15,7 @@ fn kernel_source_text(kernel: &MetalKernelSource) -> String {
 }
 
 fn declares_constant(source_text: &str, constant_name: &str, constant_value: usize) -> bool {
-    source_text.contains(&format!(
-        "int {constant_name} = {constant_value};"
-    ))
+    source_text.contains(&format!("int {constant_name} = {constant_value};"))
 }
 
 #[test]
@@ -81,8 +79,5 @@ fn should_unroll_one_step_per_token_of_the_twelve_token_block() {
     assert!(sequence_source.contains("int time_block_size = 12;"));
     // Twelve unrolled steps plus one rolled tail step, each rotating its
     // prefetched operands into current ones once.
-    assert_eq!(
-        sequence_source.matches("current_keys[4];").count(),
-        13
-    );
+    assert_eq!(sequence_source.matches("current_keys[4];").count(), 13);
 }

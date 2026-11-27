@@ -1290,11 +1290,22 @@ jobs:
       # Every Metal kernel compiled offline exactly as MLX wraps it at run
       # time (issue #2712), from scratch, against the pinned and patched MLX
       # sources: a kernel that would fail on its first GPU run fails here.
+      # Provisioning the patched MLX sources needs the verified native
+      # archives, which this lane otherwise never fetches: restore them as the
+      # build lane does, and download whatever the restore did not bring.
+      - name: Restore native archives from the github_actions_cache
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: restore
+          owner: native-archives
+          path: ~/Library/Caches/Astronomical/native-dependencies
+          key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
       - name: Compile every Metal kernel offline
         run: |
+          cargo xtask bootstrap-native-dependencies
           cargo xtask provision-bindgen-headers
           cargo xtask check-metal-kernels --fresh
-        timeout-minutes: 10
+        timeout-minutes: 15
       - name: Run the shared test-fixture unit tests
         run: |
           cargo test-test-harness-fixtures --locked
