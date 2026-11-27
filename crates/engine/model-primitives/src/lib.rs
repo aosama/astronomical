@@ -59,6 +59,12 @@ pub mod route_observation;
 #[cfg(feature = "direct-mlx")]
 pub mod metal_kernel_template;
 
+#[cfg(feature = "direct-mlx")]
+pub mod metal_kernel_declaration;
+
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod metal_kernels;
+
 pub mod row_batched_matmul;
 
 pub mod sorted_expert_matmul;
@@ -107,10 +113,10 @@ pub use route_observation::{LayerRoutedExpertIds, ObservedExpertRoute};
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
     ExpertAssignmentOrder, SORTED_EXPERT_REDUCTION_THREADS_PER_THREADGROUP,
-    SORTED_EXPERT_WEIGHTED_REDUCTION_METAL_STATEMENTS, SortedExpertAssignments,
-    StackedExpertProjection, expert_assignment_order, gather_expert_projection,
-    restore_expert_assignment_order, router_weighted_expert_inputs, sort_expert_assignments,
-    sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
+    SortedExpertAssignments, StackedExpertProjection, expert_assignment_order,
+    gather_expert_projection, restore_expert_assignment_order, router_weighted_expert_inputs,
+    sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
+    unsorted_expert_weighted_sum,
 };
 
 pub use sparse_experts::{SparseExpertError, invert_assignment_order};

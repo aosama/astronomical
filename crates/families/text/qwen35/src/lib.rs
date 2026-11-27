@@ -16,6 +16,8 @@
 
 pub mod chat_family_construction;
 pub mod kernel_capability;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod metal_kernels;
 
 // The folded ternary family ships its loader and straight text model as
 // crate API ahead of the serving-path integration; the acceptance crate

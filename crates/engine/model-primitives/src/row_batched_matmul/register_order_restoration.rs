@@ -3,14 +3,15 @@
 //! once when they are built, and decision readout reads a handful of output
 //! head rows. Neither is on a decode step, so restoring costs nothing there.
 
-use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput};
+use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelOutput};
 use runtime_integration::MlxRuntime;
 
 use super::dispatch_plan::{OUTPUT_COLUMNS_PER_SIMDGROUP, QUANTIZATION_GROUP_SIZE};
-use super::register_order_source::REGISTER_ORDER_RESTORATION_SOURCE;
 use super::register_ordered_matmul::RegisterOrderedWeight;
 use super::register_ordered_plan::REGISTER_BLOCK_WORDS;
 use super::row_batched_quantized_matmul::{RowBatchedProjectionError, integer};
+use crate::metal_kernel_declaration::declare_metal_kernel;
+use crate::metal_kernels::ASTRO_PRIMITIVE_REGISTER_ORDER_RESTORATION_4BIT;
 
 /// MLX's `(packed_weight, scales, biases)` for some rows of a 4-bit,
 /// group-64 projection: [rows, input / 8] uint32 and [rows, input / 64] bf16.
@@ -89,12 +90,8 @@ impl RegisterOrderedWeight {
         // Declared per call: MLX compiles a kernel's source once per process
         // and reuses it, and restoring is rare enough that holding the handle
         // in every model would buy nothing.
-        let restoration = MlxMetalKernel::new(
-            "astro_register_order_restoration_4bit",
-            &["R", "P", "tile_ids"],
-            &["Wq", "S", "B"],
-            REGISTER_ORDER_RESTORATION_SOURCE,
-        )?;
+        let restoration =
+            declare_metal_kernel(&ASTRO_PRIMITIVE_REGISTER_ORDER_RESTORATION_4BIT, &[])?;
         let listed_tile_count = tile_ids.len() as i32;
         let restored_row_count = listed_tile_count * OUTPUT_COLUMNS_PER_SIMDGROUP;
         let group_count = self.input_width / QUANTIZATION_GROUP_SIZE;

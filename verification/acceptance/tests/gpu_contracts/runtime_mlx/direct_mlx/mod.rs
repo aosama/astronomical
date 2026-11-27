@@ -8,6 +8,7 @@ mod compiled_swiglu;
 mod flux_operations;
 mod metal_kernel;
 mod metal_kernel_in_trace_probe;
+mod metal_kernel_wrapper_parity;
 mod mlx_runtime;
 mod moe_gather_stage_benchmark;
 mod nvfp4_quantized_operations;

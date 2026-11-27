@@ -7,15 +7,16 @@ use mlx_bridge::{
 };
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
+use crate::metal_kernel_declaration::declare_metal_kernel;
 use crate::metal_kernel_template::integer;
+use crate::metal_kernels::{
+    ASTRO_PRIMITIVE_SORTED_EXPERT_FIRST_ROWS, ASTRO_PRIMITIVE_SORTED_EXPERT_MATMUL_4BIT,
+    ASTRO_PRIMITIVE_SORTED_EXPERT_MATMUL_4BIT_TOKEN_ROWS,
+};
 
 use super::dispatch_plan::{
     QUANTIZATION_GROUP_SIZE, SortedExpertDispatchPlan, SortedExpertDispatchRefusal,
     SortedExpertLayout,
-};
-use super::kernel_source::{
-    EXPERT_FIRST_ROWS_SOURCE, SORTED_EXPERT_MATMUL_HEADER, SORTED_EXPERT_MATMUL_SOURCE,
-    SORTED_ROWS_PREAMBLE, TOKEN_ROWS_PREAMBLE,
 };
 
 /// The kernels, declared once and shared by every expert layer: the expert
@@ -44,25 +45,14 @@ impl SortedExpertMatmulKernels {
     /// too: serving must prove the kernel by evaluating it first.
     pub fn declare() -> Result<Self, MlxRuntimeError> {
         Ok(Self {
-            expert_first_rows: MlxMetalKernel::new(
-                "astro_sorted_expert_first_rows",
-                &["ids", "row_count"],
-                &["first_rows"],
-                EXPERT_FIRST_ROWS_SOURCE,
+            expert_first_rows: declare_metal_kernel(
+                &ASTRO_PRIMITIVE_SORTED_EXPERT_FIRST_ROWS,
+                &[],
             )?,
-            matmul: MlxMetalKernel::new_with_header(
-                "astro_sorted_expert_matmul_4bit",
-                &["X", "Wq", "S", "B", "first_rows", "row_count"],
-                &["Y"],
-                SORTED_EXPERT_MATMUL_HEADER,
-                &format!("{SORTED_ROWS_PREAMBLE}{SORTED_EXPERT_MATMUL_SOURCE}"),
-            )?,
-            token_rows_matmul: MlxMetalKernel::new_with_header(
-                "astro_sorted_expert_matmul_4bit_token_rows",
-                &["X", "Wq", "S", "B", "first_rows", "order", "row_count"],
-                &["Y"],
-                SORTED_EXPERT_MATMUL_HEADER,
-                &format!("{TOKEN_ROWS_PREAMBLE}{SORTED_EXPERT_MATMUL_SOURCE}"),
+            matmul: declare_metal_kernel(&ASTRO_PRIMITIVE_SORTED_EXPERT_MATMUL_4BIT, &[])?,
+            token_rows_matmul: declare_metal_kernel(
+                &ASTRO_PRIMITIVE_SORTED_EXPERT_MATMUL_4BIT_TOKEN_ROWS,
+                &[],
             )?,
             row_count_arrays: std::cell::RefCell::default(),
         })

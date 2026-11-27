@@ -1,42 +1,16 @@
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::gated_delta_inputs::GatedDeltaInputs;
-use super::gated_delta_pipelined_kernel::{
-    THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE, gated_delta_pipelined_kernel_source,
-};
+use super::gated_delta_launch_geometry::{THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE};
 use super::gated_delta_sequence_contract::{
     GatedDeltaSequenceShape, gated_delta_sequence_error, template_arguments,
     validate_gated_delta_sequence_shapes,
 };
+use crate::metal_kernels::ASTRO_FAMILY_QWEN35_GATED_DELTA_SEQUENCE_CHECKPOINTS;
 use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
-
-const GATED_DELTA_CHECKPOINT_SETUP_SOURCE: &str = r#"
-    int checkpoint_index = 0;
-    int next_checkpoint_token_count = first_checkpoint_token_count;
-"#;
-const GATED_DELTA_CHECKPOINT_WRITE_SOURCE: &str = r#"
-                const int completed_token_count = first_token +
-                    /* ASTRONOMICAL_CHECKPOINT_TOKEN */ + 1;
-                if (checkpoint_index < checkpoint_count &&
-                    completed_token_count == next_checkpoint_token_count) {
-                    auto checkpoint_state = (device float4*)(
-                        recurrent_boundary_states +
-                        (((((size_t)checkpoint_index * B + batch_index) * Hv +
-                           value_head_index) * Dv + first_value_row +
-                           value_row_in_block) * Dk));
-                    for (int fragment_index = 0; fragment_index < 4;
-                         ++fragment_index) {
-                        checkpoint_state[key_segment_index +
-                            8 * fragment_index] =
-                            state_fragment[fragment_index];
-                    }
-                    ++checkpoint_index;
-                    next_checkpoint_token_count +=
-                        checkpoint_interval_token_count;
-                }
-"#;
+use model_primitives::metal_kernel_declaration::declare_metal_kernel;
 
 /// Boundary checkpoint outputs from one fused gated-delta sequence.
 pub struct Qwen3_5GatedDeltaBoundaryCheckpointResult {
@@ -45,35 +19,11 @@ pub struct Qwen3_5GatedDeltaBoundaryCheckpointResult {
     pub recurrent_boundary_states: Vec<MlxArray>,
 }
 
-/// Builds the fused Qwen3.5 gated-delta boundary-checkpoint kernel.
+/// Builds the fused Qwen3.5 gated-delta boundary-checkpoint kernel
+/// (`metal/astro_family_qwen35_gated_delta_sequence_checkpoints.metal`).
 pub fn qwen3_5_gated_delta_checkpoint_kernel()
 -> Result<MlxMetalKernel, runtime_integration::MlxRuntimeError> {
-    let checkpoint_kernel_source = gated_delta_pipelined_kernel_source(
-        GATED_DELTA_CHECKPOINT_SETUP_SOURCE,
-        GATED_DELTA_CHECKPOINT_WRITE_SOURCE,
-    );
-    MlxMetalKernel::new(
-        "astronomical_qwen3_5_gated_delta_sequence_with_boundary_checkpoints",
-        &[
-            "queries",
-            "keys",
-            "values",
-            "decays",
-            "update_rates",
-            "recurrent_state",
-            "token_count",
-            "first_checkpoint_token_count",
-            "checkpoint_interval_token_count",
-            "checkpoint_count",
-        ],
-        &[
-            "outputs",
-            "next_recurrent_state",
-            "recurrent_boundary_states",
-        ],
-        &checkpoint_kernel_source,
-    )
-    .map_err(runtime_integration::MlxRuntimeError::from)
+    declare_metal_kernel(&ASTRO_FAMILY_QWEN35_GATED_DELTA_SEQUENCE_CHECKPOINTS, &[])
 }
 
 /// Applies fused gated-delta recurrence while retaining requested boundary

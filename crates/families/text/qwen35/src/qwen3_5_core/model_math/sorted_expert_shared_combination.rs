@@ -16,52 +16,17 @@ use mlx_bridge::{
 };
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use crate::sparse_experts::{
-    SORTED_EXPERT_REDUCTION_THREADS_PER_THREADGROUP,
-    SORTED_EXPERT_WEIGHTED_REDUCTION_METAL_STATEMENTS,
-};
+use crate::metal_kernels::ASTRO_FAMILY_QWEN35_SORTED_EXPERT_SHARED_COMBINATION;
+use crate::sparse_experts::SORTED_EXPERT_REDUCTION_THREADS_PER_THREADGROUP;
+use model_primitives::metal_kernel_declaration::declare_metal_kernel;
 
 const COMBINATION_OPERATION: &str = "combine sorted and shared experts";
 
-// The sigmoid lines copy MLX's `Sigmoid::operator()` (metal/kernels/unary_ops.h)
-// on purpose: any other formulation, even a mathematically equal one, rounds
-// differently in bfloat16 and breaks the bit-for-bit contract with the compiled
-// graph. `sigmoid_of_negative_magnitude` is sigmoid(-|x|): the gate itself for
-// a negative logit and its complement for a non-negative one.
-const SHARED_EXPERT_COMBINATION_METAL_STATEMENTS: &str = r#"
-    OutputT sparse_expert_output = (OutputT)weighted_sum;
-    OutputT gate_logit = shared_expert_gate_logits[token_index];
-    auto sigmoid_of_negative_magnitude =
-        1 / (1 + metal::precise::exp(metal::abs(gate_logit)));
-    OutputT shared_expert_gate = (gate_logit < 0)
-        ? sigmoid_of_negative_magnitude
-        : 1 - sigmoid_of_negative_magnitude;
-    OutputT gated_shared_expert_output =
-        shared_expert_output[output_index] * shared_expert_gate;
-    combined_expert_output[output_index] =
-        sparse_expert_output + gated_shared_expert_output;
-"#;
-
-/// Builds the fused sorted-reduction and shared-expert combination kernel.
+/// Builds the fused sorted-reduction and shared-expert combination kernel
+/// (`metal/astro_family_qwen35_sorted_expert_shared_combination.metal`).
 pub fn qwen3_5_sorted_expert_shared_combination_kernel() -> Result<MlxMetalKernel, MlxRuntimeError>
 {
-    MlxMetalKernel::new(
-        "qwen3_5_sorted_expert_shared_combination",
-        &[
-            "sorted_outputs",
-            "inverse_order",
-            "scores",
-            "shared_expert_output",
-            "shared_expert_gate_logits",
-        ],
-        &["combined_expert_output"],
-        &[
-            SORTED_EXPERT_WEIGHTED_REDUCTION_METAL_STATEMENTS,
-            SHARED_EXPERT_COMBINATION_METAL_STATEMENTS,
-        ]
-        .concat(),
-    )
-    .map_err(MlxRuntimeError::from)
+    declare_metal_kernel(&ASTRO_FAMILY_QWEN35_SORTED_EXPERT_SHARED_COMBINATION, &[])
 }
 
 /// The routed and shared expert tensors one fused combination consumes.

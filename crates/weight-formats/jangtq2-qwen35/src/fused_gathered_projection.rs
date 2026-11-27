@@ -38,10 +38,11 @@ use mlx_bridge::{
 };
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
+use model_primitives::metal_kernel_declaration::declare_metal_kernel;
+
 use super::codebook;
 use super::hadamard32;
-
-mod kernel_sources;
+use super::metal_kernels::ASTRO_FORMAT_JANGTQ2_FUSED_GATHERED_PROJECTION;
 
 const FUSED_GATHERED_PROJECTION_OPERATION: &str = "fused jangtq2 gathered projection";
 /// Threads per threadgroup for the one-dimensional launch. Every projection of
@@ -76,19 +77,7 @@ impl FusedJangtq2GatheredProjectionKernel {
     /// # Errors
     /// Returns an error when the Metal source fails to compile.
     pub fn new() -> Result<Self, MlxRuntimeError> {
-        let kernel = MlxMetalKernel::new(
-            "fused_jangtq2_gathered_projection",
-            &[
-                "hidden",
-                "expert_indices",
-                "packed_weights",
-                "row_scales",
-                "codebook_levels",
-            ],
-            &["projected"],
-            &kernel_sources::fused_gathered_projection_kernel_source(),
-        )
-        .map_err(MlxRuntimeError::from)?;
+        let kernel = declare_metal_kernel(&ASTRO_FORMAT_JANGTQ2_FUSED_GATHERED_PROJECTION, &[])?;
         Ok(Self {
             kernel,
             codebook_level_tables_by_bit_width: RefCell::new(HashMap::new()),

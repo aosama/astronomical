@@ -26,12 +26,18 @@
 //! MLX's `Sigmoid::operator()` (metal/kernels/unary_ops.h), because any
 //! other form of it rounds differently. The kernels are used only after a
 //! model has compared them with the composed steps on this GPU and found
-//! every bit equal (`enable_fused_lane_mixing`).
+//! every bit equal (`enable_fused_lane_mixing`). The Metal is in
+//! `metal/astro_family_qwen35_lane_mixing_*.metal`.
 
 use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
+use model_primitives::metal_kernel_declaration::{declare_metal_kernel, float_define};
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
+
+use crate::metal_kernels::{
+    ASTRO_FAMILY_QWEN35_LANE_MIXING_GATE, ASTRO_FAMILY_QWEN35_LANE_MIXING_WRITE_BACK,
+};
 
 /// Threads a threadgroup: one SIMD group's worth, or the row when shorter.
 const THREADS_A_GROUP: i32 = 32;
@@ -60,45 +66,12 @@ impl LaneMixingKernels {
         if lane_count <= 0 || lane_count.count_ones() != 1 {
             return Ok(None);
         }
-        let inverse_lane_count = format!("{:.9e}", 1.0 / lane_count as f32);
-        // `scaled` is `x * (1 / lanes)` as the composed scalar multiply
-        // leaves it; the next two lines are MLX's sigmoid, verbatim.
-        let gate_source = format!(
-            r#"
-    uint element = thread_position_in_grid.y * uint(W) + thread_position_in_grid.x;
-    const T scaled = gate_input[element] * T({inverse_lane_count}f);
-    auto y = 1 / (1 + metal::precise::exp(metal::abs(scaled)));
-    const T sigmoid_value = (scaled < 0) ? y : 1 - y;
-    if (KIND == 0) {{
-        gate_output[element] = scaled * sigmoid_value;
-    }} else {{
-        gate_output[element] = sigmoid_value * T(2.0f);
-    }}
-"#
-        );
-        let write_back_source = r#"
-    uint feature = thread_position_in_grid.x;
-    uint row = thread_position_in_grid.y;
-    uint lane = feature / uint(H);
-    uint hidden = feature - lane * uint(H);
-    const T injected = block_output[row * uint(H) + hidden]
-        * lane_weights[row * uint(L) + lane];
-    uint element = row * uint(L) * uint(H) + feature;
-    written_lanes[element] = lanes[element] + injected;
-"#;
         Ok(Some(Self {
-            gate: MlxMetalKernel::new(
-                "astronomical_lane_mixing_gate",
-                &["gate_input"],
-                &["gate_output"],
-                &gate_source,
+            gate: declare_metal_kernel(
+                &ASTRO_FAMILY_QWEN35_LANE_MIXING_GATE,
+                &[float_define("INVERSE_LANE_COUNT", 1.0 / lane_count as f32)],
             )?,
-            write_back: MlxMetalKernel::new(
-                "astronomical_lane_mixing_write_back",
-                &["lanes", "block_output", "lane_weights"],
-                &["written_lanes"],
-                write_back_source,
-            )?,
+            write_back: declare_metal_kernel(&ASTRO_FAMILY_QWEN35_LANE_MIXING_WRITE_BACK, &[])?,
         }))
     }
 

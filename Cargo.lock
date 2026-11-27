@@ -73,6 +73,7 @@ dependencies = [
  "libc",
  "lowercase-hex",
  "memory-policy",
+ "metal-kernel-declarations",
  "mlx-bridge",
  "mlx-c-fork",
  "mlx-performance-profiler",
@@ -1302,8 +1303,10 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 name = "jangtq2-qwen35"
 version = "0.2.137"
 dependencies = [
+ "metal-kernel-declarations",
  "mlx-bridge",
  "mlx-c-fork",
+ "model-primitives",
  "runtime-integration",
  "serde",
  "serde_json",
@@ -1545,6 +1548,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "metal-kernel-declarations"
+version = "0.2.137"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1658,6 +1668,7 @@ dependencies = [
  "decision-contract",
  "libc",
  "memory-policy",
+ "metal-kernel-declarations",
  "mlx-bridge",
  "runtime-integration",
  "serde",
@@ -2061,6 +2072,7 @@ dependencies = [
  "libc",
  "lowercase-hex",
  "memory-policy",
+ "metal-kernel-declarations",
  "mlx-bridge",
  "mlx-c-fork",
  "model-primitives",
@@ -3450,6 +3462,8 @@ dependencies = [
  "libc",
  "lowercase-hex",
  "memory-policy",
+ "metal-kernel-declarations",
+ "native-build-orchestration",
  "native-identity",
  "serde",
  "serde_json",

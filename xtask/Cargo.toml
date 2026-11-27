@@ -25,6 +25,11 @@ memory-policy = { path = "../crates/foundation/memory-policy" }
 native-identity = { path = "../crates/foundation/native-identity" }
 test-harness = { path = "../crates/foundation/test-harness" }
 lowercase-hex = { path = "../crates/foundation/lowercase-hex" }
+# check-metal-kernels reads the kernels' signature blocks and rebuilds MLX's
+# wrapper with the crate the kernels' build scripts use, and compiles against
+# the patched MLX sources the native build provisions.
+metal-kernel-declarations = { path = "../crates/foundation/metal-kernel-declarations" }
+native-build-orchestration = { path = "../crates/foundation/native-build-orchestration" }
 # Signal handlers, process-group signaling, access(2), and localtime_r for
 # the disposable-target lifecycle runner: the one sanctioned unsafe edge.
 libc.workspace = true

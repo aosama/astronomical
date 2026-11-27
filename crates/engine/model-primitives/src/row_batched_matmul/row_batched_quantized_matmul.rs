@@ -12,12 +12,10 @@ use super::dispatch_plan::{
     OUTPUT_COLUMNS_PER_SIMDGROUP, QUANTIZATION_GROUP_SIZE, RowBatchedDispatchPlan,
     RowBatchedDispatchRefusal, check_weight_shape,
 };
-use super::kernel_source::{
-    GROUP_SUM_SOURCE, ROW_BATCHED_MATMUL_HEADER, ROW_BATCHED_MATMUL_SOURCE,
-};
-use super::register_order_source::{
-    REGISTER_ORDER_CONVERSION_SOURCE, REGISTER_ORDERED_MATMUL_HEADER,
-    REGISTER_ORDERED_MATMUL_SOURCE,
+use crate::metal_kernel_declaration::declare_metal_kernel;
+use crate::metal_kernels::{
+    ASTRO_PRIMITIVE_REGISTER_ORDER_CONVERSION_4BIT, ASTRO_PRIMITIVE_REGISTER_ORDERED_MATMUL_4BIT,
+    ASTRO_PRIMITIVE_ROW_BATCHED_GROUP_SUM, ASTRO_PRIMITIVE_ROW_BATCHED_MATMUL_4BIT,
 };
 
 /// The two kernels, declared once and shared by every projection.
@@ -47,31 +45,15 @@ impl RowBatchedMatmulKernels {
     /// kernel by evaluating it before routing rows to it.
     pub fn declare() -> Result<Self, MlxRuntimeError> {
         Ok(Self {
-            group_sum: MlxMetalKernel::new(
-                "astro_row_batched_group_sum",
-                &["X", "row_dimensions"],
-                &["XS"],
-                GROUP_SUM_SOURCE,
+            group_sum: declare_metal_kernel(&ASTRO_PRIMITIVE_ROW_BATCHED_GROUP_SUM, &[])?,
+            matmul: declare_metal_kernel(&ASTRO_PRIMITIVE_ROW_BATCHED_MATMUL_4BIT, &[])?,
+            register_order_conversion: declare_metal_kernel(
+                &ASTRO_PRIMITIVE_REGISTER_ORDER_CONVERSION_4BIT,
+                &[],
             )?,
-            matmul: MlxMetalKernel::new_with_header(
-                "astro_row_batched_matmul_4bit",
-                &["X", "XS", "Wq", "S", "B", "row_dimensions"],
-                &["Y"],
-                ROW_BATCHED_MATMUL_HEADER,
-                ROW_BATCHED_MATMUL_SOURCE,
-            )?,
-            register_order_conversion: MlxMetalKernel::new(
-                "astro_register_order_conversion_4bit",
-                &["Wq", "S", "B"],
-                &["R", "P"],
-                REGISTER_ORDER_CONVERSION_SOURCE,
-            )?,
-            register_ordered_matmul: MlxMetalKernel::new_with_header(
-                "astro_register_ordered_matmul_4bit",
-                &["X", "XS", "W", "SB", "row_dimensions"],
-                &["Y"],
-                REGISTER_ORDERED_MATMUL_HEADER,
-                REGISTER_ORDERED_MATMUL_SOURCE,
+            register_ordered_matmul: declare_metal_kernel(
+                &ASTRO_PRIMITIVE_REGISTER_ORDERED_MATMUL_4BIT,
+                &[],
             )?,
             row_dimension_arrays: std::cell::RefCell::default(),
         })

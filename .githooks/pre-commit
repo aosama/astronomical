@@ -83,6 +83,27 @@ if git diff --cached --name-only | grep -Eq '\.rs$|^duplication-baseline\.json$'
     fi
 fi
 
+# Metal kernel check (issue #2712): HARD FAIL. Every kernel lives in a
+# .metal file named by its scope, none is declared from Rust text, and every
+# kernel compiles offline exactly as MLX wraps it, for every instantiation
+# and every way MLX may pass its inputs. Sources that compiled before are
+# remembered by digest, so an unchanged tree takes about a second. It needs
+# the patched MLX sources (`cargo xtask provision-bindgen-headers`) and the
+# Metal toolchain.
+if git diff --cached --name-only | grep -Eq '\.rs$|\.metal$|\.h$'; then
+    printf '%s\n' "[pre-commit] status=start check=metal-kernels root=${REPOSITORY_ROOT}"
+    metal_started_epoch_seconds="$(date +%s)"
+    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- check-metal-kernels; then
+        metal_elapsed_seconds=$(( $(date +%s) - metal_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=success check=metal-kernels elapsed_seconds=${metal_elapsed_seconds}"
+    else
+        metal_elapsed_seconds=$(( $(date +%s) - metal_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=metal-kernels elapsed_seconds=${metal_elapsed_seconds}" >&2
+        printf '%s\n' '[pre-commit] hint=each line above names the kernel file and what to fix' >&2
+        exit 1
+    fi
+fi
+
 # The clippy pass below only matters when Rust source changed, so a commit
 # touching only the baseline, the admissions or .cargo-crap.toml skips it.
 if git diff --cached --name-only | grep -q '\.rs$'; then

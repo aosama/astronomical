@@ -45,6 +45,7 @@
 //! `..._throughput` names).
 
 use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernel};
+use model_primitives::metal_kernel_declaration::declare_metal_kernel;
 use runtime_integration::MlxRuntime;
 use serial_test::file_serial;
 
@@ -56,7 +57,7 @@ use jangtq2_qwen35::codebook;
 use jangtq2_qwen35::mlx_decode;
 use jangtq2_qwen35::mlx_decode::decode_expert_weight_rows;
 use kernel::{
-    PREFILL_GATHERED_DEQUANT_KERNEL_SOURCE, PrefillGatheredDequantInputs,
+    ASTRO_FORMAT_JANGTQ2_PROTOTYPE_PREFILL_GATHERED_DEQUANT, PrefillGatheredDequantInputs,
     launch_prefill_gathered_dequant,
 };
 
@@ -175,19 +176,12 @@ fn measure_prefill_gathered_dequant(
     );
 }
 
-/// Compiles the prototype Metal kernel once per measurement run.
+/// Declares the prototype Metal kernel once per measurement run; MLX compiles
+/// it when it first evaluates.
 fn compile_prefill_prototype_kernel() -> MlxMetalKernel {
-    MlxMetalKernel::new(
-        "prototype_jangtq2_prefill_gathered_dequant",
-        &[
-            "activations",
-            "expert_assignment_starts",
-            "packed_weights",
-            "row_scales",
-            "codebook_levels",
-        ],
-        &["projected"],
-        PREFILL_GATHERED_DEQUANT_KERNEL_SOURCE,
+    declare_metal_kernel(
+        &ASTRO_FORMAT_JANGTQ2_PROTOTYPE_PREFILL_GATHERED_DEQUANT,
+        &[],
     )
     .expect("the prototype kernel should compile")
 }

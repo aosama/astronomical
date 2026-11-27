@@ -7,6 +7,8 @@
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::error::SparseExpertError;
+use crate::metal_kernel_declaration::declare_metal_kernel;
+use crate::metal_kernels::ASTRO_PRIMITIVE_SORTED_EXPERT_WEIGHTED_SUM;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
@@ -17,48 +19,11 @@ const OPERATION: &str = "reduce stacked expert outputs";
 /// Threads per threadgroup for every sorted expert reduction launch.
 pub const SORTED_EXPERT_REDUCTION_THREADS_PER_THREADGROUP: i32 = 256;
 
-/// Metal statements that leave the Float32 router-weighted sum of one output
-/// element in `weighted_sum`, with `output_index` and `token_index` in scope.
-///
-/// Kernels that fuse more work after the reduction build their source from
-/// this text, so their sums stay bit for bit equal to this kernel's: the
-/// accumulation order and Float32 widening are what decide the rounded bits.
-pub const SORTED_EXPERT_WEIGHTED_REDUCTION_METAL_STATEMENTS: &str = r#"
-    auto output_index = thread_position_in_grid.x;
-    auto token_index = output_index / output_dimension;
-    auto output_dimension_index = output_index % output_dimension;
-    float weighted_sum = 0.0f;
-    for (int selected_expert_index = 0;
-         selected_expert_index < selected_expert_count;
-         ++selected_expert_index) {
-        auto assignment_index =
-            token_index * selected_expert_count + selected_expert_index;
-        auto sorted_assignment_index = inverse_order[assignment_index];
-        weighted_sum +=
-            (float)sorted_outputs[sorted_assignment_index * output_dimension +
-                                  output_dimension_index] *
-            (float)scores[assignment_index];
-    }
-"#;
-
-const SORTED_EXPERT_WEIGHTED_SUM_STORE_STATEMENT: &str = r#"
-    weighted_outputs[output_index] = (OutputT)weighted_sum;
-"#;
-
-/// Builds the retained Metal kernel for sorted expert reduction.
+/// Builds the retained Metal kernel for sorted expert reduction
+/// (`metal/astro_primitive_sorted_expert_weighted_sum.metal`).
 pub fn sorted_expert_weighted_sum_kernel()
 -> Result<MlxMetalKernel, runtime_integration::MlxRuntimeError> {
-    MlxMetalKernel::new(
-        "sorted_expert_weighted_sum",
-        &["sorted_outputs", "inverse_order", "scores"],
-        &["weighted_outputs"],
-        &[
-            SORTED_EXPERT_WEIGHTED_REDUCTION_METAL_STATEMENTS,
-            SORTED_EXPERT_WEIGHTED_SUM_STORE_STATEMENT,
-        ]
-        .concat(),
-    )
-    .map_err(runtime_integration::MlxRuntimeError::from)
+    declare_metal_kernel(&ASTRO_PRIMITIVE_SORTED_EXPERT_WEIGHTED_SUM, &[])
 }
 
 /// Reduces unsorted `[..., K, D]` outputs by original assignment scores.

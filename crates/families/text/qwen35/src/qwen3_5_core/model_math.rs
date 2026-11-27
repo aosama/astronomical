@@ -32,7 +32,7 @@ pub mod gated_delta_input_rules;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_inputs;
 #[cfg(feature = "direct-mlx")]
-pub mod gated_delta_pipelined_kernel;
+pub mod gated_delta_launch_geometry;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_sequence;
 #[cfg(feature = "direct-mlx")]

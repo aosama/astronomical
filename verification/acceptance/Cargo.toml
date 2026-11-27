@@ -136,6 +136,9 @@ quantization = { path = "../../crates/tooling/quantization", features = ["direct
 rest-contract = { path = "../../crates/contracts/rest-contract" }
 speech-contract = { path = "../../crates/contracts/speech-contract" }
 runtime-integration = { path = "../../crates/foundation/runtime-integration", features = ["mlx"] }
+# The parity contract of the offline Metal kernel compile reads the kernels'
+# signature blocks and rebuilds MLX's wrapper with it (issue #2712).
+metal-kernel-declarations = { path = "../../crates/foundation/metal-kernel-declarations" }
 expert-record-reader = { path = "../../crates/engine/expert-record-reader" }
 graph-host-step = { path = "../../crates/engine/graph-host-step", features = ["direct-mlx"] }
 # Interleaved, verdict-backed comparisons of two kernels for the measurement tests.

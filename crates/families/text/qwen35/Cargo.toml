@@ -25,6 +25,9 @@ direct-mlx = ["text-generation/direct-mlx", "dep:neural-engine", "dep:graph-host
 # model-serving or on the decision models above it;
 # `cargo xtask check-architecture` enforces the serving edge.
 [dependencies]
+# The declarations the build script generates from this crate's .metal files
+# are this crate's MetalKernelSource values (issue #2712).
+metal-kernel-declarations = { path = "../../../foundation/metal-kernel-declarations" }
 artifact-validation = { path = "../../../foundation/artifact-validation" }
 config = { path = "../../../foundation/config" }
 engine-core = { path = "../../../engine/engine-core" }
@@ -55,6 +58,10 @@ thiserror.workspace = true
 tokenizers.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+[build-dependencies]
+# Reads the .metal files' signature blocks into declarations (issue #2712).
+metal-kernel-declarations = { path = "../../../foundation/metal-kernel-declarations" }
 
 [dev-dependencies]
 text-generation = { path = "../text-generation", features = ["test-support"] }

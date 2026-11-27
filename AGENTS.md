@@ -35,6 +35,13 @@
 - The astro SSD prompt cache must be disabled during performance throughput tests and measurements FOR PROMPT-PREFILL measurements only .. for DECODE having SSD cache saves time and is desired.
 - The skill declaration (`skill.declare_to_models`) must be disabled during performance throughput tests and measurements, because it adds tokens to every prompt.
 
+## Metal Kernels Are First-Class Files
+
+- Every Metal kernel Astronomical hands MLX lives in a `.metal` file in a `metal/` folder beside the Rust that launches it, never as text in a Rust file (issue #2712). Helpers several crates share live in `crates/engine/model-primitives/src/metal_common/`.
+- Names follow `astro_<scope>_[<owner>_]<operation>[_<variant>]`, and the scope and owner come from the owning crate: `astro_primitive_` in model-primitives, `astro_family_<family>_` in a family crate, `astro_format_<format>_` in a weight-format crate. A registered kernel's file stem is its registered name, which the profiler shows as `custom_kernel_<name>…`. `<name>_body.metal` is a body several kernels share and `<name>.h` is helper code.
+- A registered kernel's file opens with its signature block, one `// @key value` line a fact: `@header`, `@prologue`, `@body`, `@input NAME DTYPE [may-be-small|always-small|scalar]`, `@output`, `@template`, `@define`, `@compile-with`, `@atomic-outputs`, `@contract` and `@probe`. A dtype may name a `typename` template parameter. Launchers declare kernels only through `model_primitives::metal_kernel_declaration::declare_metal_kernel` with the constant the crate's build script generates from the file, so names and buffer order cannot drift.
+- `cargo xtask check-metal-kernels` (pre-commit hook and CI) checks the names, refuses a kernel declared from Rust text, and compiles every kernel offline exactly as MLX wraps it, for every `@compile-with` line and every way MLX may pass each input. The contract `metal_kernel_wrapper_parity` compares that wrapper with the one MLX prints. A kernel still needs its GPU exactness contract and, where serving depends on it, a capability probe.
+
 ## Release Scripts Folder
 
 - All **Release-related scripts** must live under "<repo-root>/scripts/release", they will help you through the release process. This doesnt mean you have to create shell scripts at all, if you can do what you need in xtask then go ahead.

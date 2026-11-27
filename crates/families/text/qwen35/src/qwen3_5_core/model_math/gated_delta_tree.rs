@@ -1,217 +1,25 @@
 //! The gated-delta recurrence over the rows of a draft tree: every row starts
-//! from its parent's state, not the previous row's.
-//!
-//! TensorFold's tree kernel (`lane_tree.py`, release 0.3.5.1, Apache-2.0)
-//! keeps every row's state in registers, which fits its 32 lanes per value
-//! row. This engine's sequence kernel spreads a row over 8 lanes, so 16 rows
-//! of state would be 256 floats a lane and spill. Instead each row replays
-//! its own ancestor chain from the round's starting state: at most a block's
-//! depth (8 steps) of register arithmetic, while the starting state, the
-//! only large read, is loaded once a thread. Each step is the sequence
-//! kernel's step, operation for operation (`gated_delta_pipelined_kernel`),
-//! so a row's output is bit-identical to feeding its chain alone.
+//! from its parent's state, not the previous row's. The tree kernel
+//! (`metal/astro_family_qwen35_gated_delta_tree.metal`) and the replay kernel
+//! (`metal/astro_family_qwen35_gated_delta_replay.metal`) explain the
+//! arithmetic; this file launches them and builds the chains they read.
 
+use crate::metal_kernels::{
+    ASTRO_FAMILY_QWEN35_GATED_DELTA_REPLAY, ASTRO_FAMILY_QWEN35_GATED_DELTA_TREE,
+};
 use mlx_bridge::{MlxArray, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument};
+use model_primitives::metal_kernel_declaration::declare_metal_kernel;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::gated_delta_inputs::GatedDeltaInputs;
-use super::gated_delta_pipelined_kernel::{THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE};
+use super::gated_delta_launch_geometry::{THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE};
 use super::gated_delta_sequence_contract::{
     template_arguments, validate_gated_delta_sequence_shapes,
 };
 
-/// The thread layout both kernels share: 16 value rows a threadgroup, each
-/// spread over 8 lanes, with the value head on the grid's y axis. Built once
-/// here so the tree and replay kernels cannot drift apart (issue #2340); the
-/// bit-for-bit tree and replay tests prove the assembled kernels unchanged.
-const GATED_DELTA_THREAD_LAYOUT_SOURCE: &str = r#"
-    constexpr int value_row_block_size = 16;
-    auto thread_index = thread_position_in_threadgroup.x;
-    auto value_head_index = threadgroup_position_in_grid.y;
-    auto key_head_index = value_head_index / (Hv / Hk);
-    auto value_row = threadgroup_position_in_grid.x * value_row_block_size + thread_index / 8;
-    auto key_segment_index = thread_index % 8;
-"#;
-
-/// The first half of one row's gated-delta step, shared by both kernels:
-/// load the row's keys, decay the state, and reduce what the state remembers
-/// for the row's key across the 8 lanes. Expects `row`, `key_row`,
-/// `state_fragment` and the thread layout in scope; defines `current_keys`,
-/// `current_decay`, `current_update_rate`, `current_value`,
-/// `state_key_dot_partials` and `remembered_value`.
-const GATED_DELTA_DECAY_AND_REMEMBER_SOURCE: &str = r#"
-        float4 current_keys[4];
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            current_keys[fragment_index] = float4(*(const device vec<InT, 4>*)(
-                key_row + 4 * (key_segment_index + 8 * fragment_index)));
-        }
-        const float current_decay = decays[(size_t)row * Hv + value_head_index];
-        const float current_update_rate = update_rates[(size_t)row * Hv + value_head_index];
-        const float current_value =
-            float(values[((size_t)row * Hv + value_head_index) * Dv + value_row]);
-        float2 state_key_dot_partials = 0.0f;
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            state_fragment[fragment_index] *= current_decay;
-            state_key_dot_partials = fma(state_fragment[fragment_index].xy,
-                current_keys[fragment_index].xy, state_key_dot_partials);
-            state_key_dot_partials = fma(state_fragment[fragment_index].zw,
-                current_keys[fragment_index].zw, state_key_dot_partials);
-        }
-        float remembered_value = state_key_dot_partials.x + state_key_dot_partials.y;
-        remembered_value += simd_shuffle_xor(remembered_value, 4);
-        remembered_value += simd_shuffle_xor(remembered_value, 2);
-        remembered_value += simd_shuffle_xor(remembered_value, 1);
-"#;
-
-/// The tree kernel from its first row up to the shared step.
-const GATED_DELTA_TREE_SOURCE_BEFORE_STEP: &str = r#"
-    const int tree_row_count = chain_lengths_shape[0];
-
-    float4 starting_fragment[4];
-    {
-        auto input_state = (const device float4*)(recurrent_state +
-            ((size_t)value_head_index * Dv + value_row) * Dk);
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            starting_fragment[fragment_index] =
-                input_state[key_segment_index + 8 * fragment_index];
-        }
-    }
-    // The state after the previous row: a row that continues it (a chain,
-    // such as a copied run) takes one step from there instead of replaying.
-    float4 carried_fragment[4];
-    for (int tree_row = 0; tree_row < tree_row_count; ++tree_row) {
-        const int chain_length = chain_lengths[tree_row];
-        const bool continues_previous_row = tree_row > 0 && chain_length > 1 &&
-            row_chains[tree_row * MAXIMUM_CHAIN + chain_length - 2] == tree_row - 1;
-        float4 state_fragment[4];
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            state_fragment[fragment_index] = continues_previous_row
-                ? carried_fragment[fragment_index] : starting_fragment[fragment_index];
-        }
-        float reduced_query_partial = 0.0f;
-        for (int chain_step = continues_previous_row ? chain_length - 1 : 0;
-             chain_step < chain_length; ++chain_step) {
-            const int row = row_chains[tree_row * MAXIMUM_CHAIN + chain_step];
-            auto key_row = keys + ((size_t)row * Hk + key_head_index) * Dk;
-            auto query_row = queries + ((size_t)row * Hk + key_head_index) * Dk;
-"#;
-/// The rest of the tree kernel's step, its query reduction and its output.
-const GATED_DELTA_TREE_SOURCE_AFTER_STEP: &str = r#"
-            float4 current_queries[4];
-            for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-                current_queries[fragment_index] = float4(*(const device vec<InT, 4>*)(
-                    query_row + 4 * (key_segment_index + 8 * fragment_index)));
-            }
-            const float delta = (current_value - remembered_value) * current_update_rate;
-            float2 state_query_dot_partials = 0.0f;
-            for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-                state_fragment[fragment_index] = fma(current_keys[fragment_index],
-                    float4(delta), state_fragment[fragment_index]);
-                state_query_dot_partials = fma(state_fragment[fragment_index].xy,
-                    current_queries[fragment_index].xy, state_query_dot_partials);
-                state_query_dot_partials = fma(state_fragment[fragment_index].zw,
-                    current_queries[fragment_index].zw, state_query_dot_partials);
-            }
-            reduced_query_partial = state_query_dot_partials.x + state_query_dot_partials.y;
-        }
-        // The sequence kernel's reduction of a step's query partials across
-        // the row's 8 lanes, in the same order.
-        reduced_query_partial += simd_shuffle_down(reduced_query_partial, 4);
-        reduced_query_partial += simd_shuffle_down(reduced_query_partial, 2);
-        reduced_query_partial += simd_shuffle_down(reduced_query_partial, 1);
-        if (key_segment_index == 0) {
-            outputs[((size_t)tree_row * Hv + value_head_index) * Dv + value_row] =
-                (InT)reduced_query_partial;
-        }
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            carried_fragment[fragment_index] = state_fragment[fragment_index];
-        }
-    }
-"#;
-
-/// The replay kernel from its state load up to the shared step.
-const GATED_DELTA_REPLAY_SOURCE_BEFORE_STEP: &str = r#"
-    const int kept_row_count = kept_rows_shape[0];
-    const size_t state_offset = ((size_t)value_head_index * Dv + value_row) * Dk;
-
-    float4 state_fragment[4];
-    {
-        auto input_state = (const device float4*)(recurrent_state + state_offset);
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            state_fragment[fragment_index] =
-                input_state[key_segment_index + 8 * fragment_index];
-        }
-    }
-    for (int kept_index = 0; kept_index < kept_row_count; ++kept_index) {
-        const int row = kept_rows[kept_index];
-        auto key_row = keys + ((size_t)row * Hk + key_head_index) * Dk;
-"#;
-/// The rest of the replay kernel's step and its state write.
-const GATED_DELTA_REPLAY_SOURCE_AFTER_STEP: &str = r#"
-        const float delta = (current_value - remembered_value) * current_update_rate;
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            state_fragment[fragment_index] = fma(current_keys[fragment_index],
-                float4(delta), state_fragment[fragment_index]);
-        }
-    }
-    {
-        auto output_state = (device float4*)(next_recurrent_state + state_offset);
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            output_state[key_segment_index + 8 * fragment_index] =
-                state_fragment[fragment_index];
-        }
-    }
-"#;
-
-/// The tree kernel's source: the shared thread layout and row step around
-/// its ancestor-chain replay and query reduction.
-///
-/// Inputs as the sequence kernel takes them, `[1, rows, ...]`, plus
-/// `row_chains` [rows, MAXIMUM_CHAIN] (each row's chain from the anchor to
-/// itself) and `chain_lengths` [rows]. Output `outputs` [1, rows, Hv, Dv].
-fn gated_delta_tree_source() -> String {
-    [
-        GATED_DELTA_THREAD_LAYOUT_SOURCE,
-        GATED_DELTA_TREE_SOURCE_BEFORE_STEP,
-        GATED_DELTA_DECAY_AND_REMEMBER_SOURCE,
-        GATED_DELTA_TREE_SOURCE_AFTER_STEP,
-    ]
-    .concat()
-}
-
-/// The replay kernel's source: the shared thread layout and row step around
-/// its walk over the kept rows.
-///
-/// Inputs as the tree kernel's, plus `kept_rows` [n] int32. Output
-/// `next_recurrent_state`: the starting state advanced over the kept rows in
-/// order, by the same step, so it equals the sequence kernel's final state
-/// over those rows without gathering them first (five gathers a layer, 240 a
-/// round on the 27B).
-fn gated_delta_replay_source() -> String {
-    [
-        GATED_DELTA_THREAD_LAYOUT_SOURCE,
-        GATED_DELTA_REPLAY_SOURCE_BEFORE_STEP,
-        GATED_DELTA_DECAY_AND_REMEMBER_SOURCE,
-        GATED_DELTA_REPLAY_SOURCE_AFTER_STEP,
-    ]
-    .concat()
-}
-
 /// The replay kernel, declared once per model beside the tree kernel.
 pub fn qwen3_5_gated_delta_replay_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
-    Ok(MlxMetalKernel::new(
-        "astronomical_qwen3_5_gated_delta_replay",
-        &[
-            "keys",
-            "values",
-            "decays",
-            "update_rates",
-            "recurrent_state",
-            "kept_rows",
-        ],
-        &["next_recurrent_state"],
-        &gated_delta_replay_source(),
-    )?)
+    declare_metal_kernel(&ASTRO_FAMILY_QWEN35_GATED_DELTA_REPLAY, &[])
 }
 
 /// The recurrent state after the kept rows (`kept_rows` int32 [n], in
@@ -264,21 +72,7 @@ pub fn qwen3_5_gated_delta_replay(
 
 /// The tree kernel, declared once per model.
 pub fn qwen3_5_gated_delta_tree_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
-    Ok(MlxMetalKernel::new(
-        "astronomical_qwen3_5_gated_delta_tree",
-        &[
-            "queries",
-            "keys",
-            "values",
-            "decays",
-            "update_rates",
-            "recurrent_state",
-            "row_chains",
-            "chain_lengths",
-        ],
-        &["outputs"],
-        &gated_delta_tree_source(),
-    )?)
+    declare_metal_kernel(&ASTRO_FAMILY_QWEN35_GATED_DELTA_TREE, &[])
 }
 
 /// Each tree row's chain from the anchor, padded to one width: the

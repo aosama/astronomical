@@ -32,15 +32,24 @@ default = []
 # tensor inventory, golden vectors) builds and tests in the integration lane
 # without any of this, so a contract change never rebuilds the graphics-
 # processor world.
-direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "dep:mlx-c-fork"]
+direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "dep:mlx-c-fork", "dep:model-primitives", "model-primitives/direct-mlx"]
 
 [dependencies]
+# The declarations the build script generates from this crate's .metal files
+# are this crate's MetalKernelSource values (issue #2712).
+metal-kernel-declarations = { path = "../../foundation/metal-kernel-declarations" }
 mlx-bridge = { workspace = true, optional = true }
 mlx-c-fork = { path = "../../foundation/mlx-c-fork", optional = true }
+# The one declarer of Metal kernels (`declare_metal_kernel`, issue #2712).
+model-primitives = { path = "../../engine/model-primitives", optional = true }
 runtime-integration = { path = "../../foundation/runtime-integration", features = ["mlx"], optional = true }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[build-dependencies]
+# Reads the .metal files' signature blocks into declarations (issue #2712).
+metal-kernel-declarations = { path = "../../foundation/metal-kernel-declarations" }
 
 [dev-dependencies]
 # Skips the tests of Astronomical's own Metal kernels where there is no Metal.
