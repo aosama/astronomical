@@ -737,6 +737,13 @@ measure-dflash2-round-cost = "run -p xtask -- test-run --package astronomical-ac
 # 0.7, TensorFold's raw form) and the story at 1.0. Needs about
 # 22 GB of free memory; about one minute.
 measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_kept_per_round"
+# The DFlash2 journeys read a prompt once per loaded pair and seat every
+# later decode of it from the kept decoder state (kept_prompt_state.rs), as
+# the astro_ssd_prompt_cache spares a served request its prompt. This proves
+# the seating: greedy steps after the story prompt read into a state of its
+# own, then twice from kept copies, must choose the same tokens. Same pair
+# and memory as above; under a minute.
+measure-dflash2-kept-prompt-state = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter kept_prompt_state"
 # Gate 4's first measurement: kept per round if each round verified
 # TensorFold's draft tree (15 nodes, 4 children) instead of one path, on the
 # code cell (code completion at 0.7) and the story, greedy and at 1.0.

@@ -27,14 +27,12 @@ use model_serving::speculative_decoding::verification_decision::{
 };
 use serial_test::serial;
 
-use super::dflash2_journey_support::{
-    TargetLogitRows, forward_with_taps, host_values, story_cell, tap_rows, verify_block_with_taps,
-};
+use super::dflash2_journey_support::{host_values, story_cell, verify_block_with_taps};
 use super::dflash2_kept_per_round::{
     CODE_PROMPT, Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS,
-    RoundState, TOP_K, TOP_P_THOUSANDTHS, completion_token_ids, load_pair, prompt_token_ids,
-    settle_round,
+    RoundState, TOP_K, TOP_P_THOUSANDTHS, load_pair, settle_round,
 };
+use super::kept_prompt_state::{ReadPrompt, read_prompt};
 
 /// TensorFold's community benchmark seeds its repetitions from 1234.
 pub(super) const FIRST_KEYED_SEED: u64 = 1234;
@@ -183,40 +181,24 @@ pub(super) fn decode(
     outcome
 }
 
-/// Prefills the prompt: the drafter's starting state, the target's decoder
+/// Reads the prompt, once per pair for a prompt it has read before
+/// (`kept_prompt_state`): the drafter's starting state, the target's decoder
 /// state, and the target's first pick.
 pub(super) fn prefill(
     pair: &JourneyPair,
     cell: &Cell,
 ) -> (RoundState, RequestDecoderStateStack, u32) {
-    let prompt = if cell.is_raw_completion {
-        completion_token_ids(pair, cell.prompt)
-    } else {
-        prompt_token_ids(pair, cell.prompt)
-    };
-    let mut decoder_state = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
-        &pair.target.astro_decoder_state_cache_layout(),
-        256,
-    )
-    .expect("the decoder state allocates");
-    let prefill = forward_with_taps(
-        &pair.target,
-        &prompt,
-        0,
-        &mut decoder_state,
-        &pair.drafter_configuration.target_tap_layer_ids,
-        TargetLogitRows::LastRowOnly,
-    );
-    let last_logits = prefill.logits;
-    let first_token_id = target_picks(pair, cell, &last_logits, &[prompt.len() as u64])[0];
+    let ReadPrompt {
+        decoder_state,
+        last_logits,
+        tap_rows: pending_tap_rows,
+        prompt_token_count,
+    } = read_prompt(pair, cell);
+    let first_token_id = target_picks(pair, cell, &last_logits, &[prompt_token_count as u64])[0];
     let round = RoundState {
         last_token_id: first_token_id,
-        fed_token_count: prompt.len() as u32,
-        pending_tap_rows: tap_rows(
-            pair.target.runtime(),
-            &prefill.hidden_state_taps,
-            prompt.len() as i32,
-        ),
+        fed_token_count: prompt_token_count as u32,
+        pending_tap_rows,
         context_states: DrafterContextStates::new(&pair.drafter_configuration, 0),
     };
     (round, decoder_state, first_token_id)

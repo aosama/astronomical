@@ -36,9 +36,9 @@ use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use serial_test::serial;
 
 use super::dflash2_journey_support::{
-    TargetLogitRows, UniformStream, VerifiedBlock, forward_with_taps, host_values, tap_rows,
-    verify_block_with_taps,
+    UniformStream, VerifiedBlock, host_values, tap_rows, verify_block_with_taps,
 };
+use super::kept_prompt_state::{KeptPromptState, ReadPrompt, no_kept_prompt_state, read_prompt};
 
 mod round_drafting;
 
@@ -126,6 +126,9 @@ pub(crate) struct JourneyPair {
     pub(crate) drafter_weights: DFlashDrafterWeights,
     /// Keeps the drafter's lazily mapped tensors alive.
     _drafter_checkpoint: MlxSafetensors,
+    /// The last prompt this pair read, so the next decode of it skips the
+    /// reading (`kept_prompt_state`).
+    pub(crate) kept_prompt_state: std::cell::RefCell<Option<KeptPromptState>>,
 }
 
 #[test]
@@ -288,6 +291,7 @@ pub(crate) fn load_pair() -> JourneyPair {
         drafter_configuration,
         drafter_weights,
         _drafter_checkpoint: drafter_checkpoint,
+        kept_prompt_state: no_kept_prompt_state(),
     }
 }
 
@@ -336,40 +340,22 @@ pub(crate) struct CellOutcome {
 }
 
 pub(crate) fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> CellOutcome {
-    let tap_layer_ids = &pair.drafter_configuration.target_tap_layer_ids;
-    let prompt = if cell.is_raw_completion {
-        completion_token_ids(pair, cell.prompt)
-    } else {
-        prompt_token_ids(pair, cell.prompt)
-    };
-    let mut decoder_state = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
-        &pair.target.astro_decoder_state_cache_layout(),
-        256,
-    )
-    .expect("the decoder state allocates");
+    let ReadPrompt {
+        mut decoder_state,
+        last_logits: first_logits,
+        tap_rows: pending_tap_rows,
+        prompt_token_count,
+    } = read_prompt(pair, cell);
     let mut uniforms = UniformStream::seeded(sampling_seed);
     let mut random_state = pair
         .target
         .runtime()
         .random_key(sampling_seed)
         .expect("a key builds");
-    let prefill = forward_with_taps(
-        &pair.target,
-        &prompt,
-        0,
-        &mut decoder_state,
-        tap_layer_ids,
-        TargetLogitRows::LastRowOnly,
-    );
-    let first_logits = prefill.logits;
     let mut round = RoundState {
         last_token_id: decide(pair, cell, &[], &first_logits, None, &mut uniforms).next_token_id,
-        fed_token_count: prompt.len() as u32,
-        pending_tap_rows: tap_rows(
-            pair.target.runtime(),
-            &prefill.hidden_state_taps,
-            prompt.len() as i32,
-        ),
+        fed_token_count: prompt_token_count as u32,
+        pending_tap_rows,
         context_states: DrafterContextStates::new(&pair.drafter_configuration, 0),
     };
     let decode_started_at = Instant::now();
