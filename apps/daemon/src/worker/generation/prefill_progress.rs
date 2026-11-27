@@ -45,7 +45,7 @@ pub(in crate::worker) fn handle_worker_prefill_progress(
     crate::worker::health::record_running_prefill(
         health_snapshot,
         processed_tokens,
-        elapsed_millis,
+        running_prefill_elapsed_millis(elapsed_millis, active_request.request_started_at.elapsed()),
     );
     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
         active_request.fold_observed_mlx_peak_memory_bytes(mlx_memory_snapshot.peak_memory_bytes);
@@ -86,3 +86,23 @@ pub(in crate::worker) fn handle_worker_prefill_progress(
     );
     Ok(())
 }
+
+/// The prompt time the session's running reading speed uses. A prompt read
+/// one layer at a time from the SSD reports its tokens as layers finish, but
+/// its measured prompt time only once the whole prompt is read: until then
+/// the measured time is 0, and tokens with no time would leave the reading
+/// speed blank for the whole prompt. Until a measured time arrives, the
+/// request's own clock stands in, the elapsed time the status shows.
+pub(in crate::worker) fn running_prefill_elapsed_millis(
+    measured_elapsed_millis: u64,
+    request_elapsed: std::time::Duration,
+) -> u64 {
+    if measured_elapsed_millis > 0 {
+        return measured_elapsed_millis;
+    }
+    u64::try_from(request_elapsed.as_millis()).unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+#[path = "prefill_progress_tests.rs"]
+mod prefill_progress_tests;
