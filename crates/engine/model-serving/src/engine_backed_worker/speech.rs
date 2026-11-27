@@ -5,6 +5,7 @@
 //! each turn speaks one segment, so a `Cancel` that arrives between
 //! segments stops it with at most one segment of wasted work.
 
+use super::output::finalized_memory_snapshot;
 use super::worker_engines::{LoadedRuntimeOf, WorkerEngines};
 use crate::SpeechEngine as _;
 use std::time::Instant;
@@ -45,7 +46,7 @@ impl ActiveSpeechGeneration {
     }
 
     pub(crate) fn elapsed_millis(&self) -> u64 {
-        u64::try_from(self.started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
+        super::support::elapsed_millis_since(self.started_at)
     }
 
     fn record_segment(&mut self, sample_count: usize, was_cut_short: bool) {
@@ -292,20 +293,14 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     {
         // The engine observed MLX after it returned the request's memory, so
         // the finalization publishes the state the next request starts from.
-        let mlx_memory_snapshot = self
+        let post_cleanup_memory_telemetry = self
             .loaded_speech_engine()
-            .and_then(|speech_engine| speech_engine.take_post_cleanup_memory_telemetry())
-            .map(|mlx_memory_telemetry| {
-                output::worker_memory_snapshot(
-                    MlxMemorySnapshotSource::Finalized,
-                    mlx_memory_telemetry,
-                )
-            });
+            .and_then(|speech_engine| speech_engine.take_post_cleanup_memory_telemetry());
         event_writer
             .send_event(&WorkerEvent::SpeechFinalized {
                 request_id,
                 elapsed_millis,
-                mlx_memory_snapshot,
+                mlx_memory_snapshot: finalized_memory_snapshot(post_cleanup_memory_telemetry),
             })
             .await?;
         Ok(())

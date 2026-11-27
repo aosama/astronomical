@@ -1,14 +1,14 @@
 //! Serializes one synchronous embeddings request and publishes its cleanup event.
 
+use super::output::finalized_memory_snapshot;
+use super::support::elapsed_millis_since;
 use super::worker_engines::WorkerEngines;
 use ipc_protocol::{
-    EmbeddingsCommand, EmbeddingsFailureReason, MlxMemorySnapshotSource, ProtocolWriter, RequestId,
-    WorkerEvent,
+    EmbeddingsCommand, EmbeddingsFailureReason, ProtocolWriter, RequestId, WorkerEvent,
 };
 use tokio::io::AsyncWrite;
 
 use super::WorkerRuntimeError;
-use super::output;
 use super::{EngineBackedWorker, LoadedRuntime};
 use crate::EmbeddingEngine;
 
@@ -59,7 +59,7 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
                     request_id,
                     engine_output
                         .elapsed_millis
-                        .max(Self::elapsed_since(started_at)),
+                        .max(elapsed_millis_since(started_at)),
                     event_writer,
                 )
                 .await
@@ -68,7 +68,7 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
                 self.emit_embeddings_failure_and_finalization(
                     request_id,
                     failure_reason,
-                    Self::elapsed_since(started_at),
+                    elapsed_millis_since(started_at),
                     event_writer,
                 )
                 .await
@@ -108,29 +108,20 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
         // The engine captured its post-cleanup observation during the embed
         // call, so the finalization publishes the same split the menu paints
         // (issue #510).
-        let mlx_memory_snapshot = match self.loaded_runtime.as_mut() {
-            Some(LoadedRuntime::Embeddings(embedding_engine)) => embedding_engine
-                .take_post_cleanup_memory_telemetry()
-                .map(|mlx_memory_telemetry| {
-                    output::worker_memory_snapshot(
-                        MlxMemorySnapshotSource::Finalized,
-                        mlx_memory_telemetry,
-                    )
-                }),
+        let post_cleanup_memory_telemetry = match self.loaded_runtime.as_mut() {
+            Some(LoadedRuntime::Embeddings(embedding_engine)) => {
+                embedding_engine.take_post_cleanup_memory_telemetry()
+            }
             _ => None,
         };
         event_writer
             .send_event(&WorkerEvent::EmbeddingsFinalized {
                 request_id,
                 elapsed_millis,
-                mlx_memory_snapshot,
+                mlx_memory_snapshot: finalized_memory_snapshot(post_cleanup_memory_telemetry),
             })
             .await?;
         Ok(())
-    }
-
-    fn elapsed_since(started_at: std::time::Instant) -> u64 {
-        u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 }
 

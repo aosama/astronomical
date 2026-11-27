@@ -1,5 +1,6 @@
 //! Serializes one bounded image request and publishes cleanup after its private outcome.
 
+use super::output::finalized_memory_snapshot;
 use super::worker_engines::WorkerEngines;
 use ipc_protocol::{
     ImageGenerationCommand, ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolWriter,
@@ -261,15 +262,10 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        let mlx_memory_snapshot = match self.loaded_runtime.as_mut() {
-            Some(LoadedRuntime::Image(image_engine)) => image_engine
-                .take_post_cleanup_memory_telemetry()
-                .map(|memory_telemetry| {
-                    super::output::worker_memory_snapshot(
-                        MlxMemorySnapshotSource::Finalized,
-                        memory_telemetry,
-                    )
-                }),
+        let post_cleanup_memory_telemetry = match self.loaded_runtime.as_mut() {
+            Some(LoadedRuntime::Image(image_engine)) => {
+                image_engine.take_post_cleanup_memory_telemetry()
+            }
             Some(LoadedRuntime::Autoregressive(_))
             | Some(LoadedRuntime::Embeddings(_))
             | Some(LoadedRuntime::Decisions(_))
@@ -280,7 +276,7 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
             .send_event(&WorkerEvent::ImageGenerationFinalized {
                 request_id,
                 elapsed_millis,
-                mlx_memory_snapshot,
+                mlx_memory_snapshot: finalized_memory_snapshot(post_cleanup_memory_telemetry),
             })
             .await?;
         Ok(())

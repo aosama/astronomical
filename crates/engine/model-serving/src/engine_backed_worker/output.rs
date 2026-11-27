@@ -578,6 +578,19 @@ fn worker_expert_layer_topology(
     }
 }
 
+/// What an engine observed after returning a finished request's memory, as
+/// the snapshot its finalization event publishes: the state the next request
+/// starts from.
+pub(crate) fn finalized_memory_snapshot(
+    post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
+) -> Option<WorkerMlxMemorySnapshot> {
+    let mlx_memory_telemetry = post_cleanup_memory_telemetry?;
+    Some(worker_memory_snapshot(
+        MlxMemorySnapshotSource::Finalized,
+        mlx_memory_telemetry,
+    ))
+}
+
 pub(crate) fn worker_memory_snapshot(
     mlx_memory_snapshot_source: MlxMemorySnapshotSource,
     mlx_memory_telemetry: MlxMemoryTelemetry,
