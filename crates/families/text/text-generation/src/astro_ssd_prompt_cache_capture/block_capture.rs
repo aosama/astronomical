@@ -1,18 +1,29 @@
-//! Request-side extraction and required synchronous `astro_ssd_prompt_cache`
-//! publication, shared by every text engine.
+//! Request-side extraction and `astro_ssd_prompt_cache` publication, shared by
+//! every text engine.
 //!
-//! The request cursor advances only after the matching block is durably published
-//! or an exact block was already present. Capacity pressure gets one narrowly
-//! typed retry, after allocator cleanup and whatever the engine's
-//! `reclaim_before_publication_retry` frees: retained expert pages in the
-//! Qwen3.5 text engine. Storage, quota,
-//! validation, and topology failures stop the request without retry.
+//! The engine thread copies each block's state to the host and queues it for
+//! the background writer (`engine_core::astro_ssd_prompt_cache::publication_queue`),
+//! then moves the request on: the block's state is already in memory, and the
+//! store's readers wait for the queue to drain, so a later request still finds
+//! it. Writing inside the prompt loop held a 15,000-token prompt of Ornith
+//! 35B-A3B back by ~450 ms before its first token (2026-11-27, M5 Pro).
+//!
+//! The parent chain advances when a block is queued. Capacity pressure while
+//! copying gets one narrowly typed retry, after allocator cleanup and whatever
+//! the engine's `reclaim_before_publication_retry` frees: retained expert
+//! pages in the Qwen3.5 text engine. A block the writer later fails to write is
+//! logged and dropped, and so are its children, which fail the store's
+//! published-parent check; the reply continues from memory.
 
 use crate::{
     AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheBoundaryCheckpoint,
     AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreError,
     AstroSsdPromptCachePublicationOutcome, InferenceEngineError, PerformanceAttribution,
     PerformanceOperation,
+};
+use engine_core::astro_ssd_prompt_cache::{
+    AstroSsdPromptCacheHostTensors, AstroSsdPromptCachePublicationJob,
+    AstroSsdPromptCachePublicationQueue, copy_state_tensors_to_host,
 };
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxMemorySnapshot;
@@ -182,10 +193,14 @@ fn plan_captured_block<RequestExtension>(
 }
 
 #[allow(clippy::too_many_arguments)]
-/// Publishes one block, retrying once after the engine reclaims what memory
-/// it can when the typed MLX active-memory limit blocked serialization.
-/// Reusing the caller's extracted tensors is essential: this is resource
+/// Publishes one block: copies its state to the host, retrying once after
+/// the engine reclaims what memory it can when the typed MLX active-memory
+/// limit blocked the copy, then hands it to the background writer. Reusing
+/// the caller's extracted tensors is essential: this is resource
 /// reclamation, not a second logical capture.
+///
+/// A block the store already holds complete is not copied again. With no
+/// writer (one could not be started) the block is written here, as before.
 pub(super) fn publish_block_with_reclamation_retry<
     CaptureEngine: TextAstroSsdPromptCacheCapture,
 >(
@@ -198,56 +213,144 @@ pub(super) fn publish_block_with_reclamation_retry<
     kv_block_tensors: &HashMap<String, MlxArray>,
     recurrent_snapshot_tensors: &HashMap<String, MlxArray>,
 ) -> Result<AstroSsdPromptCachePublicationOutcome, PromptBlockPublicationFailure> {
+    if astro_ssd_prompt_cache.holds_complete_block(&block_key.block_hash()) {
+        return Ok(AstroSsdPromptCachePublicationOutcome::AlreadyPublished);
+    }
+    let host_block = copy_block_to_host_with_reclamation_retry(
+        capture_engine,
+        model,
+        active_request,
+        kv_block_tensors,
+        recurrent_snapshot_tensors,
+    )?;
+    let publication_job = AstroSsdPromptCachePublicationJob {
+        block_key: block_key.clone(),
+        parent_block_key: parent_block_key.cloned(),
+        sequence_state_tensors: host_block.sequence_state_tensors,
+        boundary_state_tensors: host_block.boundary_state_tensors,
+    };
+    hand_block_to_writer(
+        capture_engine
+            .execution_core()
+            .astro_ssd_prompt_cache_publication_queue
+            .as_ref(),
+        astro_ssd_prompt_cache,
+        active_request,
+        publication_job,
+    )
+}
+
+/// A block's state copied to the host, ready for any thread to write.
+struct HostBlock {
+    sequence_state_tensors: AstroSsdPromptCacheHostTensors,
+    boundary_state_tensors: AstroSsdPromptCacheHostTensors,
+}
+
+/// Copies the block's tensors to the host, retrying once, and only for the
+/// typed MLX active-memory limit, after the engine reclaims memory.
+fn copy_block_to_host_with_reclamation_retry<CaptureEngine: TextAstroSsdPromptCacheCapture>(
+    capture_engine: &CaptureEngine,
+    model: &CaptureEngine::Model,
+    active_request: &mut TextEngineRequest<CaptureEngine::RequestExtension>,
+    kv_block_tensors: &HashMap<String, MlxArray>,
+    recurrent_snapshot_tensors: &HashMap<String, MlxArray>,
+) -> Result<HostBlock, PromptBlockPublicationFailure> {
+    match copy_block_to_host(
+        model,
+        active_request,
+        kv_block_tensors,
+        recurrent_snapshot_tensors,
+    ) {
+        Err(copy_error) if copy_error.active_memory_deficit_bytes().is_some() => {
+            let active_memory_deficit_bytes = copy_error.active_memory_deficit_bytes().unwrap_or(0);
+            capture_engine
+                .reclaim_before_publication_retry(
+                    model,
+                    active_request,
+                    active_memory_deficit_bytes,
+                )
+                .map_err(PromptBlockPublicationFailure::Reclamation)?;
+            copy_block_to_host(
+                model,
+                active_request,
+                kv_block_tensors,
+                recurrent_snapshot_tensors,
+            )
+            .map_err(PromptBlockPublicationFailure::Publication)
+        }
+        copy_outcome => copy_outcome.map_err(PromptBlockPublicationFailure::Publication),
+    }
+}
+
+fn copy_block_to_host<RequestExtension>(
+    model: &impl TextServingModel,
+    active_request: &mut TextEngineRequest<RequestExtension>,
+    kv_block_tensors: &HashMap<String, MlxArray>,
+    recurrent_snapshot_tensors: &HashMap<String, MlxArray>,
+) -> Result<HostBlock, AstroSsdPromptCacheDiskStoreError> {
+    active_request.performance_attribution.measure_operation(
+        PerformanceOperation::AstroSsdPromptCacheStateExtraction,
+        |_performance_attribution| {
+            Ok(HostBlock {
+                sequence_state_tensors: copy_state_tensors_to_host(
+                    model.runtime(),
+                    kv_block_tensors,
+                )?,
+                boundary_state_tensors: copy_state_tensors_to_host(
+                    model.runtime(),
+                    recurrent_snapshot_tensors,
+                )?,
+            })
+        },
+    )
+}
+
+/// Queues the block for the background writer, or writes it on this thread
+/// when there is no writer. A queued block counts as published: it is in
+/// memory and will be on disk before any reader looks. A writer that stopped
+/// (only a panic stops it) refuses the block, which is then not saved.
+fn hand_block_to_writer<RequestExtension>(
+    publication_queue: Option<&AstroSsdPromptCachePublicationQueue>,
+    astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
+    active_request: &mut TextEngineRequest<RequestExtension>,
+    publication_job: AstroSsdPromptCachePublicationJob,
+) -> Result<AstroSsdPromptCachePublicationOutcome, PromptBlockPublicationFailure> {
+    let Some(publication_queue) = publication_queue else {
+        return publish_on_this_thread(astro_ssd_prompt_cache, active_request, &publication_job);
+    };
+    match publication_queue.enqueue(publication_job) {
+        Ok(()) => Ok(AstroSsdPromptCachePublicationOutcome::Published),
+        Err(queue_error) => {
+            // The job went down with the writer; the request keeps going
+            // without this block rather than writing state it no longer holds.
+            tracing::warn!(%queue_error, "astro_ssd_prompt_cache writer unavailable");
+            Err(PromptBlockPublicationFailure::Publication(queue_error))
+        }
+    }
+}
+
+fn publish_on_this_thread<RequestExtension>(
+    astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
+    active_request: &mut TextEngineRequest<RequestExtension>,
+    publication_job: &AstroSsdPromptCachePublicationJob,
+) -> Result<AstroSsdPromptCachePublicationOutcome, PromptBlockPublicationFailure> {
     // The disk-store API needs mutable attribution while the request also
-    // remains mutably borrowed. Move the owner out temporarily and put it
-    // back on every return path before interpreting publication outcome.
+    // remains mutably borrowed. Move the owner out and put it back before
+    // interpreting the outcome.
     let mut request_performance_attribution = std::mem::replace(
         &mut active_request.performance_attribution,
         PerformanceAttribution::disabled(),
     );
-    let save_outcome = astro_ssd_prompt_cache.publish_block_with_performance_attribution(
-        model.runtime(),
-        block_key,
-        parent_block_key,
-        kv_block_tensors,
-        recurrent_snapshot_tensors,
-        &mut request_performance_attribution,
-    );
+    let publication_outcome = astro_ssd_prompt_cache
+        .publish_host_block_with_performance_attribution(
+            &publication_job.block_key,
+            publication_job.parent_block_key.as_ref(),
+            &publication_job.sequence_state_tensors,
+            &publication_job.boundary_state_tensors,
+            &mut request_performance_attribution,
+        );
     active_request.performance_attribution = request_performance_attribution;
-    // Retry exactly once and only for the typed MLX active-memory limit.
-    let save_outcome = match save_outcome {
-        Err(publication_error) if publication_error.active_memory_deficit_bytes().is_some() => {
-            let active_memory_deficit_bytes =
-                publication_error.active_memory_deficit_bytes().unwrap_or(0);
-            if let Err(reclamation_error) = capture_engine.reclaim_before_publication_retry(
-                model,
-                active_request,
-                active_memory_deficit_bytes,
-            ) {
-                return Err(PromptBlockPublicationFailure::Reclamation(
-                    reclamation_error,
-                ));
-            }
-            // The retry gets its own attribution span so serialization time
-            // stays apart from whatever the engine's reclamation measured.
-            let mut retry_performance_attribution = std::mem::replace(
-                &mut active_request.performance_attribution,
-                PerformanceAttribution::disabled(),
-            );
-            let retry_outcome = astro_ssd_prompt_cache.publish_block_with_performance_attribution(
-                model.runtime(),
-                block_key,
-                parent_block_key,
-                kv_block_tensors,
-                recurrent_snapshot_tensors,
-                &mut retry_performance_attribution,
-            );
-            active_request.performance_attribution = retry_performance_attribution;
-            retry_outcome
-        }
-        save_outcome => save_outcome,
-    };
-    save_outcome.map_err(PromptBlockPublicationFailure::Publication)
+    publication_outcome.map_err(PromptBlockPublicationFailure::Publication)
 }
 
 /// Extracts one block's KV tensors under the request's extraction measurement,
@@ -360,9 +463,10 @@ fn apply_publication_outcome<RequestExtension>(
             {
                 astro_ssd_prompt_cache_diagnostics.record_published_block();
             }
-            // Both successful outcomes prove durable availability, so the
-            // next block may safely use this key as its parent. Diagnostics
-            // count physical publications only, not idempotent reuse.
+            // Both outcomes make the block available to every later reader
+            // (a queued block is written before any reader looks), so the next
+            // block may use this key as its parent. Diagnostics count blocks
+            // handed to the writer, not blocks the store already held.
             active_request.last_restored_astro_ssd_prompt_cache_block_key =
                 Some(astro_ssd_prompt_cache_block_key);
             Ok(())

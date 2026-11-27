@@ -1,15 +1,17 @@
-//! Synchronous publication entry point and idempotency rules.
+//! Publication entry points and idempotency rules.
 //!
-//! A successful return means the requested block is durably available now. The
-//! caller may advance its parent cursor for both `Published` and
-//! `AlreadyPublished`; there is no queued, skipped, or eventually-written state.
+//! A successful return means the requested block is durably available now,
+//! whichever thread called: the engine thread through the MLX-array entry
+//! points, or the background writer (`publication_queue`) through the host
+//! entry point. The caller may advance its parent cursor for both `Published`
+//! and `AlreadyPublished`.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use runtime_integration::MlxRuntime;
-
+use mlx_bridge::MlxArray;
 use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
+use runtime_integration::MlxRuntime;
 
 use super::block_key::AstroSsdPromptCacheBlockKey;
 use super::block_manifest::AstroSsdPromptCacheBlockManifest;
@@ -20,7 +22,7 @@ use super::disk_store_file::{
     remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent, validate_current_file_header,
 };
 use super::disk_store_index::TrackedAstroSsdPromptCacheBlock;
-use mlx_bridge::MlxArray;
+use super::host_state_tensor::{AstroSsdPromptCacheHostTensors, copy_state_tensors_to_host};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AstroSsdPromptCachePublicationOutcome {
@@ -50,6 +52,8 @@ impl AstroSsdPromptCacheDiskStore {
         )
     }
 
+    /// Copies the block's MLX tensors to the host on the calling thread, then
+    /// publishes them synchronously through the one host write path.
     pub fn publish_block_with_performance_attribution(
         &self,
         runtime: &MlxRuntime,
@@ -57,6 +61,29 @@ impl AstroSsdPromptCacheDiskStore {
         parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
         sequence_state_tensors: &HashMap<String, MlxArray>,
         boundary_state_tensors: &HashMap<String, MlxArray>,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<AstroSsdPromptCachePublicationOutcome, AstroSsdPromptCacheDiskStoreError> {
+        let sequence_state_host_tensors =
+            copy_state_tensors_to_host(runtime, sequence_state_tensors)?;
+        let boundary_state_host_tensors =
+            copy_state_tensors_to_host(runtime, boundary_state_tensors)?;
+        self.publish_host_block_with_performance_attribution(
+            block_key,
+            parent_block_key,
+            &sequence_state_host_tensors,
+            &boundary_state_host_tensors,
+            performance_attribution,
+        )
+    }
+
+    /// Publishes a block from host copies. Touches no MLX state, so the
+    /// background writer calls it.
+    pub fn publish_host_block_with_performance_attribution(
+        &self,
+        block_key: &AstroSsdPromptCacheBlockKey,
+        parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
+        sequence_state_tensors: &AstroSsdPromptCacheHostTensors,
+        boundary_state_tensors: &AstroSsdPromptCacheHostTensors,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<AstroSsdPromptCachePublicationOutcome, AstroSsdPromptCacheDiskStoreError> {
         // Serialize scan/quota/rename/index mutations inside this process. The
@@ -73,7 +100,6 @@ impl AstroSsdPromptCacheDiskStore {
 
         if let Some(existing_block) = self.indexed_block_still_on_disk(&block_key.block_hash())? {
             return self.publish_over_existing_block(
-                runtime,
                 block_key,
                 parent_block_key,
                 &existing_block,
@@ -84,7 +110,6 @@ impl AstroSsdPromptCacheDiskStore {
 
         self.require_published_parent(block_key, parent_block_key)?;
         self.publish_new_block_transaction(
-            runtime,
             block_key,
             parent_block_key,
             sequence_state_tensors,
@@ -99,12 +124,30 @@ impl AstroSsdPromptCacheDiskStore {
         Ok(AstroSsdPromptCachePublicationOutcome::Published)
     }
 
+    /// Whether the index already holds `block_hash` with every state file the
+    /// model requires, so capturing it again would only repeat the write.
+    /// Deliberately does not wait for queued blocks: the engine thread asks
+    /// this between queueing blocks, and a block still queued is simply
+    /// queued again and found complete by the writer.
+    #[must_use]
+    pub fn holds_complete_block(&self, block_hash: &[u8; 32]) -> bool {
+        self.lock_tracked_files()
+            .block(block_hash)
+            .is_some_and(|tracked_block| {
+                existing_block_completeness(
+                    self.model_contract.has_sequence_state(),
+                    self.model_contract.has_boundary_state(),
+                    tracked_block,
+                ) == ExistingBlockCompleteness::Complete
+            })
+    }
+
     fn validate_publication_request(
         &self,
         block_key: &AstroSsdPromptCacheBlockKey,
         parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
-        sequence_state_tensors: &HashMap<String, MlxArray>,
-        boundary_state_tensors: &HashMap<String, MlxArray>,
+        sequence_state_tensors: &AstroSsdPromptCacheHostTensors,
+        boundary_state_tensors: &AstroSsdPromptCacheHostTensors,
     ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
         validate_state_kind_tensor_presence(
             "sequence",
@@ -143,11 +186,10 @@ impl AstroSsdPromptCacheDiskStore {
     /// refusal when what is stored disagrees with the request.
     fn publish_over_existing_block(
         &self,
-        runtime: &MlxRuntime,
         block_key: &AstroSsdPromptCacheBlockKey,
         parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
         existing_block: &TrackedAstroSsdPromptCacheBlock,
-        boundary_state_tensors: &HashMap<String, MlxArray>,
+        boundary_state_tensors: &AstroSsdPromptCacheHostTensors,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<AstroSsdPromptCachePublicationOutcome, AstroSsdPromptCacheDiskStoreError> {
         let block_hash = block_key.block_hash();
@@ -179,7 +221,6 @@ impl AstroSsdPromptCacheDiskStore {
                 // boundary. Reaching the same block as a leaf restores that single
                 // missing file without replacing the sequence state.
                 self.publish_missing_boundary_state_transaction(
-                    runtime,
                     block_key,
                     boundary_state_tensors,
                     performance_attribution,

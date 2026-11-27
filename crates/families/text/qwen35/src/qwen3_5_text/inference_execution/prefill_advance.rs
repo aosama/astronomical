@@ -10,7 +10,11 @@
 //!    may publish several astro SSD prompt cache blocks, each from the state its span left.
 //! 2. Read the stretch one layer at a time, reporting every measured step
 //!    to the memory governor.
-//! 3. Publish required astro SSD prompt cache state before advancing the in-memory cursor.
+//! 3. Hand the stretch's astro SSD prompt cache blocks to the background
+//!    writer before advancing the in-memory cursor: each block is copied to
+//!    host memory here and written while the reply starts, and every reader
+//!    of the store waits for queued blocks first. Writing them here instead
+//!    held a 15,000-token prompt's first token back by ~450 ms (2026-11-27).
 //! 4. Synchronize the tape and reclaim MLX buffer cache only above threshold.
 //! 5. Emit progress only after all required state transitions succeeded.
 //!

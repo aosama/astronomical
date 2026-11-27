@@ -42,6 +42,29 @@ pub(super) fn open_astro_ssd_prompt_cache_disk_store_with_contract(
     )
 }
 
+/// A block's sequence state and boundary state as MLX loads them back.
+pub(super) struct LoadedBlockState {
+    pub(super) sequence_state_tensors: HashMap<String, MlxArray>,
+    pub(super) boundary_state_tensors: HashMap<String, MlxArray>,
+}
+
+pub(super) fn load_published_block_state(
+    runtime: &MlxRuntime,
+    astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
+    block_key: &AstroSsdPromptCacheBlockKey,
+) -> LoadedBlockState {
+    LoadedBlockState {
+        sequence_state_tensors: astro_ssd_prompt_cache
+            .load_kv_block(runtime, block_key, None)
+            .expect("the published sequence state should load")
+            .expect("the published sequence state should be present"),
+        boundary_state_tensors: astro_ssd_prompt_cache
+            .load_recurrent_snapshot(runtime, block_key, None)
+            .expect("the published boundary state should load")
+            .expect("the published boundary state should be present"),
+    }
+}
+
 pub(super) fn runtime_with_shared_limits() -> MlxRuntime {
     let memory_limits = MlxMemoryLimits::new(
         DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
