@@ -10,7 +10,7 @@ use serial_test::file_serial;
 
 use super::loss_gradient::{TrainableLoss, loss_gradients};
 use crate::qwen3_5_core::model_math::differentiable_gated_delta::DifferentiableGatedDelta;
-use crate::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
+use crate::{GatedDeltaInputs, qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
 use model_primitives::synthetic_weights_test_support::{
     initialize_test_runtime, shakespeare_values,
 };
@@ -102,27 +102,19 @@ fn should_score_exactly_as_the_served_fused_kernel() {
     let runtime = initialize_test_runtime();
     let inputs = RecurrenceInputs::new(&runtime, COMPARED_TOKEN_COUNT, 0, 0.9);
     let served_kernel = qwen3_5_gated_delta_kernel().unwrap();
-    let (served_outputs, served_state) = qwen3_5_gated_delta_sequence(
-        &runtime,
-        Some(&served_kernel),
-        &inputs.queries,
-        &inputs.keys,
-        &inputs.values,
-        &inputs.decays,
-        &inputs.update_rates,
-        &inputs.recurrent_state,
-    )
-    .unwrap();
+    let gated_delta_inputs = GatedDeltaInputs {
+        queries: &inputs.queries,
+        keys: &inputs.keys,
+        values: &inputs.values,
+        decays: &inputs.decays,
+        update_rates: &inputs.update_rates,
+        recurrent_state: &inputs.recurrent_state,
+    };
+    let (served_outputs, served_state) =
+        qwen3_5_gated_delta_sequence(&runtime, Some(&served_kernel), &gated_delta_inputs).unwrap();
     let (trainable_outputs, trainable_state) = DifferentiableGatedDelta::new()
         .unwrap()
-        .sequence(
-            &inputs.queries,
-            &inputs.keys,
-            &inputs.values,
-            &inputs.decays,
-            &inputs.update_rates,
-            &inputs.recurrent_state,
-        )
+        .sequence(&gated_delta_inputs)
         .unwrap();
 
     let output_gap = largest_gap(&served_outputs, &trainable_outputs);
@@ -144,14 +136,17 @@ fn should_refuse_inputs_whose_heads_do_not_match_and_name_the_recurrence() {
     let inputs = RecurrenceInputs::new(&runtime, 1, 0, 0.9);
     let mismatched_values = shakespeare_values(&runtime, &[1, 1, 3, HEAD_DIMENSION], 0, 0.0);
 
-    let Err(refusal) = DifferentiableGatedDelta::new().unwrap().sequence(
-        &inputs.queries,
-        &inputs.keys,
-        &mismatched_values,
-        &inputs.decays,
-        &inputs.update_rates,
-        &inputs.recurrent_state,
-    ) else {
+    let Err(refusal) = DifferentiableGatedDelta::new()
+        .unwrap()
+        .sequence(&GatedDeltaInputs {
+            queries: &inputs.queries,
+            keys: &inputs.keys,
+            values: &mismatched_values,
+            decays: &inputs.decays,
+            update_rates: &inputs.update_rates,
+            recurrent_state: &inputs.recurrent_state,
+        })
+    else {
         panic!("values with the wrong head count must be refused");
     };
     assert_eq!(refusal.operation, "apply the gated-delta recurrence");
@@ -193,14 +188,14 @@ impl TrainableLoss for RecurrenceLoss {
         context: &MlxBindingsContext,
         trainable_arrays: &[MlxArray],
     ) -> Result<MlxArray, MlxCError> {
-        let (sequence_outputs, next_state) = self.recurrence.sequence(
-            &trainable_arrays[0],
-            &trainable_arrays[1],
-            &trainable_arrays[2],
-            &trainable_arrays[3],
-            &trainable_arrays[4],
-            &self.recurrent_state,
-        )?;
+        let (sequence_outputs, next_state) = self.recurrence.sequence(&GatedDeltaInputs {
+            queries: &trainable_arrays[0],
+            keys: &trainable_arrays[1],
+            values: &trainable_arrays[2],
+            decays: &trainable_arrays[3],
+            update_rates: &trainable_arrays[4],
+            recurrent_state: &self.recurrent_state,
+        })?;
         let weighted_outputs = context.multiply(&sequence_outputs, &self.output_weights)?;
         let weighted_state = context.multiply(&next_state, &self.state_weights)?;
         context.add(

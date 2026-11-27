@@ -29,6 +29,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights, Qwen3_5DecoderLayerWeights,
     Qwen3_5FullAttentionWeights, Qwen3_5LinearAttentionWeights,
 };
+use crate::qwen3_5_core::model_math::gated_delta_inputs::GatedDeltaInputs;
 use crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_sequence;
 use text_generation::execution_error::TextExecutionError;
 
@@ -139,29 +140,23 @@ impl Qwen3_5ModelBase {
         // A training building its graph puts serving's recurrence with a
         // backward pass in force; otherwise serving's own kernel runs.
         let layer_additions = self.layer_additions_in_force();
+        let gated_delta_inputs = GatedDeltaInputs {
+            queries: &queries,
+            keys: &keys,
+            values: &values,
+            decays: &decays,
+            update_rates: &update_rates,
+            recurrent_state: &empty_recurrent_state,
+        };
         let recurrent_output = if let Some(layer_additions) = &layer_additions
             && let Some(differentiable_recurrence) = &layer_additions.differentiable_recurrence
         {
-            differentiable_recurrence
-                .sequence(
-                    &queries,
-                    &keys,
-                    &values,
-                    &decays,
-                    &update_rates,
-                    &empty_recurrent_state,
-                )?
-                .0
+            differentiable_recurrence.sequence(&gated_delta_inputs)?.0
         } else {
             qwen3_5_gated_delta_sequence(
                 &self.runtime,
                 self.gated_delta_kernel.as_ref(),
-                &queries,
-                &keys,
-                &values,
-                &decays,
-                &update_rates,
-                &empty_recurrent_state,
+                &gated_delta_inputs,
             )?
             .0
         };

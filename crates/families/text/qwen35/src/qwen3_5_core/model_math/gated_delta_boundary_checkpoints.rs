@@ -1,5 +1,6 @@
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
+use super::gated_delta_inputs::GatedDeltaInputs;
 use super::gated_delta_pipelined_kernel::{
     THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE, gated_delta_pipelined_kernel_source,
 };
@@ -79,45 +80,32 @@ pub fn qwen3_5_gated_delta_checkpoint_kernel()
 /// states. A retained kernel uses the fused Metal route; a capability-demoted
 /// kernel — `None` — uses the ops-based fallback, which snapshots boundaries
 /// at exactly the same completed-token positions.
-#[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
     runtime: &MlxRuntime,
     gated_delta_checkpoint_kernel: Option<&MlxMetalKernel>,
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
+    inputs: &GatedDeltaInputs<'_>,
     completed_prefill_chunk_tokens: &[i32],
     checkpoint_interval_token_count: i32,
 ) -> Result<Qwen3_5GatedDeltaBoundaryCheckpointResult, MlxRuntimeError> {
     let Some(gated_delta_checkpoint_kernel) = gated_delta_checkpoint_kernel else {
         return qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
             runtime,
-            queries,
-            keys,
-            values,
-            decays,
-            update_rates,
-            recurrent_state,
+            inputs,
             completed_prefill_chunk_tokens,
             checkpoint_interval_token_count,
         );
     };
-    let sequence_shape = validate_gated_delta_sequence_shapes(
-        queries,
-        keys,
-        values,
-        decays,
-        update_rates,
-        recurrent_state,
-    )?;
+    let sequence_shape = validate_gated_delta_sequence_shapes(inputs)?;
     validate_boundary_checkpoint_positions(
         completed_prefill_chunk_tokens,
         checkpoint_interval_token_count,
         sequence_shape.token_count,
     )?;
+    let GatedDeltaInputs {
+        queries,
+        recurrent_state,
+        ..
+    } = *inputs;
     let checkpoint_count = i32::try_from(completed_prefill_chunk_tokens.len()).map_err(|_| {
         gated_delta_sequence_error("gated-delta checkpoint count exceeds the Int32 range")
     })?;
@@ -134,14 +122,7 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
     let checkpoint_template_arguments =
         checkpoint_template_arguments(sequence_shape, queries.dtype(), recurrent_state.dtype());
     let dispatch = CheckpointKernelDispatch {
-        sequence_buffers: CheckpointSequenceBuffers {
-            queries,
-            keys,
-            values,
-            decays,
-            update_rates,
-            recurrent_state,
-        },
+        sequence_buffers: *inputs,
         scalar_inputs,
         checkpoint_plan,
     };
@@ -173,16 +154,6 @@ struct CheckpointSequencePlan {
     checkpoint_count: i32,
 }
 
-/// The six sequence tensors the fused checkpoint kernel reads, in launch order.
-struct CheckpointSequenceBuffers<'a> {
-    queries: &'a MlxArray,
-    keys: &'a MlxArray,
-    values: &'a MlxArray,
-    decays: &'a MlxArray,
-    update_rates: &'a MlxArray,
-    recurrent_state: &'a MlxArray,
-}
-
 /// Scalar control arrays built once per forward and consumed by the launch.
 struct CheckpointScalarKernelInputs {
     token_count: MlxArray,
@@ -193,7 +164,7 @@ struct CheckpointScalarKernelInputs {
 
 /// Everything one fused checkpoint kernel launch consumes.
 struct CheckpointKernelDispatch<'a> {
-    sequence_buffers: CheckpointSequenceBuffers<'a>,
+    sequence_buffers: GatedDeltaInputs<'a>,
     scalar_inputs: CheckpointScalarKernelInputs,
     checkpoint_plan: CheckpointSequencePlan,
 }
@@ -397,31 +368,26 @@ fn validate_boundary_checkpoint_positions(
 /// capability probe demoted the fused checkpoint kernel. Boundary states are
 /// captured at exactly the same completed-token positions the fused kernel
 /// writes, so the persistent `astro_ssd_prompt_cache` boundary contract is preserved.
-#[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
     runtime: &MlxRuntime,
-    queries: &MlxArray,
-    keys: &MlxArray,
-    values: &MlxArray,
-    decays: &MlxArray,
-    update_rates: &MlxArray,
-    recurrent_state: &MlxArray,
+    inputs: &GatedDeltaInputs<'_>,
     completed_prefill_chunk_tokens: &[i32],
     checkpoint_interval_token_count: i32,
 ) -> Result<Qwen3_5GatedDeltaBoundaryCheckpointResult, MlxRuntimeError> {
-    let sequence_shape = validate_gated_delta_sequence_shapes(
+    let sequence_shape = validate_gated_delta_sequence_shapes(inputs)?;
+    validate_boundary_checkpoint_positions(
+        completed_prefill_chunk_tokens,
+        checkpoint_interval_token_count,
+        sequence_shape.token_count,
+    )?;
+    let GatedDeltaInputs {
         queries,
         keys,
         values,
         decays,
         update_rates,
         recurrent_state,
-    )?;
-    validate_boundary_checkpoint_positions(
-        completed_prefill_chunk_tokens,
-        checkpoint_interval_token_count,
-        sequence_shape.token_count,
-    )?;
+    } = *inputs;
     let query_shape = queries.shape();
     let value_shape = values.shape();
     let sequence_operands = SequenceOperands {

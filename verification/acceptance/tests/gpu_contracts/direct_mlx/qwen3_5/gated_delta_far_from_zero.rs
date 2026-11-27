@@ -11,7 +11,7 @@
 //!
 //! No model on disk; under a second.
 
-use model_serving::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
+use model_serving::{GatedDeltaInputs, qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
 use runtime_integration::MlxRuntime;
 
 use super::super::synthetic_values::{
@@ -97,12 +97,14 @@ fn swept_trial_differences(
     let (fused_outputs, fused_state) = qwen3_5_gated_delta_sequence(
         runtime,
         Some(gated_delta_kernel),
-        &queries,
-        &keys,
-        &values,
-        &decays,
-        &update_rates,
-        &fused_starting_state,
+        &GatedDeltaInputs {
+            queries: &queries,
+            keys: &keys,
+            values: &values,
+            decays: &decays,
+            update_rates: &update_rates,
+            recurrent_state: &fused_starting_state,
+        },
     )
     .expect("the fused gated-delta kernel should build a valid graph");
     let (loop_outputs, loop_state) = apply_ops_loop(
