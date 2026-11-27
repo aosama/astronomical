@@ -16,7 +16,7 @@ use super::layer_major_checkpoint_parity::{
     PublishedBoundarySnapshot, planned_spans, push_final_state_boundary,
 };
 use super::layer_major_prefill::{
-    LayerMajorCheckpointContract, LayerMajorPrefillRequest, LayerMajorSpan, LayerMajorVisualInputs,
+    LayerMajorPrefillRequest, LayerMajorSpan, LayerMajorVisualInputs,
 };
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
 use text_generation::execution_error::TextExecutionError;
@@ -178,27 +178,20 @@ impl Qwen3_5Model {
             0,
             LayerMajorPrefillRequest {
                 spans,
-                checkpoint_contract: Some(LayerMajorCheckpointContract {
-                    boundary_tensor_count: self
-                        .astro_decoder_state_cache_layout
-                        .boundary_tensor_count(),
-                    block_token_count,
-                }),
+                checkpoint_contract: Some(self.parity_checkpoint_contract(block_token_count)),
                 should_materialize_logits: false,
                 visual_inputs: Some(image_inputs),
             },
             request_decoder_state,
             &mut PerformanceAttribution::disabled(),
         )?;
-        let mut boundary_checkpoints = layer_major_outcome.boundary_checkpoints;
-        push_final_state_boundary(
-            &mut boundary_checkpoints,
-            group_token_ids.len(),
-            block_token_count,
-            request_decoder_state,
-        )?;
         Ok((
-            self.host_snapshots(boundary_checkpoints)?,
+            self.host_snapshots_with_final_state(
+                layer_major_outcome.boundary_checkpoints,
+                group_token_ids.len(),
+                block_token_count,
+                request_decoder_state,
+            )?,
             layer_major_outcome.consumed_visual_embedding_count,
         ))
     }
