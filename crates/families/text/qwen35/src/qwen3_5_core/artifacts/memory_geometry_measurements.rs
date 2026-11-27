@@ -71,11 +71,22 @@ fn measured_layer_payloads(
         .collect()
 }
 
-/// Transient payload expected to coexist with complete residency at startup.
+/// Working memory the startup placement decision keeps free beside a model
+/// held whole.
 ///
-/// With MLX linked, the gate-up fusion transient is the observed worst case;
-/// without it, the largest complete layer stands in so unit tests still
-/// reserve a meaningful floor.
+/// With MLX linked this is the size of the largest layer's gate and up
+/// projections where they share one encoding, and zero where they do not.
+/// It was sized for a fusion of those two projections that the engine no
+/// longer performs; the value is kept because it was measured adequate:
+/// a 35B-A3B at 4 bits held whole under a 36.5 GB limit needed 0.385 GB
+/// beyond its held weights in the largest step of an 11,000-token prompt,
+/// against 0.531 GB reserved here (2026-11-26). Without MLX the largest
+/// complete layer stands in so unit tests still reserve a meaningful floor.
+///
+/// This reserve is small beside what the memory governor sets aside once
+/// the model serves (about 1.5 GB of margin, working buffers and buffer room
+/// in that run, before the room for macOS's wired limit), so near the limit
+/// the governor, not this figure, decides whether every layer stays held.
 fn complete_residency_transient_bytes(
     layer_plans: &[QuantizedExpertLayerPlan],
 ) -> Result<u64, Qwen3_5MemoryGeometryError> {
