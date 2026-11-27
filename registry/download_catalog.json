@@ -160,12 +160,12 @@
             "upstream_license": "MIT",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.136",
+                "astronomical_version": "0.2.137",
                 "tokens_per_second": {
                     "essay_short_prompt": 51,
-                    "essay_long_prompt": 49,
-                    "code_short_prompt": 48,
-                    "code_long_prompt": 49
+                    "essay_long_prompt": 50,
+                    "code_short_prompt": 50,
+                    "code_long_prompt": 51
                 }
             }
         },
@@ -566,12 +566,12 @@
             "build_difference": "draft_model",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.136",
+                "astronomical_version": "0.2.137",
                 "tokens_per_second": {
-                    "essay_short_prompt": 89,
-                    "essay_long_prompt": 73,
-                    "code_short_prompt": 102,
-                    "code_long_prompt": 95
+                    "essay_short_prompt": 86,
+                    "essay_long_prompt": 76,
+                    "code_short_prompt": 97,
+                    "code_long_prompt": 92
                 }
             }
         },
@@ -709,12 +709,12 @@
             "upstream_license": "Apache-2.0",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.136",
+                "astronomical_version": "0.2.137",
                 "tokens_per_second": {
-                    "essay_short_prompt": 44,
-                    "essay_long_prompt": 45,
-                    "code_short_prompt": 59,
-                    "code_long_prompt": 60
+                    "essay_short_prompt": 53,
+                    "essay_long_prompt": 55,
+                    "code_short_prompt": 57,
+                    "code_long_prompt": 54
                 }
             }
         },
