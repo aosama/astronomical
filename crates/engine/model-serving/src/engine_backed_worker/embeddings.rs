@@ -1,5 +1,6 @@
 //! Serializes one synchronous embeddings request and publishes its cleanup event.
 
+use super::worker_engines::WorkerEngines;
 use ipc_protocol::{
     EmbeddingsCommand, EmbeddingsFailureReason, MlxMemorySnapshotSource, ProtocolWriter, RequestId,
     WorkerEvent,
@@ -10,37 +11,8 @@ use super::WorkerRuntimeError;
 use super::output;
 use super::{EngineBackedWorker, LoadedRuntime};
 use crate::EmbeddingEngine;
-use crate::InferenceEngine;
-use crate::engine_backed_worker::support::ModelFactory;
-use crate::model_generation_processor::ModelGenerationProcessor;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: crate::ImageGenerationEngine,
-    EmbeddingsEngine: EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     pub(crate) async fn start_embeddings<WriteTransport>(
         &mut self,
         embeddings_command: EmbeddingsCommand,

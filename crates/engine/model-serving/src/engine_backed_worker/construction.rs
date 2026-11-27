@@ -1,9 +1,10 @@
-use super::support::ModelFactory;
+use super::worker_engines::DirectEngines;
+use super::worker_engines::WorkerEngines;
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
+use crate::InferenceEngine;
 use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{ImageGenerationEngine, InferenceEngine};
 
-impl<Processor, Engine> EngineBackedWorker<Processor, Engine, ()>
+impl<Processor, Engine> EngineBackedWorker<DirectEngines<Processor, Engine>>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
@@ -32,34 +33,11 @@ where
     }
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
-    pub fn idle_with_model_factory(model_factory: Factory, mlx_memory_ceiling_bytes: u64) -> Self {
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
+    pub fn idle_with_model_factory(
+        model_factory: Engines::Factory,
+        mlx_memory_ceiling_bytes: u64,
+    ) -> Self {
         Self::idle_with_model_factory_and_machine_mlx_memory_ceiling(
             model_factory,
             mlx_memory_ceiling_bytes,
@@ -68,7 +46,7 @@ where
     }
 
     pub fn idle_with_model_factory_and_machine_mlx_memory_ceiling(
-        model_factory: Factory,
+        model_factory: Engines::Factory,
         machine_mlx_memory_ceiling_bytes: u64,
         effective_mlx_memory_ceiling_bytes: u64,
     ) -> Self {

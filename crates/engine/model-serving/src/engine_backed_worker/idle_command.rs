@@ -2,43 +2,17 @@ use ipc_protocol::{MlxMemorySnapshotSource, ProtocolWriter, WorkerCommand, Worke
 use tokio::io::AsyncWrite;
 
 use super::support::{ActiveWorkerRequest, ModelFactory, WorkerRuntimeError};
-use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{ImageGenerationEngine, InferenceEngine};
+use crate::InferenceEngine;
 
 use super::EngineBackedWorker;
+use super::worker_engines::{RequestOutputOf, WorkerEngines};
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     pub(crate) async fn serve_idle_command<WriteTransport>(
         &mut self,
         worker_command: WorkerCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveWorkerRequest<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveWorkerRequest<RequestOutputOf<Engines>>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
