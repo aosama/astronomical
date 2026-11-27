@@ -248,22 +248,16 @@ fn append_moe_routed_expert_tensor_profiles(
     hidden_size: usize,
     qwen3_5_config: &Qwen3_5Config,
 ) -> Result<(), Qwen3_5ArtifactError> {
-    let expert_projection_dimensions = expert_projection_dimensions(
-        hidden_size,
-        qwen3_5_config.expert_intermediate_size() as usize,
-    );
-    for (projection_name, output_dimension, input_dimension) in expert_projection_dimensions {
-        let projection_module_name =
-            format!("{mixture_of_experts_prefix}.switch_mlp.{projection_name}");
-        append_qwen3_5_quantized_affine_tensor_profiles(
-            tensor_profiles,
-            &projection_module_name,
-            &[qwen3_5_config.expert_count() as usize, output_dimension],
-            input_dimension,
-            qwen3_5_config.quantization_profile_for_module(&projection_module_name),
-        )?;
-    }
-    Ok(())
+    append_feed_forward_projection_profiles(
+        tensor_profiles,
+        &format!("{mixture_of_experts_prefix}.switch_mlp"),
+        &[qwen3_5_config.expert_count() as usize],
+        (
+            hidden_size,
+            qwen3_5_config.expert_intermediate_size() as usize,
+        ),
+        qwen3_5_config,
+    )
 }
 
 /// The shared expert's projections: one set per layer, not stacked over experts.
@@ -273,17 +267,39 @@ fn append_moe_shared_expert_tensor_profiles(
     hidden_size: usize,
     qwen3_5_config: &Qwen3_5Config,
 ) -> Result<(), Qwen3_5ArtifactError> {
-    let expert_projection_dimensions = expert_projection_dimensions(
-        hidden_size,
-        qwen3_5_config.shared_expert_intermediate_size() as usize,
-    );
-    for (projection_name, output_dimension, input_dimension) in expert_projection_dimensions {
-        let projection_module_name =
-            format!("{mixture_of_experts_prefix}.shared_expert.{projection_name}");
+    append_feed_forward_projection_profiles(
+        tensor_profiles,
+        &format!("{mixture_of_experts_prefix}.shared_expert"),
+        &[],
+        (
+            hidden_size,
+            qwen3_5_config.shared_expert_intermediate_size() as usize,
+        ),
+        qwen3_5_config,
+    )
+}
+
+/// One feed-forward block's gate, up and down projections under
+/// `module_prefix`, each led by `stacked_dimensions`: none for a dense MLP
+/// or a shared expert, the expert count for routed experts, which an
+/// artifact stores stacked over every expert of the layer.
+pub(crate) fn append_feed_forward_projection_profiles(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    module_prefix: &str,
+    stacked_dimensions: &[usize],
+    (hidden_size, intermediate_size): (usize, usize),
+    qwen3_5_config: &Qwen3_5Config,
+) -> Result<(), Qwen3_5ArtifactError> {
+    for (projection_name, output_dimension, input_dimension) in
+        expert_projection_dimensions(hidden_size, intermediate_size)
+    {
+        let projection_module_name = format!("{module_prefix}.{projection_name}");
+        let mut leading_dimensions = stacked_dimensions.to_vec();
+        leading_dimensions.push(output_dimension);
         append_qwen3_5_quantized_affine_tensor_profiles(
             tensor_profiles,
             &projection_module_name,
-            &[output_dimension],
+            &leading_dimensions,
             input_dimension,
             qwen3_5_config.quantization_profile_for_module(&projection_module_name),
         )?;
@@ -291,7 +307,7 @@ fn append_moe_shared_expert_tensor_profiles(
     Ok(())
 }
 
-/// One feed-forward expert's three projections as `(name, output width, input
+/// One feed-forward block's three projections as `(name, output width, input
 /// width)`: gate and up widen the hidden state to the intermediate size, down
 /// narrows it back.
 fn expert_projection_dimensions(

@@ -68,12 +68,7 @@ impl Qwen3_5Model {
             0,
             LayerMajorPrefillRequest {
                 spans: &spans,
-                checkpoint_contract: Some(LayerMajorCheckpointContract {
-                    boundary_tensor_count: self
-                        .astro_decoder_state_cache_layout
-                        .boundary_tensor_count(),
-                    block_token_count,
-                }),
+                checkpoint_contract: Some(self.parity_checkpoint_contract(block_token_count)),
                 should_materialize_logits: false,
                 visual_inputs: None,
             },
@@ -97,15 +92,13 @@ impl Qwen3_5Model {
                 Err(advance_error) => return Err(advance_error),
             }
         };
-        let mut boundary_checkpoints = layer_major_outcome.boundary_checkpoints;
-        push_final_state_boundary(
-            &mut boundary_checkpoints,
-            group_token_ids.len(),
-            block_token_count,
-            request_decoder_state,
-        )?;
         Ok((
-            self.host_snapshots(boundary_checkpoints)?,
+            self.host_snapshots_with_final_state(
+                layer_major_outcome.boundary_checkpoints,
+                group_token_ids.len(),
+                block_token_count,
+                request_decoder_state,
+            )?,
             redone_span_count,
         ))
     }
@@ -182,6 +175,38 @@ impl Qwen3_5Model {
     }
 
     /// Copies every snapshot tensor to the host as Float32, in boundary order.
+    /// The contract a parity run's layer-major prefill publishes under: the
+    /// engine's own boundary tensors at every `block_token_count` tokens.
+    pub(super) fn parity_checkpoint_contract(
+        &self,
+        block_token_count: usize,
+    ) -> LayerMajorCheckpointContract {
+        LayerMajorCheckpointContract {
+            boundary_tensor_count: self
+                .astro_decoder_state_cache_layout
+                .boundary_tensor_count(),
+            block_token_count,
+        }
+    }
+
+    /// A finished layer-major run's boundaries plus the final state's own
+    /// boundary, copied to the host.
+    pub(super) fn host_snapshots_with_final_state(
+        &self,
+        mut boundary_checkpoints: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
+        end_token: usize,
+        block_token_count: usize,
+        request_decoder_state: &RequestDecoderStateStack,
+    ) -> Result<Vec<PublishedBoundarySnapshot>, TextExecutionError> {
+        push_final_state_boundary(
+            &mut boundary_checkpoints,
+            end_token,
+            block_token_count,
+            request_decoder_state,
+        )?;
+        self.host_snapshots(boundary_checkpoints)
+    }
+
     pub(super) fn host_snapshots(
         &self,
         boundary_checkpoints: Vec<AstroSsdPromptCacheBoundaryCheckpoint>,
