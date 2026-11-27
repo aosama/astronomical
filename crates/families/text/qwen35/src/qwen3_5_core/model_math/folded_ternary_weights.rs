@@ -129,7 +129,7 @@ impl FoldedTernaryRotations {
         let Qwen3_5ProjectionStorage::Bound(bound_weights) = &projection.storage else {
             return Ok(());
         };
-        let rotation = self.rotation_for_width(stored_input_width(bound_weights))?;
+        let rotation = self.rotation_for_width(stored_input_width(&weight_name, bound_weights)?)?;
         let stored_weights = bound_weights.retained_reference()?;
         projection.storage = Qwen3_5ProjectionStorage::HadamardRotated(HadamardRotatedWeights {
             weights: stored_weights,
@@ -211,8 +211,12 @@ fn rotation_at_width(
 }
 
 /// The input width of a bound module: MLX's affine packing stores
-/// `32 / bits` inputs a 32-bit word.
-fn stored_input_width(bound_weights: &Qwen3_5AffineWeights) -> u32 {
+/// `32 / bits` inputs a 32-bit word. A folded pack stores its rotated
+/// modules affine-packed or unquantized, never as codebooks.
+fn stored_input_width(
+    weight_name: &str,
+    bound_weights: &Qwen3_5AffineWeights,
+) -> Result<u32, TextExecutionError> {
     let stored_width = match bound_weights {
         Qwen3_5AffineWeights::Quantized {
             packed_weight,
@@ -220,9 +224,17 @@ fn stored_input_width(bound_weights: &Qwen3_5AffineWeights) -> u32 {
             ..
         } => packed_weight.shape()[1] * 32 / quantization_bits,
         Qwen3_5AffineWeights::NativeBfloat16 { weight } => weight.shape()[1],
-        Qwen3_5AffineWeights::Jangtq2Codebook { .. } => 0,
+        Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
+            return Err(TextExecutionError::InvalidTensor {
+                tensor_name: weight_name.to_owned(),
+                description: "a rotated module of a folded pack cannot be stored as codebooks",
+            });
+        }
     };
-    u32::try_from(stored_width).unwrap_or(0)
+    u32::try_from(stored_width).map_err(|_| TextExecutionError::InvalidTensor {
+        tensor_name: weight_name.to_owned(),
+        description: "the rotated module's stored input width is negative",
+    })
 }
 
 /// Narrows one layer's float32 auxiliaries to the pack's float16: the

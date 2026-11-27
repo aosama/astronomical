@@ -166,6 +166,11 @@ fn served_arrays(drafter_weights: &DFlashDrafterWeights) -> Vec<(String, MlxArra
             ),
             ("successor_codebook", &candidate_selector.successor_codebook),
         ] {
+            assert_eq!(
+                codebook.dtype(),
+                mlx_bridge::MlxDtype::BFloat16,
+                "the selector reads its {codebook_name} in bf16"
+            );
             arrays.push((
                 codebook_name.to_owned(),
                 codebook.retain().expect("the array handle retains"),

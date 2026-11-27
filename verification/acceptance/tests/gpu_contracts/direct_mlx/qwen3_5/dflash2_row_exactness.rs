@@ -273,7 +273,7 @@ fn split_rows(pair: &JourneyPair, logits: &MlxArray) -> Vec<Vec<f32>> {
         .collect()
 }
 
-fn highest_logit_token(row: &[f32]) -> u32 {
+pub(super) fn highest_logit_token(row: &[f32]) -> u32 {
     let mut best_index = 0;
     for (token_index, logit) in row.iter().enumerate() {
         if *logit > row[best_index] {

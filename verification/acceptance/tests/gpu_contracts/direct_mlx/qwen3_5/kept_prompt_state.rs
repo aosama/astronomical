@@ -152,14 +152,10 @@ fn greedy_steps(pair: &JourneyPair, read: ReadPrompt, step_count: usize) -> Vec<
 }
 
 fn highest_logit_token(pair: &JourneyPair, logits: &MlxArray) -> u32 {
-    let row = super::dflash2_journey_support::host_values(pair.target.runtime(), logits);
-    let mut best_token_id = 0;
-    for (token_id, logit) in row.iter().enumerate() {
-        if *logit > row[best_token_id] {
-            best_token_id = token_id;
-        }
-    }
-    best_token_id as u32
+    super::dflash2_row_exactness::highest_logit_token(&super::dflash2_journey_support::host_values(
+        pair.target.runtime(),
+        logits,
+    ))
 }
 
 /// Greedy steps on a prompt read into a state of its own, then twice on

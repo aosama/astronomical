@@ -1,7 +1,7 @@
 //! The DFlash2 drafter's tensors, bound by their checkpoint names with every
 //! shape checked against the configuration before any is used.
 
-use mlx_bridge::MlxArray;
+use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 use thiserror::Error;
 
@@ -305,7 +305,8 @@ impl TensorBinder<'_> {
     /// published already quantized stores it as `<name>.weight` in MLX's
     /// affine packing (8 bits in the one published so far); it is
     /// dequantized once here, because the selector gathers a few rows of it
-    /// a round and reads them as bf16.
+    /// a round and reads them as bf16. Dequantizing yields the scales'
+    /// dtype, so a pack with float16 scales is cast to bf16 after.
     fn codebook(
         &self,
         tensor_name: &str,
@@ -313,16 +314,19 @@ impl TensorBinder<'_> {
     ) -> Result<MlxArray, DFlashDrafterWeightsError> {
         let packed_tensor_name = format!("{tensor_name}.weight");
         match self.packed_affine(&packed_tensor_name, expected_shape)? {
-            Some(packed_affine) => Ok(self
-                .runtime
-                .dequantize_affine(
-                    &packed_affine.packed_weight,
-                    &packed_affine.scales,
-                    &packed_affine.biases,
-                    packed_affine.group_size,
-                    packed_affine.bits,
-                )
-                .map_err(MlxRuntimeError::from)?),
+            Some(packed_affine) => {
+                let dequantized = self
+                    .runtime
+                    .dequantize_affine(
+                        &packed_affine.packed_weight,
+                        &packed_affine.scales,
+                        &packed_affine.biases,
+                        packed_affine.group_size,
+                        packed_affine.bits,
+                    )
+                    .map_err(MlxRuntimeError::from)?;
+                Ok(in_bfloat16(self.runtime, dequantized)?)
+            }
             None => self.tensor(tensor_name, expected_shape),
         }
     }
@@ -383,6 +387,14 @@ fn served_packed_linear(
         scales: packed_affine.scales,
         biases: packed_affine.biases,
     })
+}
+
+/// `tensor` in bf16, the dtype the selector reads its codebooks in.
+fn in_bfloat16(runtime: &MlxRuntime, tensor: MlxArray) -> Result<MlxArray, MlxRuntimeError> {
+    if tensor.dtype() == MlxDtype::BFloat16 {
+        return Ok(tensor);
+    }
+    Ok(runtime.astype(&tensor, MlxDtype::BFloat16)?)
 }
 
 /// One module in MLX's affine packing, as a checkpoint stores it.
