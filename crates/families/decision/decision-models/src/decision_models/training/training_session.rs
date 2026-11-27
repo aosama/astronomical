@@ -24,7 +24,7 @@ use decision_contract::{DecisionFailure, HeadInputRequest, OrderedJsonValue, Que
 use decision_training::head_parameters::ParameterLayout;
 use decision_training::shipped_head::{ShippedHead, read_shipped_head};
 use decision_training::training_settings::{
-    FINAL_LAYERS_TRAINING_SETTINGS, WHOLE_MODEL_TRAINING_SETTINGS,
+    FINAL_LAYERS_TRAINING_SETTINGS, whole_model_training_settings,
 };
 use runtime_integration::MlxRuntime;
 
@@ -229,7 +229,7 @@ impl DecisionTrainingSession {
         };
         let settings = match self.job.scope {
             TrainingScope::FinalLayers => FINAL_LAYERS_TRAINING_SETTINGS,
-            TrainingScope::WholeModel => WHOLE_MODEL_TRAINING_SETTINGS,
+            TrainingScope::WholeModel => whole_model_training_settings(family),
         };
         Ok(PreparedTraining {
             trained_layout: prepared_scorer.trained_layout,

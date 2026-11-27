@@ -15,6 +15,7 @@
 //! and the choosing questions pick the best.
 
 use crate::anchored_adam::{AdamSettings, TRAINING_ADAM_SETTINGS};
+use decision_contract::head_tuning_file::TunableHeadFamily;
 
 /// The settings of one training.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -70,6 +71,53 @@ pub const WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
     patience_epochs: 3,
     seeds: &[1],
 };
+
+/// Laya's whole-model settings: the shared ones with a faster, longer run.
+///
+/// The shared settings were measured on Kev, which learns the 200-question
+/// coded control (`whole_model_positive_control`) within 12 passes at a
+/// learning rate of 1e-4. Laya does not: at those settings its add-ons moved
+/// (the largest `up` value after 45 steps was 4.1e-3) and its gradient is
+/// the loss's own slope on MLX's CUDA backend (`whole_model_gradient`), yet
+/// the run stopped after 8 passes with the unseen lines 60% right (issue
+/// #2705). Chosen on the choosing lines, as a run chooses its own stopping
+/// point, then judged on the unseen lines once (CUDA, 140 training, 30
+/// choosing and 30 unseen lines):
+///
+/// | Learning rate | Passes (limit, patience) | Choosing loss | Choosing right | Unseen right |
+/// |---|---|---|---|---|
+/// | 1e-4 (shared) | 12, 3 | 0.658 | 63.3% | 60.0% |
+/// | 3e-4 | 30, 12 | 0.301 | 90.0% | 83.3% |
+/// | 5e-4 | 30, 8 | 0.400 | 83.3% | 86.7% |
+/// | 1e-3 | 30, 8 | 0.028 | 100.0% | 100.0% |
+///
+/// At 1e-3 the run stops by itself after 18 passes, about four minutes. The
+/// check set keeps its weight, which the gate tests: a larger step moves
+/// answers nobody asked about more, and a run that does is refused.
+pub const LAYA_WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
+    adam: AdamSettings {
+        learning_rate: 1e-3,
+        ..TRAINING_ADAM_SETTINGS
+    },
+    maximum_epochs: 30,
+    patience_epochs: 8,
+    ..WHOLE_MODEL_TRAINING_SETTINGS
+};
+
+// A patience as long as the pass limit would never end a run early.
+const _: () = assert!(
+    LAYA_WHOLE_MODEL_TRAINING_SETTINGS.patience_epochs
+        < LAYA_WHOLE_MODEL_TRAINING_SETTINGS.maximum_epochs
+);
+
+/// The whole-model settings of `family`.
+#[must_use]
+pub const fn whole_model_training_settings(family: TunableHeadFamily) -> TrainingSettings {
+    match family {
+        TunableHeadFamily::Laya => LAYA_WHOLE_MODEL_TRAINING_SETTINGS,
+        TunableHeadFamily::Kev | TunableHeadFamily::Clef => WHOLE_MODEL_TRAINING_SETTINGS,
+    }
+}
 
 /// How one run ended.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

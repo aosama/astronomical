@@ -234,10 +234,13 @@ test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronom
 # `test-kev-whole-model-positive-control` (and the Clef and Laya aliases)
 # trains the whole model on 140 coded lines whose code alone decides the
 # answer and requires 90% right on 30 unseen ones: about a minute and a half
-# on Kev, fifteen on Clef. It prints the accuracy on the choosing and unseen
-# lines, each run's summary and the largest trained add-on value, so a run
-# that stopped early reads differently from one that never moved. Laya does
-# not learn the code within the shared recipe yet (issue #2705).
+# on Kev, fifteen on Clef, about four on Laya (its own recipe, issue #2705,
+# which is why its aliases carry a longer case budget). It prints the
+# accuracy on the choosing and unseen lines, each run's summary and the
+# largest trained add-on value, so a run that stopped early reads differently
+# from one that never moved. `test-laya-whole-model-positive-control-balanced`
+# repeats it with half the lines on each option, from another stretch of the
+# play, so nothing the control's own layout fixed is what is learned.
 # `test-laya-whole-model-gradient` proves the backend's backward pass on the
 # real Laya checkpoint before any weight moves: every trainable array's
 # gradient against a central difference of the loss, over one batch of the
@@ -271,7 +274,8 @@ test-kev-whole-model-training = "run -p xtask -- test-run --package astronomical
 test-clef-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_clef"
 test-kev-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_kev"
 test-clef-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_clef"
-test-laya-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_laya"
+test-laya-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --case-budget-seconds 1800 --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_laya"
+test-laya-whole-model-positive-control-balanced = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --case-budget-seconds 1800 --filter whole_model_positive_control::should_learn_a_balanced_code_from_another_passage_on_laya"
 test-laya-whole-model-gradient = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --case-budget-seconds 900 --filter whole_model_gradient::should_give_every_laya_array_the_gradient_of_its_loss"
 test-laya-whole-model-check-set-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 900 --filter whole_model_check_set_training::should_train_laya_as_a_whole_on_labelled_lines_with_the_commands_check_set"
 test-kev-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_kev_whole_model_training_speed"
