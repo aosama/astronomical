@@ -118,7 +118,7 @@ async fn should_not_send_when_the_active_request_is_not_an_image_request() {
             next_tool_call_index: 0,
             completed_tool_calls: Vec::new(),
             request_started_at: tokio::time::Instant::now(),
-            prefill_elapsed_millis: 0,
+            prefill_work: Default::default(),
             maximum_mlx_peak_memory_bytes: None,
             last_mlx_active_memory_bytes: None,
             request_id: RequestId::new(2),

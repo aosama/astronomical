@@ -116,6 +116,10 @@ fn completed_request_work(
     CompletedRequestWork {
         prompt_token_count,
         astro_ssd_prompt_cache_restored_token_count: restored_token_count,
+        // These requests restore only through the prompt cache, so the
+        // computed tokens are the prompt less what it restored.
+        computed_prompt_token_count: prompt_token_count
+            - restored_token_count.min(prompt_token_count),
         generated_token_count,
         prefill_elapsed_millis,
         generation_elapsed_millis,

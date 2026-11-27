@@ -38,7 +38,15 @@ pub(in crate::worker) fn handle_worker_prefill_progress(
     }
 
     // Worker elapsed_millis is cumulative, so retain the latest amount.
-    active_request.prefill_elapsed_millis = elapsed_millis;
+    active_request.prefill_work = crate::worker::loop_types::RequestPrefillWork {
+        elapsed_millis,
+        computed_token_count: processed_tokens,
+    };
+    crate::worker::health::record_running_prefill(
+        health_snapshot,
+        processed_tokens,
+        elapsed_millis,
+    );
     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
         active_request.fold_observed_mlx_peak_memory_bytes(mlx_memory_snapshot.peak_memory_bytes);
         active_request.last_mlx_active_memory_bytes = Some(mlx_memory_snapshot.active_memory_bytes);

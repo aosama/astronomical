@@ -36,7 +36,8 @@ pub(crate) use publisher::{
     publish_mlx_memory_limit_rejection, publish_model_load_in_flight,
     publish_neural_engine_prefill, publish_pending_astro_ssd_prompt_cache_clear,
     publish_worker_expert_residency, record_neural_engine_chunk, record_prompt_work_reuse,
-    record_reply_drafting, record_reply_peak_mlx_memory, record_serving_session,
+    record_reply_drafting, record_reply_peak_mlx_memory, record_running_generation,
+    record_running_prefill, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the daemon readiness endpoint.
@@ -398,6 +399,10 @@ impl WorkerHealthSnapshot {
             .clone();
         replacement_health_snapshot.serving_session =
             previous_health_snapshot.serving_session.clone();
+        // A replaced worker's running request did not complete here.
+        replacement_health_snapshot
+            .serving_session
+            .clear_running_request();
         replacement_health_snapshot.worker_runtime_feature_configuration = previous_health_snapshot
             .worker_runtime_feature_configuration
             .clone();

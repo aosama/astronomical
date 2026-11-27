@@ -339,7 +339,7 @@ pub(crate) struct ActiveGeneration {
     /// Bounded at write time so the completion log never grows without bound.
     pub(crate) completed_tool_calls: Vec<CompletedToolCall>,
     pub(crate) request_started_at: Instant,
-    pub(crate) prefill_elapsed_millis: u64,
+    pub(crate) prefill_work: RequestPrefillWork,
     pub(crate) maximum_mlx_peak_memory_bytes: Option<u64>,
     pub(crate) last_mlx_active_memory_bytes: Option<u64>,
     pub(crate) request_id: RequestId,
@@ -351,6 +351,15 @@ pub(crate) struct ActiveGeneration {
     /// What drafting did for this reply, from the worker's report just
     /// before completion; `None` when it never drafted.
     pub(crate) drafting_statistics: Option<ipc_protocol::RequestDraftingStatistics>,
+}
+
+/// A request's prompt work so far, from its latest prompt progress event:
+/// the worker's measured prompt time and the tokens it computed in it
+/// (restored and adopted prefixes are not among them), both cumulative.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RequestPrefillWork {
+    pub(crate) elapsed_millis: u64,
+    pub(crate) computed_token_count: u32,
 }
 
 impl ActiveGeneration {

@@ -192,7 +192,7 @@ fn measure_completion_timings(
     let generation_elapsed_millis = completed_request
         .generation_started_at
         .map_or(0, |started_at| started_at.elapsed().as_millis() as u64);
-    let prefill_elapsed_millis = completed_request.prefill_elapsed_millis;
+    let prefill_elapsed_millis = completed_request.prefill_work.elapsed_millis;
     let (prefill_tok_per_second, generation_tok_per_second) =
         GenerationPerformanceRecord::compute_throughput(
             completion_measurements.prompt_token_count,
@@ -394,6 +394,10 @@ fn publish_post_completion_activity(
             prompt_token_count: completion_measurements.prompt_token_count,
             astro_ssd_prompt_cache_restored_token_count: completion_measurements
                 .astro_ssd_prompt_cache_restored_token_count,
+            computed_prompt_token_count: completion_observation
+                .completed_request
+                .prefill_work
+                .computed_token_count,
             generated_token_count: completion_measurements.generated_token_count,
             prefill_elapsed_millis: completion_timings.prefill_elapsed_millis,
             generation_elapsed_millis: completion_timings.generation_elapsed_millis,
