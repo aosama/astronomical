@@ -67,9 +67,6 @@ pub(crate) struct ApplicationState {
     pub(crate) runtime_config_resolver: Option<ResolvedRuntimeConfigResolver>,
     /// Serializes request policy admission with configuration transitions and acknowledgements.
     pub(crate) configuration_transition_lock: Arc<AsyncMutex<()>>,
-    /// Keeps a persisted live-memory update transactional until the worker
-    /// either applies or rejects a value queued behind active generation.
-    pub(crate) pending_memory_config_generation: Arc<AsyncMutex<Option<String>>>,
     /// Internal shutdown controller for `POST /v1/control/shutdown`.
     pub(crate) shutdown_controller: Option<crate::shutdown_control::ShutdownController>,
     /// Problem reports waiting for the person, the sent-reports log and the
@@ -169,7 +166,6 @@ pub fn build_application_with_discovered_models(
         configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
-        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
         problem_report_desk: None,
     };
@@ -196,7 +192,6 @@ pub fn build_application_with_download_catalog(
         configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
-        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
         problem_report_desk: None,
     };
@@ -225,7 +220,6 @@ pub fn build_application_with_shutdown(
         configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
-        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: Some(shutdown_controller),
         problem_report_desk: None,
     };
@@ -275,7 +269,6 @@ pub fn build_development_application_with_reload(
         configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: Some(runtime_config_resolver),
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
-        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
         problem_report_desk,
     };
@@ -410,7 +403,6 @@ pub fn build_application_with_full_control_and_download_catalog(
         configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: Some(runtime_config_resolver),
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
-        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: Some(shutdown_controller),
         problem_report_desk,
     };

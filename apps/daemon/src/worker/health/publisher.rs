@@ -273,15 +273,6 @@ pub(crate) fn clear_latest_mlx_memory_snapshot(
     }
 }
 
-pub(crate) fn publish_pending_mlx_memory_ceiling(
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    pending_mlx_memory_ceiling_bytes: Option<u64>,
-) {
-    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.pending_mlx_memory_ceiling_bytes = pending_mlx_memory_ceiling_bytes;
-    }
-}
-
 pub(crate) fn publish_pending_astro_ssd_prompt_cache_clear(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     pending_astro_ssd_prompt_cache_clear: Option<PendingAstroSsdPromptCacheClear>,
@@ -303,7 +294,6 @@ pub(crate) fn publish_mlx_memory_limit_changed(
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes;
         worker_health_snapshot.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
-        worker_health_snapshot.pending_mlx_memory_ceiling_bytes = None;
         if let Some(configuration_generation) = worker_health_snapshot
             .pending_configuration_generation
             .take()
@@ -332,7 +322,6 @@ pub(crate) fn publish_mlx_memory_limit_rejection(
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
-        worker_health_snapshot.pending_mlx_memory_ceiling_bytes = None;
         worker_health_snapshot.pending_configuration_generation = None;
         worker_health_snapshot.mlx_memory_limit_error = Some(reason);
     }

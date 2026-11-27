@@ -134,6 +134,14 @@ test-vision-tower-hub = "test -p vision-tower --test integration_tests -- --igno
 # both roles discoverable from the Development model_directories.
 test-dense-text-weights = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter dense_text_weights"
 
+# Live memory limit during a reply (issue #2681): each guard model replies to a
+# Shakespeare prompt twice, once with its limit fixed and once with it raised
+# between prompt chunks, lowered back after eight tokens and asked to drop to
+# 1 GB after sixteen (refused). The greedy tokens must match, memory must
+# settle under the lowered limit, and the refusal must name the memory needed.
+# Models are the resident_sparse_moe, small_sparse_moe_streaming,
+# streamed_dense and dense_drafting roles; about forty seconds for all four.
+test-live-memory-limit-during-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 240 --filter should_keep_the_greedy_reply_when_the_limit_moves"
 # Kept dense layers in register order (issues #2568, #2585): one load of the
 # 4-bit dense_vision model with half its layers kept answers a Shakespeare prompt
 # before and after the kept layers convert; the replies must begin alike, a layer a

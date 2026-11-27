@@ -80,6 +80,16 @@ impl DraftRoundPayoff {
                 / f64::from(self.rounds_since_the_last_decision);
             costs.record_tokens_a_round(tokens_a_round);
             self.writes_plain_tokens = self.stops_after_this_count(tokens_a_round, costs);
+            // One line every sixteen rounds names what the reply decided
+            // and the figures it decided by.
+            tracing::info!(
+                tokens_a_round,
+                break_even_tokens_a_round = ?costs.break_even_tokens_a_round(),
+                round_milliseconds = ?costs.round_milliseconds(),
+                plain_token_milliseconds = ?costs.plain_token_milliseconds(),
+                keeps_drafting = !self.writes_plain_tokens,
+                "a reply counted what its draft rounds decided"
+            );
             self.rounds_since_the_last_decision = 0;
             self.tokens_since_the_last_decision = 0;
         }

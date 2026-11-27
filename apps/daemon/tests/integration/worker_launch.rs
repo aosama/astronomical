@@ -192,10 +192,6 @@ async fn should_apply_a_memory_limit_immediately_when_worker_is_idle() {
         worker_health_snapshot.mlx_memory_ceiling_bytes,
         32_000_000_000
     );
-    assert_eq!(
-        worker_health_snapshot.pending_mlx_memory_ceiling_bytes,
-        None
-    );
     assert_eq!(worker_health_snapshot.mlx_memory_limit_error, None);
     assert_eq!(worker_health_snapshot.ready_model_id, None);
     assert_eq!(worker_health_snapshot.expert_memory_mode, None);

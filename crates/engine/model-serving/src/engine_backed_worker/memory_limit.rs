@@ -14,6 +14,7 @@ use crate::{
     ImageGenerationEngine, InferenceEngine, InferenceEngineError,
     effective_mlx_memory_ceiling_bytes,
 };
+use memory_policy::live_memory_limit::{LiveMemoryLimitEngine as _, LiveMemoryLimitRefusal};
 
 use super::{EngineBackedWorker, LoadedRuntime};
 
@@ -78,6 +79,7 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
         let memory_limit_adjustment = Self::adjust_loaded_runtime_mlx_memory_limit(
             loaded_runtime,
             effective_requested_mlx_memory_ceiling_bytes,
+            self.minimum_mlx_memory_ceiling_bytes,
         )
         .await;
         match memory_limit_adjustment {
@@ -106,9 +108,11 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
                 .await
             }
             Err(InferenceEngineError::EngineBusy) => {
+                // Only an image being made or a decision model training
+                // still holds its limit fixed; a reply or speech takes it.
                 self.emit_mlx_memory_limit_rejection(
                     requested_mlx_memory_ceiling_bytes,
-                    "memory limits cannot change during generation",
+                    "the limit can't change while an image is being made or a model is training; try again when it ends",
                     event_writer,
                 )
                 .await
@@ -147,8 +151,12 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
             self.floor_raise_limit_bytes,
         )?;
         let loaded_runtime = self.loaded_runtime.as_mut()?;
-        match Self::adjust_loaded_runtime_mlx_memory_limit(loaded_runtime, floor_ceiling_bytes)
-            .await
+        match Self::adjust_loaded_runtime_mlx_memory_limit(
+            loaded_runtime,
+            floor_ceiling_bytes,
+            self.minimum_mlx_memory_ceiling_bytes,
+        )
+        .await
         {
             Ok(mlx_memory_limit_adjustment) => {
                 tracing::info!(
@@ -253,7 +261,13 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     async fn adjust_loaded_runtime_mlx_memory_limit(
         loaded_runtime: &mut LoadedRuntimeOf<Engines>,
         effective_requested_mlx_memory_ceiling_bytes: u64,
+        current_minimum_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
+        let requested_ceiling_bytes = effective_requested_mlx_memory_ceiling_bytes;
+        let ceiling_change = LiveCeilingChange {
+            requested_mlx_memory_ceiling_bytes: requested_ceiling_bytes,
+            current_minimum_mlx_memory_ceiling_bytes,
+        };
         match loaded_runtime {
             LoadedRuntime::Autoregressive(loaded_model) => {
                 loaded_model
@@ -264,15 +278,33 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
             LoadedRuntime::Image(image_engine) => image_engine
                 .update_mlx_memory_limit(effective_requested_mlx_memory_ceiling_bytes)
                 .map_err(map_image_memory_limit_failure_to_engine_error),
-            // Their requests hold no state between them, so a new limit is
-            // applied by restarting the worker rather than moved live.
-            LoadedRuntime::Embeddings(_)
-            | LoadedRuntime::Decisions(_)
-            | LoadedRuntime::Speech(_) => Err(InferenceEngineError::Fatal {
-                reason:
-                    "embedding, decision and speech engines do not support live MLX memory limits"
-                        .to_owned(),
-            }),
+            embeddings_decisions_or_speech => ceiling_change.engine_result(
+                Self::move_live_ceiling_of(embeddings_decisions_or_speech, requested_ceiling_bytes),
+            ),
+        }
+    }
+
+    /// Moves an embeddings, decisions or speech engine's ceiling. Their
+    /// requests hold no state between them, so each engine moves its own
+    /// runtime's ceiling live, or refuses and keeps serving. The text and
+    /// image runtimes have their own arms above and never reach here.
+    fn move_live_ceiling_of(
+        loaded_runtime: &mut LoadedRuntimeOf<Engines>,
+        requested_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, LiveMemoryLimitRefusal> {
+        match loaded_runtime {
+            LoadedRuntime::Embeddings(embedding_engine) => {
+                embedding_engine.update_mlx_memory_limit(requested_ceiling_bytes)
+            }
+            LoadedRuntime::Decisions(decision_engine) => {
+                decision_engine.update_mlx_memory_limit(requested_ceiling_bytes)
+            }
+            LoadedRuntime::Speech(speech_engine) => {
+                speech_engine.update_mlx_memory_limit(requested_ceiling_bytes)
+            }
+            LoadedRuntime::Autoregressive(_) | LoadedRuntime::Image(_) => {
+                Err(LiveMemoryLimitRefusal::Unsupported)
+            }
         }
     }
 
@@ -427,6 +459,49 @@ fn effective_requested_ceiling_after_wired_claim(
         ),
         wired_residency_budget_bytes,
     )
+}
+
+struct LiveCeilingChange {
+    requested_mlx_memory_ceiling_bytes: u64,
+    /// The floor the worker knew before this change, reported when an engine
+    /// cannot move its ceiling and so has no floor of its own to name.
+    current_minimum_mlx_memory_ceiling_bytes: u64,
+}
+
+impl LiveCeilingChange {
+    /// Maps one engine's answer to a live ceiling change onto the shared
+    /// engine result.
+    ///
+    /// Only a failure of the runtime itself is fatal. Every other refusal
+    /// leaves the loaded model serving at its previous ceiling, so the worker
+    /// answers it as a rejection and never exits.
+    fn engine_result(
+        &self,
+        live_memory_limit_outcome: Result<MlxMemoryLimitAdjustment, LiveMemoryLimitRefusal>,
+    ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
+        let refusal = match live_memory_limit_outcome {
+            Ok(mlx_memory_limit_adjustment) => return Ok(mlx_memory_limit_adjustment),
+            Err(refusal) => refusal,
+        };
+        Err(match refusal {
+            LiveMemoryLimitRefusal::BelowModelFloor {
+                minimum_mlx_memory_ceiling_bytes,
+            } => InferenceEngineError::MlxMemoryLimitRejected {
+                requested_mlx_memory_ceiling_bytes: self.requested_mlx_memory_ceiling_bytes,
+                minimum_mlx_memory_ceiling_bytes,
+                reason: memory_policy::live_memory_limit::needs_at_least_message(
+                    minimum_mlx_memory_ceiling_bytes,
+                ),
+            },
+            LiveMemoryLimitRefusal::EngineBusy => InferenceEngineError::EngineBusy,
+            LiveMemoryLimitRefusal::Unsupported => InferenceEngineError::MlxMemoryLimitRejected {
+                requested_mlx_memory_ceiling_bytes: self.requested_mlx_memory_ceiling_bytes,
+                minimum_mlx_memory_ceiling_bytes: self.current_minimum_mlx_memory_ceiling_bytes,
+                reason: "the loaded model cannot change its memory limit while loaded".to_owned(),
+            },
+            LiveMemoryLimitRefusal::Failed { reason } => InferenceEngineError::Fatal { reason },
+        })
+    }
 }
 
 /// Maps an image engine's memory-limit failure onto the shared engine error.

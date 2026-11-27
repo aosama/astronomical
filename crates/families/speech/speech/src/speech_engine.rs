@@ -19,6 +19,7 @@
 
 use speech_contract::{SpeechFailure, SpeechRequest};
 
+use memory_policy::live_memory_limit::LiveMemoryLimitEngine;
 use memory_policy::telemetry::MlxMemoryTelemetry;
 
 /// What a loaded speech engine offers.
@@ -61,7 +62,7 @@ pub enum SpeechEngineStep {
     Completed,
 }
 
-pub trait SpeechEngine: 'static {
+pub trait SpeechEngine: 'static + LiveMemoryLimitEngine {
     /// Loads the model; called once before any request.
     fn load(&mut self) -> Result<SpeechEngineLoadResult, SpeechFailure>;
 
@@ -101,6 +102,8 @@ pub trait SpeechEngine: 'static {
 /// The speech slot of a worker whose model does not speak.
 #[doc(hidden)]
 pub struct SpeechUnavailableEngine;
+
+impl LiveMemoryLimitEngine for SpeechUnavailableEngine {}
 
 impl SpeechEngine for SpeechUnavailableEngine {
     fn load(&mut self) -> Result<SpeechEngineLoadResult, SpeechFailure> {

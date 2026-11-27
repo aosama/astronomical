@@ -62,29 +62,6 @@ final class MaximumModelMemorySliderPresentationTests: XCTestCase {
     XCTAssertTrue(sliderPresentation(chosen: 28, modelSizeGigabytes: 28.05).partOfTheModelIsReadFromTheSSD)
   }
 
-  /// Resting the slider at the top asks the engine for the whole Mac's memory (48 GB here); the
-  /// engine installs what macOS lets it keep, so the note must name that, never 48.
-  func test_should_name_the_limit_the_engine_will_install_while_a_change_is_queued() {
-    let wholeMacBytes: UInt64 = 48 * 1_073_741_824
-    let wiredResidencyBudgetBytes: UInt64 = 40_200_896_512
-    XCTAssertEqual(
-      queuedMaximumModelMemoryCaption(
-        pendingCeilingBytes: wholeMacBytes, wiredResidencyBudgetBytes: wiredResidencyBudgetBytes),
-      "Changes to 36.50 GB when this reply finishes.")
-  }
-
-  func test_should_name_an_explicit_queued_limit_unchanged_when_the_mac_can_serve_it() {
-    XCTAssertEqual(
-      queuedMaximumModelMemoryCaption(
-        pendingCeilingBytes: 20 * 1_073_741_824, wiredResidencyBudgetBytes: 40_200_896_512),
-      "Changes to 20.00 GB when this reply finishes.")
-    XCTAssertEqual(
-      queuedMaximumModelMemoryCaption(
-        pendingCeilingBytes: 48 * 1_073_741_824, wiredResidencyBudgetBytes: nil),
-      "Changes to 48.00 GB when this reply finishes.",
-      "without a wired claim the engine installs the request itself")
-  }
-
   func test_should_stay_defined_when_the_range_is_a_single_value_or_the_limit_passes_the_mac() {
     let singleValue = sliderPresentation(chosen: 8, minimum: 8, maximum: 8)
     XCTAssertEqual(singleValue.chosenFraction, 0)

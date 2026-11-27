@@ -106,6 +106,10 @@ impl DecisionFamily for KevDecisionFamily {
         loaded_state.backbone.model.runtime()
     }
 
+    fn runtime_mut(loaded_state: &mut LoadedKevState) -> &mut MlxRuntime {
+        &mut loaded_state.backbone.model.base.runtime
+    }
+
     fn admit_decision<'loaded>(
         loaded_state: Option<&'loaded Rc<LoadedKevState>>,
         _state: &OrderedJsonValue,

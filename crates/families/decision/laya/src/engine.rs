@@ -125,6 +125,10 @@ impl DecisionFamily for LayaDecisionFamily {
         &loaded_state.runtime
     }
 
+    fn runtime_mut(loaded_state: &mut LoadedLayaState) -> &mut MlxRuntime {
+        &mut loaded_state.runtime
+    }
+
     /// Laya checks for a loaded model first, then for questions, and builds
     /// every question's sequence before any model work.
     fn admit_decision<'loaded>(

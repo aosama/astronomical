@@ -15,7 +15,6 @@ use tokio::time::Instant;
 
 use crate::serving::decisions_executor::DecisionsResultSender;
 use crate::serving::speech_executor::SpeechResultSender;
-use crate::worker::memory::limit::PendingMlxMemoryLimitUpdate;
 use crate::worker::process::failure_relaunch::ContainedFailureRelaunch;
 use crate::{
     AstroSsdPromptCacheClearOutcome, ChatGenerationStreamEvent, CompletedToolCall,
@@ -40,7 +39,6 @@ pub(in crate::worker) struct WorkerLoopRuntime {
     pub performance_log: GenerationPerformanceLog,
     pub completion_log: CompletionAttributionLog,
     pub model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
-    pub pending_mlx_memory_limit_update: Option<PendingMlxMemoryLimitUpdate>,
     pub pending_astro_ssd_prompt_cache_clear: Option<crate::PendingAstroSsdPromptCacheClear>,
     pub active_generation_permits: Arc<Semaphore>,
     pub generation_queue_permits: Arc<Semaphore>,

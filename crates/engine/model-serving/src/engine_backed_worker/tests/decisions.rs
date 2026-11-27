@@ -11,21 +11,23 @@ use decision_contract::{
     NoulAnswer, OrderedJsonValue, QuestionInputCoverage, QuestionOutcome,
 };
 use ipc_protocol::{
-    DecisionsCommand, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
-    RequestId, WorkerCommand, WorkerDecisionModelConfiguration, WorkerEvent,
-    WorkerModelConfiguration,
+    DecisionsCommand, MlxMemorySnapshotSource, RequestId, WorkerCommand,
+    WorkerDecisionModelConfiguration, WorkerEvent, WorkerModelConfiguration,
 };
-use tokio::io::{duplex, split};
-use tokio::task::JoinHandle;
 
 use super::chat::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
+use super::daemon_side::{WorkerUnderTest, start_worker_under_test};
+use super::live_memory_limit_journeys::{
+    self as journeys, OneMoreRequest, SCRIPTED_FLOOR_BYTES, ScriptedLiveCeiling,
+};
 use crate::decision_engine::DecisionTrainingStep;
 use crate::{
     DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, EmbeddingUnavailableEngine,
     EngineBackedWorker, ImageGenerationUnavailableEngine, MlxActiveMemoryBreakdown,
-    MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
+    MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime,
 };
 use decision_contract::decision_training_job::DecisionTrainingJob;
+use memory_policy::live_memory_limit::{LiveMemoryLimitEngine, LiveMemoryLimitRefusal};
 
 pub(super) const DECISION_MODEL_ID: &str = "scripted-decision-model";
 const MAXIMUM_TOKENS_PER_QUESTION: u32 = 512;
@@ -50,9 +52,6 @@ type DecisionsWorker = EngineBackedWorker<
     >,
 >;
 
-type DaemonReader = ProtocolReader<tokio::io::ReadHalf<tokio::io::DuplexStream>>;
-type DaemonWriter = ProtocolWriter<tokio::io::WriteHalf<tokio::io::DuplexStream>>;
-
 /// Answers each request with the next scripted outcome and records the
 /// question names it was asked, so a test can see what crossed the boundary.
 pub(super) struct ScriptedDecisionEngine {
@@ -65,6 +64,9 @@ pub(super) struct ScriptedDecisionEngine {
     scripted_training_steps: VecDeque<Result<DecisionTrainingStep, DecisionFailure>>,
     /// Whether the worker dropped the training state after a failure.
     was_training_cancelled: Arc<Mutex<bool>>,
+    live_ceiling: ScriptedLiveCeiling,
+    /// Whether a training is running, which holds the ceiling fixed.
+    is_training: bool,
 }
 
 impl DecisionEngine for ScriptedDecisionEngine {
@@ -113,20 +115,24 @@ impl DecisionEngine for ScriptedDecisionEngine {
                 "this model's final layers cannot be trained",
             ));
         }
+        self.is_training = true;
         Ok(())
     }
 
     fn advance_training(&mut self) -> Result<DecisionTrainingStep, DecisionFailure> {
         self.has_unreported_cleanup = true;
-        match self.scripted_training_steps.pop_front() {
-            Some(scripted_step) => scripted_step,
-            None => Err(DecisionFailure::fatal_execution(
+        let scripted_step = self.scripted_training_steps.pop_front().unwrap_or_else(|| {
+            Err(DecisionFailure::fatal_execution(
                 "no training is in progress",
-            )),
-        }
+            ))
+        });
+        // Only a progress step leaves the training running.
+        self.is_training = matches!(scripted_step, Ok(DecisionTrainingStep::Progress { .. }));
+        scripted_step
     }
 
     fn cancel_training(&mut self) {
+        self.is_training = false;
         self.scripted_training_steps.clear();
         *self
             .was_training_cancelled
@@ -145,6 +151,18 @@ impl DecisionEngine for ScriptedDecisionEngine {
             512,
             MlxActiveMemoryBreakdown::default(),
         ))
+    }
+}
+
+impl LiveMemoryLimitEngine for ScriptedDecisionEngine {
+    fn update_mlx_memory_limit(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, LiveMemoryLimitRefusal> {
+        if self.is_training {
+            return Err(LiveMemoryLimitRefusal::EngineBusy);
+        }
+        self.live_ceiling.answer(requested_mlx_memory_ceiling_bytes)
     }
 }
 
@@ -204,9 +222,7 @@ impl
 }
 
 pub(super) struct DecisionsWorkerHarness {
-    pub(super) events: DaemonReader,
-    pub(super) commands: DaemonWriter,
-    worker_task: JoinHandle<Result<(), WorkerRuntimeError>>,
+    pub(super) worker: WorkerUnderTest,
     asked_question_names: Arc<Mutex<Vec<String>>>,
     pub(super) was_training_cancelled: Arc<Mutex<bool>>,
 }
@@ -217,7 +233,7 @@ async fn start_worker_and_swap_in_a_decision_model(
     loaded_model_id: &str,
     scripted_outcomes: Vec<Result<(), DecisionFailure>>,
 ) -> DecisionsWorkerHarness {
-    start_worker_with_scripts(loaded_model_id, scripted_outcomes, Vec::new()).await
+    start_worker_with_scripts(loaded_model_id, scripted_outcomes, Vec::new(), None).await
 }
 
 /// Like [`start_worker_and_swap_in_a_decision_model`], for a model whose
@@ -225,13 +241,14 @@ async fn start_worker_and_swap_in_a_decision_model(
 pub(super) async fn start_worker_and_swap_in_a_trainable_model(
     scripted_training_steps: Vec<Result<DecisionTrainingStep, DecisionFailure>>,
 ) -> DecisionsWorkerHarness {
-    start_worker_with_scripts(DECISION_MODEL_ID, Vec::new(), scripted_training_steps).await
+    start_worker_with_scripts(DECISION_MODEL_ID, Vec::new(), scripted_training_steps, None).await
 }
 
 async fn start_worker_with_scripts(
     loaded_model_id: &str,
     scripted_outcomes: Vec<Result<(), DecisionFailure>>,
     scripted_training_steps: Vec<Result<DecisionTrainingStep, DecisionFailure>>,
+    live_memory_floor_bytes: Option<u64>,
 ) -> DecisionsWorkerHarness {
     let asked_question_names = Arc::new(Mutex::new(Vec::new()));
     let was_training_cancelled = Arc::new(Mutex::new(false));
@@ -242,6 +259,8 @@ async fn start_worker_with_scripts(
         has_unreported_cleanup: false,
         scripted_training_steps: scripted_training_steps.into(),
         was_training_cancelled: Arc::clone(&was_training_cancelled),
+        live_ceiling: ScriptedLiveCeiling::with_floor(live_memory_floor_bytes),
+        is_training: false,
     };
     let worker: DecisionsWorker = EngineBackedWorker::idle_with_model_factory(
         ScriptedDecisionFactory {
@@ -249,47 +268,24 @@ async fn start_worker_with_scripts(
         },
         8_000,
     );
-    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
-    let (daemon_read, daemon_write) = split(daemon_transport);
-    let (worker_read, worker_write) = split(worker_transport);
-    let worker_task = tokio::spawn(async move { worker.run(worker_read, worker_write).await });
     let mut harness = DecisionsWorkerHarness {
-        events: ProtocolReader::new(daemon_read),
-        commands: ProtocolWriter::new(daemon_write),
-        worker_task,
+        worker: start_worker_under_test!(worker),
         asked_question_names,
         was_training_cancelled,
     };
-    assert!(matches!(
-        next_event(&mut harness.events).await,
-        WorkerEvent::Idle { .. }
-    ));
     harness
-        .commands
-        .send_command(&WorkerCommand::SwapModel {
-            model_directory: "/models/decision".to_owned(),
-            model_configuration: WorkerModelConfiguration::Decisions(
-                WorkerDecisionModelConfiguration {
-                    model_id: DECISION_MODEL_ID.to_owned(),
-                    model_family: "laya".to_owned(),
-                    artifact_revision: "scripted-revision".to_owned(),
-                    maximum_tokens_per_question: MAXIMUM_TOKENS_PER_QUESTION,
-                },
-            ),
-        })
-        .await
-        .expect("the swap command should reach the worker");
+        .worker
+        .swap_in(
+            "/models/decision",
+            WorkerModelConfiguration::Decisions(WorkerDecisionModelConfiguration {
+                model_id: DECISION_MODEL_ID.to_owned(),
+                model_family: "laya".to_owned(),
+                artifact_revision: "scripted-revision".to_owned(),
+                maximum_tokens_per_question: MAXIMUM_TOKENS_PER_QUESTION,
+            }),
+        )
+        .await;
     harness
-}
-
-/// The next event that is not a periodic memory sample.
-pub(super) async fn next_event(events: &mut DaemonReader) -> WorkerEvent {
-    loop {
-        let worker_event = super::next_event_skipping_load_progress(events).await;
-        if !matches!(worker_event, WorkerEvent::MlxMemorySample { .. }) {
-            return worker_event;
-        }
-    }
 }
 
 fn decisions_command(request_number: u64, questions_json: &str) -> WorkerCommand {
@@ -302,23 +298,14 @@ fn decisions_command(request_number: u64, questions_json: &str) -> WorkerCommand
 }
 
 pub(super) async fn close(harness: DecisionsWorkerHarness) {
-    harness
-        .commands
-        .close()
-        .await
-        .expect("the command transport should close");
-    harness
-        .worker_task
-        .await
-        .expect("the worker task should not panic")
-        .expect("the worker should stop cleanly when its transport closes");
+    harness.worker.close().await;
 }
 
 #[tokio::test]
 async fn should_swap_in_a_decision_model_and_advertise_its_token_limit() {
     let mut harness = start_worker_and_swap_in_a_decision_model(DECISION_MODEL_ID, vec![]).await;
 
-    let swapped_event = next_event(&mut harness.events).await;
+    let swapped_event = harness.worker.next_event().await;
 
     let WorkerEvent::ModelSwapped {
         model_id,
@@ -345,7 +332,7 @@ async fn should_refuse_a_decision_model_that_loads_under_another_identity() {
     let mut harness =
         start_worker_and_swap_in_a_decision_model("some-other-decision-model", vec![]).await;
 
-    let swap_event = next_event(&mut harness.events).await;
+    let swap_event = harness.worker.next_event().await;
 
     assert!(
         matches!(swap_event, WorkerEvent::ModelSwapFailed { .. }),
@@ -359,11 +346,12 @@ async fn should_answer_questions_in_request_order_then_finalize_with_memory() {
     let mut harness =
         start_worker_and_swap_in_a_decision_model(DECISION_MODEL_ID, vec![Ok(())]).await;
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::ModelSwapped { .. }
     ));
 
     harness
+        .worker
         .commands
         .send_command(&decisions_command(
             41,
@@ -373,7 +361,7 @@ async fn should_answer_questions_in_request_order_then_finalize_with_memory() {
         .await
         .expect("the decisions command should reach the worker");
 
-    let completed_event = next_event(&mut harness.events).await;
+    let completed_event = harness.worker.next_event().await;
     let WorkerEvent::DecisionsCompleted {
         request_id,
         question_outcomes,
@@ -391,7 +379,7 @@ async fn should_answer_questions_in_request_order_then_finalize_with_memory() {
         .collect();
     assert_eq!(answered_question_names, ["tragic", "asking"]);
     assert!(
-        matches!(next_event(&mut harness.events).await, WorkerEvent::DecisionsFinalized { request_id, mlx_memory_snapshot: Some(snapshot), .. } if request_id == RequestId::new(41) && snapshot.source == MlxMemorySnapshotSource::Finalized)
+        matches!(harness.worker.next_event().await, WorkerEvent::DecisionsFinalized { request_id, mlx_memory_snapshot: Some(snapshot), .. } if request_id == RequestId::new(41) && snapshot.source == MlxMemorySnapshotSource::Finalized)
     );
     assert_eq!(
         *harness
@@ -408,17 +396,18 @@ async fn should_never_send_head_inputs_back_with_an_answer() {
     let mut harness =
         start_worker_and_swap_in_a_decision_model(DECISION_MODEL_ID, vec![Ok(())]).await;
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::ModelSwapped { .. }
     ));
     let questions_json =
         r#"{"tragic": {"type": "noul", "instructions": "Is the speaker in despair?"}}"#;
     harness
+        .worker
         .commands
         .send_command(&decisions_command(51, questions_json))
         .await
         .expect("the decisions command should reach the worker");
-    let completed_event = next_event(&mut harness.events).await;
+    let completed_event = harness.worker.next_event().await;
     let WorkerEvent::DecisionsCompleted {
         question_outcomes, ..
     } = completed_event
@@ -430,7 +419,7 @@ async fn should_never_send_head_inputs_back_with_an_answer() {
     // request never asks and its outcomes stay small.
     assert_eq!(question_outcomes[0].head_inputs, None);
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::DecisionsFinalized { .. }
     ));
     close(harness).await;
@@ -441,20 +430,21 @@ async fn should_fail_malformed_questions_without_asking_the_model_and_stay_usabl
     let mut harness =
         start_worker_and_swap_in_a_decision_model(DECISION_MODEL_ID, vec![Ok(())]).await;
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::ModelSwapped { .. }
     ));
 
     harness
+        .worker
         .commands
         .send_command(&decisions_command(50, "{}"))
         .await
         .expect("the malformed command should reach the worker");
     assert!(
-        matches!(next_event(&mut harness.events).await, WorkerEvent::DecisionsFailed { request_id, reason: DecisionFailure::InvalidRequest { .. } } if request_id == RequestId::new(50))
+        matches!(harness.worker.next_event().await, WorkerEvent::DecisionsFailed { request_id, reason: DecisionFailure::InvalidRequest { .. } } if request_id == RequestId::new(50))
     );
     assert!(
-        matches!(next_event(&mut harness.events).await, WorkerEvent::DecisionsFinalized { request_id, mlx_memory_snapshot: None, .. } if request_id == RequestId::new(50)),
+        matches!(harness.worker.next_event().await, WorkerEvent::DecisionsFinalized { request_id, mlx_memory_snapshot: None, .. } if request_id == RequestId::new(50)),
         "a request the model never saw has no cleanup observation to report"
     );
     assert!(
@@ -466,6 +456,7 @@ async fn should_fail_malformed_questions_without_asking_the_model_and_stay_usabl
     );
 
     harness
+        .worker
         .commands
         .send_command(&decisions_command(
             51,
@@ -474,7 +465,7 @@ async fn should_fail_malformed_questions_without_asking_the_model_and_stay_usabl
         .await
         .expect("the next command should reach the worker");
     assert!(
-        matches!(next_event(&mut harness.events).await, WorkerEvent::DecisionsCompleted { request_id, .. } if request_id == RequestId::new(51)),
+        matches!(harness.worker.next_event().await, WorkerEvent::DecisionsCompleted { request_id, .. } if request_id == RequestId::new(51)),
         "a refused request must leave the model ready for the next one"
     );
     close(harness).await;
@@ -490,11 +481,12 @@ async fn should_report_an_engine_failure_as_the_requests_outcome_and_finalize() 
     )
     .await;
     assert!(matches!(
-        next_event(&mut harness.events).await,
+        harness.worker.next_event().await,
         WorkerEvent::ModelSwapped { .. }
     ));
 
     harness
+        .worker
         .commands
         .send_command(&decisions_command(
             60,
@@ -504,10 +496,76 @@ async fn should_report_an_engine_failure_as_the_requests_outcome_and_finalize() 
         .expect("the decisions command should reach the worker");
 
     assert!(
-        matches!(next_event(&mut harness.events).await, WorkerEvent::DecisionsFailed { request_id, reason: DecisionFailure::FatalExecution { .. } } if request_id == RequestId::new(60))
+        matches!(harness.worker.next_event().await, WorkerEvent::DecisionsFailed { request_id, reason: DecisionFailure::FatalExecution { .. } } if request_id == RequestId::new(60))
     );
     assert!(
-        matches!(next_event(&mut harness.events).await, WorkerEvent::DecisionsFinalized { request_id, .. } if request_id == RequestId::new(60))
+        matches!(harness.worker.next_event().await, WorkerEvent::DecisionsFinalized { request_id, .. } if request_id == RequestId::new(60))
     );
     close(harness).await;
+}
+
+/// Swaps in a decision model that can move its ceiling live down to
+/// `live_memory_floor_bytes` (or cannot, for `None`) and waits for the swap.
+async fn start_worker_with_a_loaded_decision_model_holding(
+    live_memory_floor_bytes: Option<u64>,
+) -> DecisionsWorkerHarness {
+    let mut harness = start_worker_with_scripts(
+        DECISION_MODEL_ID,
+        vec![Ok(())],
+        Vec::new(),
+        live_memory_floor_bytes,
+    )
+    .await;
+    assert!(matches!(
+        harness.worker.next_event().await,
+        WorkerEvent::ModelSwapped { .. }
+    ));
+    harness
+}
+
+fn one_more_decisions_request() -> OneMoreRequest {
+    OneMoreRequest {
+        worker_command: decisions_command(
+            91,
+            r#"{"asking": {"type": "noul", "instructions": "Is a question being asked?"}}"#,
+        ),
+        is_its_completion: is_decisions_completion,
+    }
+}
+
+fn is_decisions_completion(worker_event: &WorkerEvent) -> bool {
+    matches!(worker_event, WorkerEvent::DecisionsCompleted { request_id, .. } if *request_id == RequestId::new(91))
+}
+
+#[tokio::test]
+async fn should_change_the_memory_limit_live_and_keep_answering_with_the_same_model() {
+    journeys::assert_a_change_applies_and_the_model_keeps_serving(
+        start_worker_with_a_loaded_decision_model_holding(Some(SCRIPTED_FLOOR_BYTES))
+            .await
+            .worker,
+        one_more_decisions_request(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn should_refuse_a_memory_limit_below_what_the_decision_model_holds_and_keep_answering() {
+    journeys::assert_a_change_below_the_floor_is_refused_and_the_model_keeps_serving(
+        start_worker_with_a_loaded_decision_model_holding(Some(SCRIPTED_FLOOR_BYTES))
+            .await
+            .worker,
+        one_more_decisions_request(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn should_reject_a_memory_limit_change_cleanly_when_the_decision_engine_cannot_move_it() {
+    journeys::assert_an_engine_that_cannot_move_its_ceiling_is_rejected_cleanly(
+        start_worker_with_a_loaded_decision_model_holding(None)
+            .await
+            .worker,
+        one_more_decisions_request(),
+    )
+    .await;
 }

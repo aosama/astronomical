@@ -120,6 +120,10 @@ impl DecisionFamily for ClefDecisionFamily {
         loaded_state.backbone.model.runtime()
     }
 
+    fn runtime_mut(loaded_state: &mut LoadedClefState) -> &mut MlxRuntime {
+        &mut loaded_state.backbone.model.base.runtime
+    }
+
     fn admit_decision<'loaded>(
         loaded_state: Option<&'loaded Rc<LoadedClefState>>,
         _state: &OrderedJsonValue,

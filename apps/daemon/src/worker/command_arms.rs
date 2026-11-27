@@ -34,8 +34,7 @@ use crate::worker::image_request::{ImageAdmission, handle_generate_image_command
 use crate::worker::loop_types::{
     ActiveWorkerRequest, WorkerLoopCommand, WorkerLoopRuntime, WorkerLoopState,
 };
-use crate::worker::memory::limit::take_generation_start_after_pending_memory_limit;
-use crate::worker::memory::limit_update_command::queue_or_apply_mlx_memory_limit_update;
+use crate::worker::memory::limit_update_command::apply_mlx_memory_limit_update;
 use crate::worker::model_unload_request::handle_model_unload_command;
 use crate::worker::process::containment::{
     close_worker_if_running, contain_worker_failure, shutdown_worker,
@@ -264,7 +263,7 @@ pub(in crate::worker) async fn handle_worker_loop_command(
             WorkerLoopFlow::Continue
         }
         routed_command @ WorkerLoopCommand::UpdateMlxMemoryLimit { .. } => {
-            queue_or_apply_mlx_memory_limit_update(runtime, routed_command).await;
+            apply_mlx_memory_limit_update(runtime, routed_command).await;
             WorkerLoopFlow::Continue
         }
         routed_command @ WorkerLoopCommand::UpdateModelPolicyCatalog { .. } => {
@@ -289,10 +288,9 @@ pub(in crate::worker) fn reject_unavailable_worker(
     !is_ready || !is_worker_running
 }
 
-/// Handles a chat generation command: readiness guard, pending-memory-limit
-/// gate, delegation to the chat handler, and failure containment. Mirrors the
-/// inlined `Generate` arm. Returns early (as the original `continue`d) when the
-/// guard rejects or the gate declines the request.
+/// Handles a chat generation command: readiness guard, delegation to the chat
+/// handler, and failure containment. Returns early when the guard rejects the
+/// request.
 async fn admit_chat_generation_command(
     runtime: &mut WorkerLoopRuntime,
     is_worker_running: bool,
@@ -313,22 +311,6 @@ async fn admit_chat_generation_command(
         let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
         return;
     }
-    let Some(start_sender) = take_generation_start_after_pending_memory_limit(
-        &mut runtime.pending_mlx_memory_limit_update,
-        &mut runtime.worker_process,
-        runtime.model_load_timeout,
-        &runtime.health_snapshot,
-        &mut runtime.is_ready,
-        &mut runtime.model_load_deadline,
-        &mut runtime.active_generation,
-        &mut runtime.performance_log,
-        &mut runtime.completion_log,
-        start_sender,
-    )
-    .await
-    else {
-        return;
-    };
     let mut worker_loop_state = WorkerLoopState {
         worker_process: &mut runtime.worker_process,
         health_snapshot: &runtime.health_snapshot,
@@ -384,22 +366,6 @@ async fn admit_image_generation_command(
         let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
         return;
     }
-    let Some(start_sender) = take_generation_start_after_pending_memory_limit(
-        &mut runtime.pending_mlx_memory_limit_update,
-        &mut runtime.worker_process,
-        runtime.model_load_timeout,
-        &runtime.health_snapshot,
-        &mut runtime.is_ready,
-        &mut runtime.model_load_deadline,
-        &mut runtime.active_generation,
-        &mut runtime.performance_log,
-        &mut runtime.completion_log,
-        start_sender,
-    )
-    .await
-    else {
-        return;
-    };
     let mut worker_loop_state = WorkerLoopState {
         worker_process: &mut runtime.worker_process,
         health_snapshot: &runtime.health_snapshot,

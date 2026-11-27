@@ -145,9 +145,11 @@ impl Qwen3_5Model {
         let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return;
         };
+        // Each layer keeps its most-read experts rather than losing whole
+        // layers; see `hot_expert_trim` (issue #2681).
         let released_expert_bytes = astro_expert_cache
             .borrow_mut()
-            .set_capacity(capacity.bytes())
+            .set_capacity_keeping_hot_experts(&self.runtime, capacity.bytes())
             .released_payload_bytes();
         if released_expert_bytes > 0 {
             self.report_released_experts(capacity, released_expert_bytes);

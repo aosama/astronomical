@@ -26,7 +26,6 @@ use tokio::time::Instant;
 use crate::worker::command_arms::reject_unavailable_worker;
 use crate::worker::health::{clear_active_request_progress, publish_activity};
 use crate::worker::loop_types::{ActiveWorkerRequest, WorkerLoopRuntime};
-use crate::worker::memory::limit::take_generation_start_after_pending_memory_limit;
 use crate::worker::process::containment::{cancel_active_generation, contain_worker_failure};
 use crate::worker::request_admission::{
     RequestAdmissionContext, RequestAdmissionOutcome, SINGLE_SHOT_EXECUTION_TIMEOUT,
@@ -115,7 +114,7 @@ pub(in crate::worker) async fn admit_request_kind_command<Kind: RequestKind>(
         result_sender,
     } = request_kind_command;
     let Some(start_sender) =
-        refuse_or_settle_before_admission::<Kind>(runtime, is_worker_running, start_sender).await
+        refuse_while_unavailable_or_busy::<Kind>(runtime, is_worker_running, start_sender)
     else {
         return;
     };
@@ -156,15 +155,11 @@ pub(in crate::worker) async fn admit_request_kind_command<Kind: RequestKind>(
     }
 }
 
-/// Refuses while the worker is unavailable or busy, then applies a pending
-/// memory-limit change. `None` means the client has had its answer.
-///
-/// The busy refusal comes before the memory limit, so a ceiling queued behind
-/// the active request is only ever applied to an idle worker, by the idle
-/// drain once that request ends. Only one request can be active at a time,
-/// so a busy worker refuses here only if that slot was bypassed.
-async fn refuse_or_settle_before_admission<Kind: RequestKind>(
-    runtime: &mut WorkerLoopRuntime,
+/// Refuses while the worker is unavailable or busy. `None` means the client
+/// has had its answer. Only one request can be active at a time, so a busy
+/// worker refuses here only if that slot was bypassed.
+fn refuse_while_unavailable_or_busy<Kind: RequestKind>(
+    runtime: &WorkerLoopRuntime,
     is_worker_running: bool,
     start_sender: StartSender,
 ) -> Option<StartSender> {
@@ -180,19 +175,7 @@ async fn refuse_or_settle_before_admission<Kind: RequestKind>(
         );
         return None;
     }
-    take_generation_start_after_pending_memory_limit(
-        &mut runtime.pending_mlx_memory_limit_update,
-        &mut runtime.worker_process,
-        runtime.model_load_timeout,
-        &runtime.health_snapshot,
-        &mut runtime.is_ready,
-        &mut runtime.model_load_deadline,
-        &mut runtime.active_generation,
-        &mut runtime.performance_log,
-        &mut runtime.completion_log,
-        start_sender,
-    )
-    .await
+    Some(start_sender)
 }
 
 /// Runs the pre-execution admission pipeline: model residency through the

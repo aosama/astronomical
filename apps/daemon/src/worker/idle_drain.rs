@@ -1,9 +1,9 @@
 //! Idle-time pending-work draining for the daemon worker loop.
 //!
-//! Before every select iteration the loop must apply an enacted MLX memory
-//! limit change and a pending astro SSD prompt cache clear while no generation is
-//! active; this module owns that pre-loop work so the loop itself stays
-//! inside the source-size budget. Dependencies stay explicit parameters,
+//! Before every select iteration the loop must apply a pending
+//! `astro_ssd_prompt_cache` clear while no generation is active; this module
+//! owns that pre-loop work so the loop itself stays inside the source-size
+//! budget. Dependencies stay explicit parameters,
 //! matching the process-loop style noted in `worker.rs`.
 
 use std::sync::Arc;
@@ -13,14 +13,9 @@ use tokio::sync::Semaphore;
 use crate::worker::astro_ssd_prompt_cache_clear;
 use crate::worker::loop_types::ActiveWorkerRequest;
 use crate::worker::loop_types::WorkerLoopState;
-use crate::worker::memory::limit::{
-    PendingMlxMemoryLimitUpdate, apply_pending_mlx_memory_limit_if_idle,
-    contain_mlx_memory_limit_failure,
-};
 
 pub(super) async fn drain_pending_idle_work(
     worker_loop_state: &mut WorkerLoopState<'_>,
-    pending_mlx_memory_limit_update: &mut Option<PendingMlxMemoryLimitUpdate>,
     pending_astro_ssd_prompt_cache_clear: &mut Option<crate::PendingAstroSsdPromptCacheClear>,
     active_generation_permits: &Arc<Semaphore>,
     generation_queue_permits: &Arc<Semaphore>,
@@ -33,7 +28,7 @@ pub(super) async fn drain_pending_idle_work(
         model_load_deadline,
         performance_log,
         completion_log,
-        model_load_timeout,
+        model_load_timeout: _,
     } = worker_loop_state;
     let worker_process = &mut **worker_process;
     let health_snapshot = *health_snapshot;
@@ -42,30 +37,6 @@ pub(super) async fn drain_pending_idle_work(
     let active_generation = &mut **active_generation;
     let performance_log = &mut **performance_log;
     let completion_log = &mut **completion_log;
-    let model_load_timeout = *model_load_timeout;
-    if active_generation.is_none()
-        && let Err(memory_limit_error) = apply_pending_mlx_memory_limit_if_idle(
-            pending_mlx_memory_limit_update,
-            worker_process,
-            model_load_timeout,
-            health_snapshot,
-            is_ready,
-            model_load_deadline,
-            active_generation,
-            performance_log,
-            completion_log,
-        )
-        .await
-    {
-        contain_mlx_memory_limit_failure(
-            worker_process,
-            health_snapshot,
-            active_generation,
-            is_ready,
-            memory_limit_error,
-        )
-        .await;
-    }
     astro_ssd_prompt_cache_clear::apply_pending_astro_ssd_prompt_cache_clear_if_idle(
         pending_astro_ssd_prompt_cache_clear,
         worker_process,

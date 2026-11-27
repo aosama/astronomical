@@ -1,8 +1,12 @@
 //! Coordinates the live MLX ceiling with the streaming pager's retained-page budget.
 //!
 //! Keeping both limits in one transition prevents the retained `astro_expert_cache` from exceeding
-//! the user's current memory grant.
+//! the user's current memory grant. A change may land between two steps of a running request
+//! (issue #2681); the floor then also keeps what that request holds and its next step's buffers.
 
+use memory_policy::live_memory_limit::{
+    InFlightRequestMemory, needs_at_least_message, request_aware_ceiling_floor_bytes,
+};
 use runtime_integration::MlxMemoryLimits;
 
 use crate::{
@@ -25,39 +29,27 @@ impl Qwen3_5Model {
         ))
     }
 
+    /// Moves the model to a new ceiling, between requests or between two
+    /// steps of a running one (`request_is_running`).
     pub fn update_mlx_memory_limit(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
+        request_is_running: bool,
     ) -> Result<(u64, MlxMemoryLimits), InferenceEngineError> {
         let LiveMemoryObservation {
             current_mlx_memory_limits,
             current_mlx_memory_ceiling_bytes,
-            minimum_mlx_memory_ceiling_bytes,
+            minimum_mlx_memory_ceiling_bytes: idle_floor_bytes,
             current_active_memory_bytes,
         } = observe_live_memory(&self.runtime, self.minimum_mlx_memory_ceiling_bytes()?)?;
-        let expert_statistics = self.astro_expert_cache_statistics();
-        let ceiling_change_decision = MemoryCeilingChangeRequirements {
-            current_ceiling_bytes: current_mlx_memory_ceiling_bytes,
-            requested_ceiling_bytes: requested_mlx_memory_ceiling_bytes,
-            minimum_safe_ceiling_bytes: minimum_mlx_memory_ceiling_bytes,
-            current_active_memory_bytes,
-            // Kept dense layers are given back like retained experts.
-            retained_paged_expert_payload_bytes: expert_statistics
-                .resident_payload_byte_count
-                .saturating_add(self.dense_kept_layer_payload_bytes()),
-            complete_experts_are_resident: false,
-            complete_residency_required_headroom_bytes: 0,
-        }
-        .decide();
-        if let MemoryCeilingChangeDecision::Reject { .. } = ceiling_change_decision {
-            return Err(InferenceEngineError::MlxMemoryLimitRejected {
+        let (minimum_mlx_memory_ceiling_bytes, ceiling_change_decision) = self
+            .decide_live_ceiling_change(
                 requested_mlx_memory_ceiling_bytes,
-                minimum_mlx_memory_ceiling_bytes,
-                reason:
-                    "the loaded model needs its non-evictable memory and one expert page reserve"
-                        .to_owned(),
-            });
-        }
+                request_is_running,
+                current_mlx_memory_ceiling_bytes,
+                idle_floor_bytes,
+                current_active_memory_bytes,
+            )?;
         let Some(requested_mlx_memory_limits) = requested_mlx_memory_limits_when_changed(
             requested_mlx_memory_ceiling_bytes,
             current_mlx_memory_limits,
@@ -86,6 +78,7 @@ impl Qwen3_5Model {
             self.lower_ceiling_with_expert_reclamation(
                 requested_mlx_memory_ceiling_bytes,
                 previous_memory_ceiling_bytes,
+                request_is_running,
             )?;
         }
 
@@ -115,6 +108,47 @@ impl Qwen3_5Model {
         ))
     }
 
+    /// The floor the model can move to now and what the change asks of it, or
+    /// the refusal of a ceiling below that floor.
+    fn decide_live_ceiling_change(
+        &self,
+        requested_mlx_memory_ceiling_bytes: u64,
+        request_is_running: bool,
+        current_mlx_memory_ceiling_bytes: u64,
+        idle_floor_bytes: u64,
+        current_active_memory_bytes: u64,
+    ) -> Result<(u64, MemoryCeilingChangeDecision), InferenceEngineError> {
+        // Kept dense layers are given back like retained experts.
+        let retained_paged_expert_payload_bytes = self
+            .astro_expert_cache_statistics()
+            .resident_payload_byte_count
+            .saturating_add(self.dense_kept_layer_payload_bytes());
+        let minimum_mlx_memory_ceiling_bytes = self.ceiling_floor_bytes(
+            idle_floor_bytes,
+            request_is_running,
+            current_active_memory_bytes,
+            retained_paged_expert_payload_bytes,
+        );
+        let ceiling_change_decision = MemoryCeilingChangeRequirements {
+            current_ceiling_bytes: current_mlx_memory_ceiling_bytes,
+            requested_ceiling_bytes: requested_mlx_memory_ceiling_bytes,
+            minimum_safe_ceiling_bytes: minimum_mlx_memory_ceiling_bytes,
+            current_active_memory_bytes,
+            retained_paged_expert_payload_bytes,
+            complete_experts_are_resident: false,
+            complete_residency_required_headroom_bytes: 0,
+        }
+        .decide();
+        if let MemoryCeilingChangeDecision::Reject { .. } = ceiling_change_decision {
+            return Err(below_floor_rejection(
+                requested_mlx_memory_ceiling_bytes,
+                minimum_mlx_memory_ceiling_bytes,
+                request_is_running,
+            ));
+        }
+        Ok((minimum_mlx_memory_ceiling_bytes, ceiling_change_decision))
+    }
+
     /// A higher ceiling can seat a layer the previous one refused. Clearing
     /// only after the raise sticks lets the next prefill try completion once.
     fn clear_prefill_completion_refusals_when_raise_sticks(
@@ -138,10 +172,14 @@ impl Qwen3_5Model {
     /// operation reject its own temporary work. If active memory still
     /// exceeds the request after reclamation, the pager ceiling is restored
     /// and the whole transition fails without ever touching the runtime.
+    ///
+    /// Memory left above the request is refused, not fatal: the policy is
+    /// already back at the old ceiling and the model keeps serving under it.
     fn lower_ceiling_with_expert_reclamation(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
         previous_memory_ceiling_bytes: u64,
+        request_is_running: bool,
     ) -> Result<(), InferenceEngineError> {
         self.prepare_expert_residency_for_lower_mlx_memory_limit(
             requested_mlx_memory_ceiling_bytes,
@@ -150,11 +188,48 @@ impl Qwen3_5Model {
             post_reclamation_active_memory_bytes(&self.runtime)?;
         if post_reclamation_active_memory_bytes > requested_mlx_memory_ceiling_bytes {
             self.restore_memory_ceiling_policy(previous_memory_ceiling_bytes)?;
-            return Err(text_generation::engine_errors::fatal_engine_error(
-                "retained model memory remained above the requested MLX ceiling after expert reclamation",
+            return Err(below_floor_rejection(
+                requested_mlx_memory_ceiling_bytes,
+                post_reclamation_active_memory_bytes,
+                request_is_running,
             ));
         }
         Ok(())
+    }
+
+    /// The smallest ceiling the model can move to now. A running request also
+    /// keeps the active memory kept weights do not account for, which it
+    /// cannot give back, and the MLX working buffers its next step allocates,
+    /// which the memory governor has measured.
+    fn ceiling_floor_bytes(
+        &self,
+        idle_floor_bytes: u64,
+        request_is_running: bool,
+        current_active_memory_bytes: u64,
+        reclaimable_bytes: u64,
+    ) -> u64 {
+        let in_flight_request_memory = if request_is_running {
+            Some(InFlightRequestMemory {
+                non_evictable_active_bytes: current_active_memory_bytes
+                    .saturating_sub(reclaimable_bytes),
+                next_step_working_buffer_bytes: self.measured_mlx_working_buffer_bytes(),
+            })
+        } else {
+            None
+        };
+        request_aware_ceiling_floor_bytes(idle_floor_bytes, in_flight_request_memory)
+    }
+
+    /// The MLX working buffers the memory governor has measured a step to
+    /// need; zero before any step was measured.
+    fn measured_mlx_working_buffer_bytes(&self) -> u64 {
+        let Ok(memory_governor) = self.governed_memory.governor.try_borrow() else {
+            return 0;
+        };
+        match memory_governor.as_ref() {
+            Some(memory_governor) => memory_governor.accounts().mlx_working_buffer_bytes,
+            None => 0,
+        }
     }
 
     /// Installs the new runtime limits, rolling the pager ceiling back if the
@@ -260,5 +335,25 @@ impl Qwen3_5Model {
                 ))
             }
         }
+    }
+}
+
+/// The answer to a ceiling below the floor. While a request runs it names the
+/// smallest ceiling in GB, which the memory control shows beside its red slider.
+fn below_floor_rejection(
+    requested_mlx_memory_ceiling_bytes: u64,
+    minimum_mlx_memory_ceiling_bytes: u64,
+    request_is_running: bool,
+) -> InferenceEngineError {
+    let needs_at_least = needs_at_least_message(minimum_mlx_memory_ceiling_bytes);
+    let reason = if request_is_running {
+        format!("{needs_at_least} while this request runs")
+    } else {
+        format!("{needs_at_least} for the loaded model")
+    };
+    InferenceEngineError::MlxMemoryLimitRejected {
+        requested_mlx_memory_ceiling_bytes,
+        minimum_mlx_memory_ceiling_bytes,
+        reason,
     }
 }

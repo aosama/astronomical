@@ -49,9 +49,8 @@ pub(super) fn idle_control_tick_conditions(
     }
 }
 
-/// Applies a pending memory-limit change and a pending `astro_ssd_prompt_cache`
-/// clear, when no generation is active, before the loop waits for its next
-/// event.
+/// Applies a pending `astro_ssd_prompt_cache` clear, when no generation is
+/// active, before the loop waits for its next event.
 pub(super) async fn drain_idle_work_before_waiting(runtime: &mut WorkerLoopRuntime) {
     let mut worker_loop_state = WorkerLoopState {
         worker_process: &mut runtime.worker_process,
@@ -65,7 +64,6 @@ pub(super) async fn drain_idle_work_before_waiting(runtime: &mut WorkerLoopRunti
     };
     drain_pending_idle_work(
         &mut worker_loop_state,
-        &mut runtime.pending_mlx_memory_limit_update,
         &mut runtime.pending_astro_ssd_prompt_cache_clear,
         &runtime.active_generation_permits,
         &runtime.generation_queue_permits,

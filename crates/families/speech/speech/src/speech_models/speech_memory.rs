@@ -27,6 +27,14 @@ impl SpeechMemoryAccount {
         }
     }
 
+    /// Keeps the account's headroom split in step with a live ceiling change.
+    pub fn set_effective_mlx_memory_ceiling_bytes(
+        &mut self,
+        effective_mlx_memory_ceiling_bytes: u64,
+    ) {
+        self.effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes;
+    }
+
     pub fn observe(&self, runtime: &MlxRuntime) -> Option<MlxMemoryTelemetry> {
         let memory_snapshot = runtime.memory_snapshot().ok()?;
         Some(forward_pass_memory_telemetry(

@@ -185,7 +185,7 @@ struct OrbitalTelemetryPopover: View {
 
   @ViewBuilder
   private func controlFeedbackRows(_ statusDocument: DaemonStatusDocument) -> some View {
-    if let controlActionFeedback = telemetryStore.visibleControlActionFeedback {
+    if let controlActionFeedback = telemetryStore.controlActionFeedback {
       Text(controlActionFeedback.message)
         .font(.caption)
         // A success only confirms what the person just did, so it reads as quiet text like

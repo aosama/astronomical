@@ -7,12 +7,13 @@
 use ipc_protocol::{EmbeddingsCommand, EmbeddingsFailureReason, WorkerEmbeddingCapabilities};
 
 use crate::memory::telemetry::MlxMemoryTelemetry;
+use memory_policy::live_memory_limit::LiveMemoryLimitEngine;
 
 /// A loaded embedding runtime that turns validated text into unit-norm vectors.
 ///
 /// `Any` lets a caller holding a boxed engine ask which family it is; every
 /// engine is `'static`, so it costs nothing.
-pub trait EmbeddingEngine: std::any::Any {
+pub trait EmbeddingEngine: std::any::Any + LiveMemoryLimitEngine {
     /// Loads model resources and returns the exact identity and limits to advertise.
     fn load(&mut self) -> Result<EmbeddingEngineLoadResult, EmbeddingsFailureReason>;
 
@@ -116,6 +117,8 @@ pub trait EmbeddingFamilyConstruction: 'static {
 /// Default embedding slot used by existing chat-only and image-only workers.
 #[doc(hidden)]
 pub struct EmbeddingUnavailableEngine;
+
+impl LiveMemoryLimitEngine for EmbeddingUnavailableEngine {}
 
 impl EmbeddingEngine for EmbeddingUnavailableEngine {
     fn load(&mut self) -> Result<EmbeddingEngineLoadResult, EmbeddingsFailureReason> {

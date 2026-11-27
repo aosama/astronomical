@@ -58,6 +58,10 @@ impl DecisionFamily for GlobeFamily {
         unreachable!("a Globe model is never loaded")
     }
 
+    fn runtime_mut(_loaded_state: &mut ()) -> &mut MlxRuntime {
+        unreachable!("a Globe model is never loaded")
+    }
+
     fn admit_decision<'loaded>(
         loaded_state: Option<&'loaded Rc<()>>,
         _state: &OrderedJsonValue,

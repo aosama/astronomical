@@ -28,21 +28,6 @@ test("should_report_a_memory_change_in_its_own_panel_and_tell_the_editor_the_fil
     assert.deepEqual(dispatchedEventTypes, ["observatory:config-file-written"]);
 });
 
-// The notice under the input already names a queued change, quietly; a
-// second, coloured message beside it would only repeat it.
-test("should_add_no_feedback_for_a_queued_memory_change", async () => {
-    const scriptContext = createConsoleContext();
-    const elementsById = attachRecordingElements(scriptContext);
-    recordConfigFileWrittenEvents(scriptContext);
-    scriptContext.pollStatus = async () => {};
-    scriptContext.fetch = async () => ({ ok: true, status: 202, json: async () => ({ message: "Applies after the current reply" }) });
-
-    await vm.runInContext("updateMaximumMlxMemory(34)", scriptContext);
-
-    assert.equal(elementsById["maximum-mlx-memory-feedback"].hidden, true);
-    assert.equal(elementsById["maximum-mlx-memory-feedback"].textContent, "");
-});
-
 test("should_tell_the_editor_the_file_changed_even_when_a_memory_change_is_refused", async () => {
     const scriptContext = createConsoleContext();
     const elementsById = attachRecordingElements(scriptContext);
@@ -151,53 +136,18 @@ test("reports a cap when an explicit request exceeds the live ceiling", () => {
     assert.equal(elementsById["maximum-mlx-memory-apply"].hidden, false);
 });
 
-test("prefers a pending change and then an error over the cap notice", () => {
-    const pendingElements = renderMemoryControlFor({
-        ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 32212254720,
-        configured_maximum_mlx_memory_gb: 34,
-        pending_mlx_memory_ceiling_bytes: 36507222016
-    });
+test("prefers an error over the cap notice", () => {
     const failedElements = renderMemoryControlFor({
         ...WIRED_MAC_STATUS,
         mlx_memory_ceiling_bytes: 32212254720,
         configured_maximum_mlx_memory_gb: 34,
-        pending_mlx_memory_ceiling_bytes: 36507222016,
         mlx_memory_limit_error: "The worker could not apply the requested MLX memory ceiling"
     });
 
     assert.equal(
-        pendingElements["maximum-mlx-memory-notice"].textContent,
-        "Changes to 34.00 GB when the current reply finishes."
-    );
-    assert.equal(
-        pendingElements["maximum-mlx-memory-notice"].className,
-        "mlx-memory-control-notice mlx-memory-control-notice-calm",
-        "a queued change is not a warning"
-    );
-    assert.equal(failedElements["maximum-mlx-memory-notice"].className, "mlx-memory-control-notice");
-    assert.equal(
         failedElements["maximum-mlx-memory-notice"].textContent,
         "The worker could not apply the requested MLX memory ceiling"
     );
-});
-
-// "Use Max" queues a request for the whole Mac's memory; the engine installs
-// what macOS lets it keep, and the notice must name that figure.
-test("should_name_the_limit_the_engine_will_install_for_a_queued_whole_mac_request", () => {
-    const queuedElements = renderMemoryControlFor({
-        ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 32212254720,
-        pending_mlx_memory_ceiling_bytes: WIRED_MAC_STATUS.machine_mlx_memory_ceiling_bytes
-    });
-    const reachableBytes = WIRED_MAC_STATUS.wired_residency_budget_bytes
-        - Math.floor(WIRED_MAC_STATUS.wired_residency_budget_bytes / 1000) * 25;
-
-    assert.equal(
-        queuedElements["maximum-mlx-memory-notice"].textContent,
-        "Changes to " + (reachableBytes / 1073741824).toFixed(2) + " GB when the current reply finishes."
-    );
-    assert.ok(reachableBytes < WIRED_MAC_STATUS.machine_mlx_memory_ceiling_bytes);
 });
 
 test("reaches the machine ceiling when serving is pageable and stays quiet before a ceiling exists", () => {
@@ -210,3 +160,27 @@ test("reaches the machine ceiling when serving is pageable and stays quiet befor
     assert.equal(elementsById["maximum-mlx-memory-gb"].max, "40");
     assert.equal(elementsById["maximum-mlx-memory-notice"].hidden, true);
 });
+
+test("should_mark_the_field_refused_while_the_engine_reports_a_limit_error", () => {
+    const refusedElements = renderMemoryControlFor({
+        ...WIRED_MAC_STATUS,
+        configured_maximum_mlx_memory_gb: 12,
+        mlx_memory_limit_error: "needs at least 22.4 GB while this request runs"
+    });
+
+    assert.equal(refusedElements["maximum-mlx-memory-gb"].ariaInvalid, "true");
+    assert.equal(
+        refusedElements["maximum-mlx-memory-notice"].textContent,
+        "needs at least 22.4 GB while this request runs"
+    );
+});
+
+test("should_not_mark_the_field_refused_after_an_accepted_limit", () => {
+    const acceptedElements = renderMemoryControlFor({
+        ...WIRED_MAC_STATUS,
+        configured_maximum_mlx_memory_gb: 30
+    });
+
+    assert.equal(acceptedElements["maximum-mlx-memory-gb"].ariaInvalid, "false");
+});
+

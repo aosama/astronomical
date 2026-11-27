@@ -174,6 +174,24 @@ impl MlxMemoryLimitAdjustment {
         }
     }
 
+    /// A report for an engine with no routed experts, whose weights are all
+    /// resident: embedding, decision and speech models.
+    #[must_use]
+    pub const fn resident(
+        effective_mlx_memory_ceiling_bytes: u64,
+        mlx_buffer_cache_limit_bytes: u64,
+        minimum_mlx_memory_ceiling_bytes: u64,
+        mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
+    ) -> Self {
+        Self::new(
+            effective_mlx_memory_ceiling_bytes,
+            mlx_buffer_cache_limit_bytes,
+            minimum_mlx_memory_ceiling_bytes,
+            ExpertMemoryMode::Resident,
+            mlx_memory_telemetry,
+        )
+    }
+
     /// Attaches sparse-expert ownership when the adjusted engine has routed experts.
     #[must_use]
     pub const fn with_expert_residency_telemetry(

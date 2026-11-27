@@ -41,6 +41,9 @@ pub mod fp32_layers;
 pub mod gpu_token_sampling;
 
 #[cfg(feature = "direct-mlx")]
+pub mod live_memory_ceiling;
+
+#[cfg(feature = "direct-mlx")]
 pub mod linear_adapters;
 
 // Small synthetic weight files for GPU tests in this crate and the family

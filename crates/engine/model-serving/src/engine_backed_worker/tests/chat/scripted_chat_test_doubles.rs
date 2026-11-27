@@ -221,6 +221,9 @@ fn prepared_generation(
     PreparedModelGeneration::new(ScriptedInferenceRequest::new(prompt_token_count), ())
 }
 
+/// What the scripted engine says when it refuses a live ceiling change.
+pub(crate) const REFUSED_CEILING_REASON: &str = "the running reply holds more than that";
+
 pub(crate) struct ScriptedChatEngine {
     cancellation_count: Arc<AtomicUsize>,
     astro_ssd_prompt_cache_restored_token_count: u32,
@@ -239,6 +242,9 @@ pub(crate) struct ScriptedChatEngine {
     load_floor_bytes: u64,
     /// Every live ceiling the worker asked this engine to adopt, in order.
     pub(crate) adopted_ceilings: Arc<Mutex<Vec<u64>>>,
+    /// A ceiling below this is refused with this floor, as an engine does
+    /// when the running reply holds more than the ceiling allows.
+    refused_ceiling_floor_bytes: Option<u64>,
 }
 
 impl ScriptedChatEngine {
@@ -292,7 +298,14 @@ impl ScriptedChatEngine {
             idle_mlx_memory_telemetry: None,
             load_floor_bytes: 1,
             adopted_ceilings: Arc::new(Mutex::new(Vec::new())),
+            refused_ceiling_floor_bytes: None,
         }
+    }
+
+    /// Scripts a floor under which a live ceiling change is refused.
+    pub(crate) fn with_refused_ceilings_below(mut self, refused_ceiling_floor_bytes: u64) -> Self {
+        self.refused_ceiling_floor_bytes = Some(refused_ceiling_floor_bytes);
+        self
     }
 
     /// Scripts the floor this engine reports when it loads.
@@ -456,27 +469,7 @@ impl InferenceEngine for ScriptedChatEngine {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
-        self.adopted_ceilings
-            .lock()
-            .expect("the adopted-ceiling record should not be poisoned")
-            .push(requested_mlx_memory_ceiling_bytes);
-        Ok(MlxMemoryLimitAdjustment::new(
-            requested_mlx_memory_ceiling_bytes,
-            self.maximum_mlx_buffer_cache_limit_bytes
-                .min(requested_mlx_memory_ceiling_bytes),
-            1,
-            ExpertMemoryMode::Resident,
-            self.idle_mlx_memory_telemetry,
-        )
-        .with_expert_residency_telemetry(ExpertResidencyTelemetry {
-            dense_layers: None,
-            total_layer_count: 2,
-            resident_expert_count: 2,
-            resident_expert_payload_bytes: 8_000,
-            complete_expert_payload_byte_count: 8_000,
-            expert_capacity: 2,
-            layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
-        }))
+        self.refuse_or_adopt_ceiling(requested_mlx_memory_ceiling_bytes)
     }
 
     async fn collect_astro_ssd_prompt_cache_stats(
@@ -499,5 +492,45 @@ impl InferenceEngine for ScriptedChatEngine {
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
         Ok(self.idle_mlx_memory_telemetry)
+    }
+}
+
+impl ScriptedChatEngine {
+    /// Refuses a ceiling below the scripted floor, as the real engine refuses
+    /// one a running reply does not fit under, and adopts any other.
+    fn refuse_or_adopt_ceiling(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
+        if let Some(floor_bytes) = self.refused_ceiling_floor_bytes
+            && requested_mlx_memory_ceiling_bytes < floor_bytes
+        {
+            return Err(InferenceEngineError::MlxMemoryLimitRejected {
+                requested_mlx_memory_ceiling_bytes,
+                minimum_mlx_memory_ceiling_bytes: floor_bytes,
+                reason: REFUSED_CEILING_REASON.to_owned(),
+            });
+        }
+        self.adopted_ceilings
+            .lock()
+            .expect("the adopted-ceiling record should not be poisoned")
+            .push(requested_mlx_memory_ceiling_bytes);
+        Ok(MlxMemoryLimitAdjustment::new(
+            requested_mlx_memory_ceiling_bytes,
+            self.maximum_mlx_buffer_cache_limit_bytes
+                .min(requested_mlx_memory_ceiling_bytes),
+            1,
+            ExpertMemoryMode::Resident,
+            self.idle_mlx_memory_telemetry,
+        )
+        .with_expert_residency_telemetry(ExpertResidencyTelemetry {
+            dense_layers: None,
+            total_layer_count: 2,
+            resident_expert_count: 2,
+            resident_expert_payload_bytes: 8_000,
+            complete_expert_payload_byte_count: 8_000,
+            expert_capacity: 2,
+            layer_seating: ipc_protocol::ExpertLayerSeatingCounts::default(),
+        }))
     }
 }

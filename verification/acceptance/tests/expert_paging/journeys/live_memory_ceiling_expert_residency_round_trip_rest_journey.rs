@@ -334,7 +334,6 @@ async fn apply_memory_ceiling(
         applied_ceiling_bytes > 0 && applied_ceiling_bytes <= configured_ceiling_bytes,
         "applied ceiling {applied_ceiling_bytes} should be positive and within the configured {configured_ceiling_bytes}"
     );
-    assert!(response_document["pending_mlx_memory_ceiling_bytes"].is_null());
     eprintln!(
         "{LOG_MARKER} phase=ceiling_{maximum_mlx_memory_gb}_gb status=success elapsed_seconds={:.3} applied_ceiling_bytes={applied_ceiling_bytes}",
         transition_started_at.elapsed().as_secs_f64(),

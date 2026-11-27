@@ -26,8 +26,10 @@ use crate::decision_models::training::training_session::{
     DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
     read_through_decide, start_session,
 };
-use crate::memory::telemetry::MlxMemoryTelemetry;
+use crate::memory::telemetry::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
+use memory_policy::live_memory_limit::{LiveMemoryLimitEngine, LiveMemoryLimitRefusal};
 use model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
+use model_primitives::live_memory_ceiling::move_engine_ceiling;
 
 /// What a decision family adds to the shared shell.
 pub trait DecisionFamily: 'static {
@@ -54,6 +56,9 @@ pub trait DecisionFamily: 'static {
     ) -> Result<LoadedDecisionModel<Self::LoadedState>, DecisionFailure>;
 
     fn runtime(loaded_state: &Self::LoadedState) -> &MlxRuntime;
+
+    /// The same runtime, mutably, so a live memory-ceiling change can reach it.
+    fn runtime_mut(loaded_state: &mut Self::LoadedState) -> &mut MlxRuntime;
 
     /// Checks a request before any model work, in the family's own order and
     /// wording, and returns the loaded model to answer it with and its plan.
@@ -244,6 +249,39 @@ impl<Family: DecisionFamily> DecisionEngine for DecisionEngineShell<Family> {
     fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         let loaded_state = self.loaded_state.as_ref()?;
         self.memory_telemetry(Family::runtime(loaded_state))
+    }
+}
+
+impl<Family: DecisionFamily> LiveMemoryLimitEngine for DecisionEngineShell<Family> {
+    fn update_mlx_memory_limit(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<MlxMemoryLimitAdjustment, LiveMemoryLimitRefusal> {
+        // A training run reads the model across steps and sized its work
+        // against the ceiling it started under.
+        if self.training_session.is_some() {
+            return Err(LiveMemoryLimitRefusal::EngineBusy);
+        }
+        // A shared handle means something else still reads the model, such
+        // as a whole-model scorer built for a training; it must not see the
+        // runtime change under it.
+        let loaded_runtime = match self.loaded_state.as_mut() {
+            Some(loaded_state) => match Rc::get_mut(loaded_state) {
+                Some(unshared_state) => Some(Family::runtime_mut(unshared_state)),
+                None => return Err(LiveMemoryLimitRefusal::EngineBusy),
+            },
+            None => None,
+        };
+        let applied_ceiling = move_engine_ceiling(
+            loaded_runtime,
+            &mut self.effective_mlx_memory_ceiling_bytes,
+            &mut self.mlx_buffer_cache_limit_bytes,
+            requested_mlx_memory_ceiling_bytes,
+        )?;
+        Ok(applied_ceiling.into_adjustment(
+            requested_mlx_memory_ceiling_bytes,
+            self.collect_mlx_memory_telemetry(),
+        ))
     }
 }
 

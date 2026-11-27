@@ -52,7 +52,6 @@ pub fn build_application_with_full_control_and_library_download(
         configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: Some(runtime_config_resolver),
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
-        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: Some(shutdown_controller),
         problem_report_desk,
     })
@@ -104,7 +103,6 @@ pub fn build_application_with_library_download_and_trash(
         configuration_validation_error: Arc::new(RwLock::new(None)),
         runtime_config_resolver: None,
         configuration_transition_lock: Arc::new(AsyncMutex::new(())),
-        pending_memory_config_generation: Arc::new(AsyncMutex::new(None)),
         shutdown_controller: None,
         problem_report_desk: None,
     })

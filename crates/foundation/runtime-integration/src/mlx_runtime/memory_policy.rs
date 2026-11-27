@@ -120,6 +120,29 @@ impl MlxRuntime {
         Ok(())
     }
 
+    /// Moves the active-memory ceiling and keeps this runtime's MLX buffer
+    /// cache limit, lowered to the new ceiling when it would otherwise exceed
+    /// it, because `MlxMemoryLimits::new` refuses a cache larger than the
+    /// ceiling.
+    ///
+    /// # Errors
+    ///
+    /// Returns the validation or runtime error of the underlying update.
+    pub fn apply_live_memory_ceiling(
+        &mut self,
+        requested_active_memory_limit_bytes: usize,
+    ) -> Result<(), MlxRuntimeError> {
+        let kept_mlx_buffer_cache_limit_bytes = self
+            .memory_limits
+            .mlx_buffer_cache_limit_bytes()
+            .min(requested_active_memory_limit_bytes);
+        let memory_limits = MlxMemoryLimits::new(
+            requested_active_memory_limit_bytes,
+            kept_mlx_buffer_cache_limit_bytes,
+        )?;
+        self.update_memory_limits(memory_limits)
+    }
+
     /// Reads the active allocator limit currently enforced by MLX.
     ///
     /// Deliberately queries the native runtime rather than the Rust-side

@@ -58,7 +58,7 @@ final class TelemetryStore: ObservableObject {
   private var latestStatusRefreshSequence = 0
   private var controlActionFeedbackDismissalTask: Task<Void, Never>?
   private var controlActionFeedbackGeneration = 0
-  private var pendingMaximumMlxMemoryCeilingBytes: UInt64?
+  private var requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption: UInt64?
   private var popoverIsVisible = false
   private var lastSystemTelemetrySampleTime: ContinuousClock.Instant?
 
@@ -131,7 +131,7 @@ final class TelemetryStore: ObservableObject {
   }
 
   func performMaximumMlxMemoryLimitUpdate(_ maximumMlxMemoryGigabytes: UInt64?) async {
-    pendingMaximumMlxMemoryCeilingBytes = requestedMaximumMlxMemoryCeilingBytes(
+    requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption = requestedMaximumMlxMemoryCeilingBytes(
       maximumMlxMemoryGigabytes)
     let memoryUpdateFeedbackGeneration = presentControlActionFeedback(
       .inProgress("Updating maximum model RAM…"))
@@ -146,13 +146,13 @@ final class TelemetryStore: ObservableObject {
         for: refreshedStatusDocument)
     } catch {
       guard controlActionFeedbackGeneration == memoryUpdateFeedbackGeneration else { return }
-      pendingMaximumMlxMemoryCeilingBytes = nil
+      requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption = nil
       presentControlActionFeedback(.failure(controlActionErrorMessage(error)))
     }
   }
 
   func performConfigurationReload() async {
-    pendingMaximumMlxMemoryCeilingBytes = nil
+    requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption = nil
     let configurationReloadFeedbackGeneration = presentControlActionFeedback(
       .inProgress("Reloading configuration…"))
     do {
@@ -222,17 +222,17 @@ final class TelemetryStore: ObservableObject {
   }
 
   func beginServerRestart() {
-    pendingMaximumMlxMemoryCeilingBytes = nil
+    requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption = nil
     presentControlActionFeedback(.inProgress("Restarting server…"))
   }
 
   func completeServerRestart(restartMessage: String) {
-    pendingMaximumMlxMemoryCeilingBytes = nil
+    requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption = nil
     presentControlActionFeedback(.success(restartMessage))
   }
 
   func failServerRestart(_ restartError: Error) {
-    pendingMaximumMlxMemoryCeilingBytes = nil
+    requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption = nil
     presentControlActionFeedback(.failure(controlActionErrorMessage(restartError)))
   }
 
@@ -334,21 +334,20 @@ final class TelemetryStore: ObservableObject {
   }
 
   private func resolveMaximumMlxMemoryFeedbackIfReady() {
-    guard let pendingMaximumMlxMemoryCeilingBytes,
+    guard let requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption,
       statusDocument.status != "unavailable",
-      statusDocument.pendingMlxMemoryCeilingBytes == nil,
       case .success = controlActionFeedback
     else { return }
 
     if liveMlxMemoryCeilingAdoptedRequest(
       liveCeilingBytes: statusDocument.mlxMemoryCeilingBytes,
-      requestedCeilingBytes: pendingMaximumMlxMemoryCeilingBytes,
+      requestedCeilingBytes: requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption,
       wiredResidencyBudgetBytes: statusDocument.wiredResidencyBudgetBytes
     ) {
-      self.pendingMaximumMlxMemoryCeilingBytes = nil
+      self.requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption = nil
       scheduleMaximumMlxMemoryFeedbackDismissal()
     } else if let mlxMemoryLimitError = statusDocument.mlxMemoryLimitError {
-      self.pendingMaximumMlxMemoryCeilingBytes = nil
+      self.requestedMaximumMlxMemoryCeilingBytesAwaitingAdoption = nil
       presentControlActionFeedback(.failure(mlxMemoryLimitError))
     }
   }
@@ -375,17 +374,6 @@ final class TelemetryStore: ObservableObject {
     let (requestedMlxMemoryCeilingBytes, overflowOccurred) =
       maximumMlxMemoryGigabytes.multipliedReportingOverflow(by: 1_073_741_824)
     return overflowOccurred ? nil : requestedMlxMemoryCeilingBytes
-  }
-
-  /// The feedback the popover shows. A success for a change still waiting on the reply being
-  /// written is left out: the slider's own note already says when the change lands, so the
-  /// line would only repeat it.
-  var visibleControlActionFeedback: ControlActionFeedback? {
-    guard let controlActionFeedback else { return nil }
-    if case .success = controlActionFeedback, statusDocument.pendingMlxMemoryCeilingBytes != nil {
-      return nil
-    }
-    return controlActionFeedback
   }
 
   var minimumWholeGigabytes: UInt64 {
