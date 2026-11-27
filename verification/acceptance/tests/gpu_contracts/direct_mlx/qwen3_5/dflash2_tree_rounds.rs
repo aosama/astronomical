@@ -21,12 +21,10 @@ use model_serving::speculative_decoding::dflash_drafter::DraftTreeOptions;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use serial_test::serial;
 
-use model_serving::speculative_decoding::context_copy::{ContextCopier, ContextCopySettings};
-
 use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps, story_cell};
 use super::dflash2_kept_per_round::{
     Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS, RoundState,
-    completion_token_ids, load_pair, prompt_token_ids,
+    load_pair,
 };
 use super::dflash2_tree_oracle::{
     Drafting, FIRST_KEYED_SEED, ORACLE_CELLS, draft_tree, prefill, target_picks,
@@ -34,10 +32,6 @@ use super::dflash2_tree_oracle::{
 
 /// Seeds pooled for a sampled cell, as TensorFold's three repetitions.
 const SAMPLED_SEED_COUNT: u64 = 3;
-/// TensorFold's copied-row budget: it starts at 16 rows past the tree,
-/// doubles while copies land whole, halves when most miss, and stops at 48.
-const FIRST_COPY_ROWS: usize = 16;
-const MAXIMUM_COPY_ROWS: usize = 48;
 
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
@@ -227,7 +221,7 @@ fn compare_tree_attention_paths(cell: &Cell, seed_count: u64, paths: &[TreeAtten
         let mut seed_line = format!("[dflash2-tree-rounds] seed {seed_offset:>2}:");
         for (pooled_decode, path) in pooled.iter_mut().zip(paths) {
             path.configure(&mut pair);
-            let decode = decode_with_trees(&pair, &seeded_cell, false);
+            let decode = decode_with_trees(&pair, &seeded_cell);
             seed_line.push_str(&format!(
                 " {} {:.2}",
                 path.label(),
@@ -329,7 +323,7 @@ fn compare_cells_per_seed(cells: &[Cell], seed_count: u64) {
                 keyed_seed: FIRST_KEYED_SEED + seed_offset,
                 ..*cell
             };
-            let decode = decode_with_trees(&pair, &seeded_cell, false);
+            let decode = decode_with_trees(&pair, &seeded_cell);
             seed_line.push_str(&format!(
                 " | {} {:.2}",
                 cell.label,
@@ -384,8 +378,8 @@ pub(super) fn report_plain_decode(cell: &Cell, seed_count: u64) {
     );
 }
 
-/// Decodes every cell with and without context copies; a sampled cell
-/// pools up to `sampled_seed_limit` seeds.
+/// Decodes every cell with the engine's draft trees; a sampled cell pools
+/// up to `sampled_seed_limit` seeds.
 pub(super) fn decode_cells_with_trees(cells: &[Cell], sampled_seed_limit: u64) {
     let mut pair = load_pair();
     pair.target
@@ -397,32 +391,27 @@ pub(super) fn decode_cells_with_trees(cells: &[Cell], sampled_seed_limit: u64) {
         } else {
             SAMPLED_SEED_COUNT.min(sampled_seed_limit)
         };
-        // Alternating the two in one process keeps drift out of the comparison.
-        let mut pooled = [PooledTreeDecode::default(), PooledTreeDecode::default()];
+        let mut pooled_decode = PooledTreeDecode::default();
         for seed_offset in 0..seed_count {
             let seeded_cell = Cell {
                 keyed_seed: FIRST_KEYED_SEED + seed_offset,
                 ..*cell
             };
-            for (pooled_decode, copies_context) in pooled.iter_mut().zip([false, true]) {
-                pooled_decode.add(&decode_with_trees(&pair, &seeded_cell, copies_context));
-            }
+            pooled_decode.add(&decode_with_trees(&pair, &seeded_cell));
         }
-        for (pooled_decode, label) in pooled.iter().zip(["tree", "tree + context copies"]) {
-            eprintln!(
-                "[dflash2-tree-rounds {}/{}] {} ({seed_count} seeds), {label}: {:.2} kept per \
-                 round, {:.1} tok/s decode ({} tokens in {} rounds, {:.1} ms a round)",
-                cell_index + 1,
-                cells.len(),
-                cell.label,
-                pooled_decode.emitted as f64 / pooled_decode.rounds as f64,
-                pooled_decode.emitted as f64 / pooled_decode.decode_seconds,
-                pooled_decode.emitted,
-                pooled_decode.rounds,
-                pooled_decode.decode_seconds * 1000.0 / pooled_decode.rounds as f64,
-            );
-        }
-        print_segments(pooled[0].rounds + pooled[1].rounds);
+        eprintln!(
+            "[dflash2-tree-rounds {}/{}] {} ({seed_count} seeds), tree: {:.2} kept per round, \
+             {:.1} tok/s decode ({} tokens in {} rounds, {:.1} ms a round)",
+            cell_index + 1,
+            cells.len(),
+            cell.label,
+            pooled_decode.emitted as f64 / pooled_decode.rounds as f64,
+            pooled_decode.emitted as f64 / pooled_decode.decode_seconds,
+            pooled_decode.emitted,
+            pooled_decode.rounds,
+            pooled_decode.decode_seconds * 1000.0 / pooled_decode.rounds as f64,
+        );
+        print_segments(pooled_decode.rounds);
     }
 }
 
@@ -449,44 +438,13 @@ struct TreeDecode {
     decode_seconds: f64,
 }
 
-/// The request's text so far and its copier, when the round adds copies.
-struct CopyContext {
-    history: Vec<u32>,
-    copier: ContextCopier,
-    copy_row_budget: usize,
-}
-
-fn decode_with_trees(pair: &JourneyPair, cell: &Cell, copies_context: bool) -> TreeDecode {
+fn decode_with_trees(pair: &JourneyPair, cell: &Cell) -> TreeDecode {
     let (mut round, mut decoder_state, first_token_id) = prefill(pair, cell);
-    let mut copy_context = if copies_context {
-        let mut history = if cell.is_raw_completion {
-            completion_token_ids(pair, cell.prompt)
-        } else {
-            prompt_token_ids(pair, cell.prompt)
-        };
-        history.push(first_token_id);
-        Some(CopyContext {
-            history,
-            copier: ContextCopier::new(ContextCopySettings::default()),
-            copy_row_budget: FIRST_COPY_ROWS,
-        })
-    } else {
-        None
-    };
     let decode_started_at = Instant::now();
     let mut emitted_token_ids = vec![first_token_id];
     let mut rounds = 0;
     while emitted_token_ids.len() <= OUTPUT_TOKENS {
-        let emitted = tree_round(
-            pair,
-            cell,
-            &mut round,
-            &mut decoder_state,
-            copy_context.as_mut(),
-        );
-        if let Some(copy_context) = copy_context.as_mut() {
-            copy_context.history.extend_from_slice(&emitted);
-        }
+        let emitted = tree_round(pair, cell, &mut round, &mut decoder_state);
         emitted_token_ids.extend(emitted);
         rounds += 1;
     }
@@ -497,29 +455,18 @@ fn decode_with_trees(pair: &JourneyPair, cell: &Cell, copies_context: bool) -> T
     }
 }
 
-/// Drafts a tree, hangs a context copy below it when given a copier,
-/// verifies every row, keeps the chain the target's picks follow and
+/// Drafts a tree, verifies every row, keeps the chain the target's picks follow and
 /// commits it. Returns the tokens the round emitted.
 fn tree_round(
     pair: &JourneyPair,
     cell: &Cell,
     round: &mut RoundState,
     decoder_state: &mut RequestDecoderStateStack,
-    mut copy_context: Option<&mut CopyContext>,
 ) -> Vec<u32> {
     let segment_started_at = Instant::now();
     let tree = draft_tree(pair, cell, round, Drafting::Tree);
     let segment_started_at = record_segment(0, segment_started_at);
-    let mut rows = TreeRows::from_draft_tree(round.last_token_id, &tree);
-    let first_copied_row = rows.row_count();
-    let mut copied_row_count = 0;
-    if let Some(copy_context) = copy_context.as_deref_mut() {
-        let copied = copy_context.copier.propose(
-            &copy_context.history,
-            copy_context.copy_row_budget + tree.token_ids.len(),
-        );
-        copied_row_count = rows.add_copied_chain(&copied);
-    }
+    let rows = TreeRows::from_draft_tree(round.last_token_id, &tree);
     let verification = pair
         .target
         .verify_draft_tree(
@@ -538,16 +485,6 @@ fn tree_round(
     let picks = target_picks(pair, cell, &verification.per_row_logits, &pick_positions);
     let segment_started_at = record_segment(2, segment_started_at);
     let kept = rows.kept_chain(&picks);
-    if let Some(copy_context) = copy_context {
-        let mut landed = 0;
-        for kept_row in &kept.rows {
-            if *kept_row >= first_copied_row {
-                landed += 1;
-            }
-        }
-        copy_context.copier.observe(copied_row_count, landed);
-        adapt_copy_row_budget(copy_context, copied_row_count, landed);
-    }
     round.pending_tap_rows = kept_tap_rows(pair, &verification.hidden_state_taps, &kept.rows);
     pair.target
         .commit_draft_tree(decoder_state, verification, &kept.rows)
@@ -599,19 +536,6 @@ fn print_segments(round_count: usize) {
         ));
     }
     eprintln!("[dflash2-tree-rounds] a round, unsynced:{line}");
-}
-
-/// TensorFold's rule: double the copied rows while copies land whole, halve
-/// them (not below the first budget) when fewer than half land.
-fn adapt_copy_row_budget(copy_context: &mut CopyContext, copied_row_count: usize, landed: usize) {
-    if copied_row_count == 0 {
-        return;
-    }
-    if landed == copied_row_count {
-        copy_context.copy_row_budget = (copy_context.copy_row_budget * 2).min(MAXIMUM_COPY_ROWS);
-    } else if 2 * landed < copied_row_count {
-        copy_context.copy_row_budget = (copy_context.copy_row_budget / 2).max(FIRST_COPY_ROWS);
-    }
 }
 
 /// The drafter's next input: every tap's kept rows, in chain order, joined.
