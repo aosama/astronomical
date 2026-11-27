@@ -46,13 +46,13 @@ use graph_host_step::{HostStepOutput, append_host_step};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::Qwen3_5Model;
-use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::in_graph_lookup_admission::LayerNotLookedUp;
 use super::in_graph_route_lookup::{
     InGraphForwardWindow, InGraphLayerOutcome, InGraphLookupTable, InGraphRouteLookup,
     SharedLayerOutcome,
 };
 use super::paged_execution::PageSlots;
+use super::routed_layer_input::RoutedLayerInput;
 use crate::qwen3_5_text::expert_streaming::{TableReadThrough, TableRefusal};
 use crate::{PerformanceAttribution, should_commit_mandatory_routed_page};
 use text_generation::execution_error::TextExecutionError;
@@ -463,17 +463,20 @@ impl Qwen3_5Model {
     /// whole layer (no lookup is needed) or none of it, or the layer keeps
     /// no new experts. Such a layer may still stop at the host; the lookups
     /// before it have run by then, and those after it run later.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_in_graph_table_page(
         &self,
-        layer_index: usize,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        should_use_compiled_elementwise_graphs: bool,
+        routed_layer_input: &RoutedLayerInput<'_>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
+        let RoutedLayerInput {
+            layer_index,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+            ..
+        } = *routed_layer_input;
         let in_graph_serving = self.in_graph_table_serving();
         if !in_graph_serving.is_serving_forward() || selected_indices.dtype() != MlxDtype::UInt32 {
             return Ok(None);

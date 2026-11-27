@@ -23,7 +23,7 @@
 
 use mlx_bridge::MlxArray;
 
-use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
+use super::routed_layer_input::RoutedLayerInput;
 use crate::qwen3_5_text::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
     codebook_page_multiplies_without_transient_decode,
@@ -350,33 +350,18 @@ impl Qwen3_5Model {
     /// Serves a multi-token chunk from a prefetched complete layer when one
     /// is staged for this layer. `Ok(None)` falls through to the retained
     /// and routed dispatch paths.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_prefetched_complete_layer(
         &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        token_count: i32,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
+        routed_layer_input: &RoutedLayerInput<'_>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
         if let Some((prefetched_weights, prefetched_manifest)) =
-            self.take_prefetched_complete_layer(layer_index)
+            self.take_prefetched_complete_layer(routed_layer_input.layer_index)
         {
             return Ok(Some(self.forward_moe_with_prefetched_complete_layer(
-                hidden_states,
-                mixture_of_experts_weights,
-                expert_pager,
-                layer_index,
-                token_count,
+                routed_layer_input,
                 prefetched_weights,
                 prefetched_manifest,
-                selected_indices,
-                selected_scores,
-                should_use_compiled_elementwise_graphs,
                 performance_attribution,
             )?));
         }
@@ -388,21 +373,24 @@ impl Qwen3_5Model {
     /// The complete read is the chunk's routed union, so the plan may seat it
     /// exactly as it would seat a full-coverage union; the route feeds demand
     /// learning after the forward's single completion evaluation.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn forward_moe_with_prefetched_complete_layer(
         &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        route_token_count: i32,
+        routed_layer_input: &RoutedLayerInput<'_>,
         prefetched_weights: Qwen3_5PagedExpertWeights,
         prefetched_manifest: QuantizedExpertPageManifest,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+            ..
+        } = *routed_layer_input;
+        let route_token_count = routed_layer_input.token_count;
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
         if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
