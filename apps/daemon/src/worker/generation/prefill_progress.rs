@@ -44,7 +44,7 @@ pub(in crate::worker) fn handle_worker_prefill_progress(
     };
     crate::worker::health::record_running_prefill(
         health_snapshot,
-        processed_tokens,
+        running_prefill_token_count(processed_tokens, total_tokens, prompt_layer_progress),
         elapsed_millis,
     );
     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
@@ -86,3 +86,33 @@ pub(in crate::worker) fn handle_worker_prefill_progress(
     );
     Ok(())
 }
+
+/// The prompt tokens the session's running reading speed counts. A prompt
+/// read one layer at a time from the SSD computes every token through each
+/// layer in turn, so it reports layers done and no computed tokens until the
+/// last layer: its work so far is the prompt's tokens times the share of the
+/// layers done, the same share the progress bar shows.
+pub(in crate::worker) fn running_prefill_token_count(
+    processed_tokens: u32,
+    total_tokens: u32,
+    prompt_layer_progress: Option<ipc_protocol::WorkerPromptLayerProgress>,
+) -> u32 {
+    let Some(prompt_layer_progress) = prompt_layer_progress else {
+        return processed_tokens;
+    };
+    if prompt_layer_progress.layer_count == 0 {
+        return processed_tokens;
+    }
+    let layer_share_tokens = u64::from(total_tokens)
+        * u64::from(
+            prompt_layer_progress
+                .completed_layer_count
+                .min(prompt_layer_progress.layer_count),
+        )
+        / u64::from(prompt_layer_progress.layer_count);
+    processed_tokens.max(u32::try_from(layer_share_tokens).unwrap_or(u32::MAX))
+}
+
+#[cfg(test)]
+#[path = "prefill_progress_tests.rs"]
+mod prefill_progress_tests;
