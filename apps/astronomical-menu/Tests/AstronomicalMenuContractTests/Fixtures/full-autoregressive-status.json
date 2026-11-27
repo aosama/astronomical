@@ -112,6 +112,7 @@
   "configured_maximum_mlx_memory_gb": null,
   "effective_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "neural_engine_prefill": null,
+  "custom_metal_kernels": null,
   "draft_model": null,
   "drafting": {
     "last_reply": null,
