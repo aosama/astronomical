@@ -1,5 +1,10 @@
-//! Gives back the least-read experts across every layer when the astro expert
-//! cache's capacity falls, rather than whole layers (issue #2681).
+//! Gives back the least-demanded experts across every layer when the person
+//! lowers the memory limit, rather than whole layers (issue #2681).
+//!
+//! Only a live limit change trims this way. Every other capacity move the
+//! memory governor makes on its own (a request starting, a prompt span)
+//! drops whole tables, which is free: rebuilding tables on those moves cost
+//! 36 to 44% of prompt reading on a 35B-A3B at 16 GB.
 //!
 //! A layer's table is one block of slots, so emptying a slot frees nothing:
 //! giving back part of a layer means building a smaller table that holds only

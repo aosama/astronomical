@@ -59,6 +59,22 @@ pub struct GovernedMemory {
     pub(super) largest_prompt_layer_peak_bytes: std::cell::Cell<usize>,
 }
 
+/// How the astro expert cache gives back what no longer fits.
+#[derive(Clone, Copy)]
+enum ExpertTableTrim {
+    /// Whole layer tables, least occupied first. Free, so the capacity moves
+    /// the governor makes on its own at every request start and prompt span
+    /// pay nothing. Rebuilding tables there instead cost 36 to 44% of prompt
+    /// reading and 15 to 20% of replies on a 35B-A3B at 16 GB.
+    WholeTables,
+    /// Every layer rebuilt holding its most-demanded experts
+    /// (`hot_expert_trim`, issue #2681). It costs a copy of each table it
+    /// shrinks, so it is paid only when the person changes the limit: whole
+    /// tables there left a lowered cache with layers empty and the reply
+    /// streaming them on every token.
+    KeepEachLayersHotExperts,
+}
+
 impl Qwen3_5Model {
     /// What this model occupies and could keep, from the geometry measured
     /// at load.
@@ -135,22 +151,36 @@ impl Qwen3_5Model {
         )
     }
 
-    /// The one place the astro expert cache is told how much it may keep. The
-    /// astro expert cache gives back, in its own order, whatever no longer fits.
+    /// Tells the astro expert cache how much it may keep, for every capacity
+    /// move the governor makes on its own (a request starting, a prompt
+    /// span, a workspace lease). What no longer fits goes as whole layer
+    /// tables, which costs nothing.
     ///
     /// A dense model's kept layers are its kept weights: trailing layers
     /// are given back until what is kept fits.
     pub(super) fn apply_kept_weight_capacity(&self, capacity: KeptWeightCapacity) {
+        self.apply_kept_weight_capacity_by(capacity, ExpertTableTrim::WholeTables);
+    }
+
+    /// The one place the astro expert cache is told how much it may keep.
+    fn apply_kept_weight_capacity_by(
+        &self,
+        capacity: KeptWeightCapacity,
+        expert_table_trim: ExpertTableTrim,
+    ) {
         self.give_back_kept_dense_layers_beyond(capacity);
         let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return;
         };
-        // Each layer keeps its most-read experts rather than losing whole
-        // layers; see `hot_expert_trim` (issue #2681).
-        let released_expert_bytes = astro_expert_cache
-            .borrow_mut()
-            .set_capacity_keeping_hot_experts(&self.runtime, capacity.bytes())
-            .released_payload_bytes();
+        let released_expert_bytes = match expert_table_trim {
+            ExpertTableTrim::WholeTables => astro_expert_cache
+                .borrow_mut()
+                .set_capacity(capacity.bytes()),
+            ExpertTableTrim::KeepEachLayersHotExperts => astro_expert_cache
+                .borrow_mut()
+                .set_capacity_keeping_hot_experts(&self.runtime, capacity.bytes()),
+        }
+        .released_payload_bytes();
         if released_expert_bytes > 0 {
             self.report_released_experts(capacity, released_expert_bytes);
         }
@@ -492,7 +522,7 @@ impl Qwen3_5Model {
             self.follow_installed_limit(memory_governor);
             memory_governor.kept_weight_capacity()
         };
-        self.apply_kept_weight_capacity(capacity);
+        self.apply_kept_weight_capacity_by(capacity, ExpertTableTrim::KeepEachLayersHotExperts);
     }
 
     /// Tells the governor the limit MLX has installed. A zero limit is
