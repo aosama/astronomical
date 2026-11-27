@@ -946,6 +946,24 @@ measure-row-exact-attention-verdict = "run -p xtask -- test-run --package astron
 # 16,384. Prints a verdict a cell and writes its comparison page. No model;
 # about a minute. The kernel saving does not reach the served engine: a real
 # layer already runs gate and up concurrently (measured 2026-11-27).
+# Astronomical's sorted-expert 4-bit matmul against MLX's gather_qmm at a
+# 35B-A3B prompt chunk's gate and down projections (256 experts, 16,384
+# assignments, uneven routing): fails if any output bit differs from MLX's,
+# then prints the profiler's verdict a shape and writes its comparison page.
+# No model; about a minute.
+measure-sorted-expert-matmul-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 180 --filter sorted_expert_matmul_against_mlx_gather_qmm"
+# A 35B-A3B expert layer's gate and up over a prompt chunk read straight from
+# the token rows by Astronomical's sorted-expert matmul, against the engine's
+# way today (a sorted copy of the rows, then MLX's gather_qmm twice): fails if
+# any gate bit differs, then prints the profiler's verdict. No model; under a
+# minute.
+measure-sorted-expert-token-rows-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 120 --filter gate_and_up_from_token_rows_against_the_sorted_copy"
+# A served 2,048-token prompt chunk on an installed 4-bit mixture-of-experts
+# pack (the 35B-A3B), its gate and up projections through the sorted-expert
+# matmul against MLX's route in one loaded model: fails if the chunk's final
+# logits change in any bit, then prints the profiler's verdict over
+# interleaved rounds. Needs --configuration with model_directory. About a minute.
+measure-sorted-expert-matmul-served-chunk = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --ignored --case-budget-seconds 240 --filter should_give_a_verdict_on_the_sorted_expert_matmul_in_a_served_chunk"
 measure-expert-gate-up-fusion-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter fused_gate_and_up_projection_against_two"
 # Where a 2-bit folded ternary projection over a 2,048-token prompt chunk
 # stands against dense float16 arithmetic: MLX's 2-bit multiply, the weight

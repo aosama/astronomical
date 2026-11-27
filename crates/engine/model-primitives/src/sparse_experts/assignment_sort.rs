@@ -15,6 +15,11 @@ pub struct SortedExpertAssignments {
     pub sorted_states: MlxArray,
     pub sorted_indices: MlxArray,
     pub inverse_order: MlxArray,
+    /// The assignment at each sorted position (the argsort of the flat
+    /// expert ids): sorted row r is token `sorted_order[r] / top_k`'s row. A
+    /// kernel that reads token rows through it needs no `sorted_states`,
+    /// which then stays an unevaluated node of the graph.
+    pub sorted_order: MlxArray,
 }
 
 /// Sorts assignments by expert id and gathers the matching token rows.
@@ -94,6 +99,7 @@ fn sort_expert_assignments_inner(
         sorted_states,
         sorted_indices,
         inverse_order,
+        sorted_order,
     })
 }
 
@@ -148,11 +154,22 @@ fn empty_sorted_assignments(
             "expanded hidden states must have a positive hidden dimension",
         ));
     }
+    let [sorted_indices, inverse_order, sorted_order] = empty_index_vectors(runtime)?;
     Ok(SortedExpertAssignments {
         sorted_states: runtime.zeros(&[0, 1, hidden_dimension], expanded_states.dtype())?,
-        sorted_indices: runtime.array_from_u32(&[], &[0])?,
-        inverse_order: runtime.array_from_u32(&[], &[0])?,
+        sorted_indices,
+        inverse_order,
+        sorted_order,
     })
+}
+
+/// The sorted indices, inverse order and sort order of no assignments.
+fn empty_index_vectors(runtime: &MlxRuntime) -> Result<[MlxArray; 3], MlxRuntimeError> {
+    Ok([
+        runtime.array_from_u32(&[], &[0])?,
+        runtime.array_from_u32(&[], &[0])?,
+        runtime.array_from_u32(&[], &[0])?,
+    ])
 }
 
 fn geometry_error(description: &'static str) -> MlxRuntimeError {

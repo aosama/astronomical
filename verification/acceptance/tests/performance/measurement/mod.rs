@@ -25,6 +25,10 @@ mod register_order_slice_verdict;
 #[cfg(feature = "performance-measurement")]
 mod row_exact_attention_verdict;
 #[cfg(feature = "performance-measurement")]
+mod sorted_expert_matmul_verdict;
+#[cfg(feature = "performance-measurement")]
+mod sorted_expert_token_rows_verdict;
+#[cfg(feature = "performance-measurement")]
 mod ternary_prompt_projection_verdict;
 #[cfg(feature = "performance-measurement")]
 mod verdict_text;

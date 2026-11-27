@@ -12,8 +12,12 @@ pub mod fused_jangtq2_gathered_projection_probe;
 pub mod gated_delta_probes;
 #[cfg(feature = "direct-mlx")]
 pub mod prism_hadamard_probes;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod probe_test_runtime;
 #[cfg(feature = "direct-mlx")]
 pub mod row_batched_matmul_probe;
+#[cfg(feature = "direct-mlx")]
+pub mod sorted_expert_matmul_probe;
 #[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_shared_combination_probe;
 #[cfg(feature = "direct-mlx")]
@@ -37,6 +41,8 @@ pub use gated_delta_probes::{
 pub use prism_hadamard_probes::PRISM_HADAMARD_SIGNED_ROTATION;
 #[cfg(feature = "direct-mlx")]
 pub use row_batched_matmul_probe::ROW_BATCHED_MATMUL;
+#[cfg(feature = "direct-mlx")]
+pub use sorted_expert_matmul_probe::SORTED_EXPERT_MATMUL;
 #[cfg(feature = "direct-mlx")]
 pub use sorted_expert_shared_combination_probe::SORTED_EXPERT_SHARED_COMBINATION;
 #[cfg(feature = "direct-mlx")]
