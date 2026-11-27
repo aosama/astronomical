@@ -108,14 +108,17 @@ test-reply-token-reclaim = "test -p text-generation --features direct-mlx --lib 
 # layout and starting values, the add-on path every linear layer takes, and
 # how serving's passes are regrouped so trained scores compare with served
 # ones, and the parts of recomputing layers for a text too long for a pass
-# (issue #2299) that need no model. Needs MLX and the graphics processor
-# (#[serial]); about a second.
+# (issue #2299) that need no model. Needs MLX (#[serial]), on the graphics
+# processor on macOS and the CPU elsewhere; about a second.
 # The whole journey runs live with `astronomical decision train EXAMPLES
 # --whole-model --output DIR --model laya-MLX-8bit` against Development, on
 # at least 1000 labelled questions about 100 states.
-# The linear add-on tests live in model-primitives (issue
-# #2340), so both packages run with their direct-MLX feature.
-test-decision-whole-model-training = "test -p decision-models -p model-primitives --features decision-models/direct-mlx,model-primitives/direct-mlx --lib -- adapter_training linear_adapters decision_adapters laya::served_batches laya::batching"
+# The linear add-on tests live in model-primitives (issue #2340) and the
+# regrouping of served passes in the laya crate (`served_batches`, since each
+# decision family got its own crate in #2535), so all three packages run with
+# their direct-MLX feature. Filters name modules, not crates: `laya::...`
+# would match nothing inside the laya crate itself (issue #2686).
+test-decision-whole-model-training = "test -p decision-models -p model-primitives -p laya --features decision-models/direct-mlx,model-primitives/direct-mlx,laya/direct-mlx --lib -- adapter_training linear_adapters decision_adapters served_batches"
 
 # Vision tower journeys against real public Hugging Face repositories: whether a
 # repository has a tower, and whether a tower shares a text model's base. They
@@ -204,11 +207,15 @@ measure-flash-next-sampled-forward-speed = "run -p xtask -- test-run --package a
 test-modernbert = "test -p decision-models --features direct-mlx --lib modernbert"
 test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_reproduce_the_embedding_vectors_recorded_before_the_trunk_was_restructured"
 
-# The Laya decision-model backend (issue #2032). `test-laya` runs its lib
-# tests: artifact, configuration, tokenizer and batching checks, plus the
-# decision head on small synthetic weights built on the graphics processor;
-# about a second, no installed model. The two journeys below load the real
-# 8-bit MLX checkpoints; pass `--configuration PATH` naming a JSON file whose
+# The Laya decision-model backend (issue #2032). `test-laya` runs the laya
+# crate's lib tests (artifact, configuration, tokenizer, engine and
+# served-batch checks, plus the decision head on small synthetic weights
+# through MLX) together with those of the decision-models shell and the
+# ModernBERT trunk it runs through; a few seconds, no installed model. It
+# names the laya crate itself because Laya's tests live in a crate of their
+# own (#2535): a filter on decision-models alone runs none of them (issue
+# #2686). The two journeys below load the real 8-bit MLX checkpoints; pass
+# `--configuration PATH` naming a JSON file whose
 # `model_directory` is the MLX Laya repository folder (English checkpoint at
 # its root, `multilingual/` beside it). `test-laya-reference-decisions`
 # compares token sequences exactly and probabilities within 0.05 against the
@@ -236,7 +243,7 @@ test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronom
 # text longer than the pass budget twice, recomputing each layer and keeping
 # every activation, and requires the same weights and a lower peak: about a
 # minute on Kev 0.8B.
-test-laya = "test -p decision-models --features direct-mlx --lib decision_models"
+test-laya = "test -p decision-models -p laya --features decision-models/direct-mlx,laya/direct-mlx --lib"
 test-laya-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_reference_decisions"
 test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_engine_requests"
 test-laya-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_laya"
