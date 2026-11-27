@@ -16,7 +16,7 @@
 
 use std::io::Read as _;
 use std::os::fd::AsRawFd as _;
-use std::path::Path;
+use std::path::PathBuf;
 
 use metal_kernel_declarations::kernel_files::{
     RegisteredKernel, kernel_folder_files, read_registered_kernel, repository_root_above,
@@ -91,7 +91,11 @@ fn should_find_no_mlx_source_in_output_without_a_fence() {
 }
 
 fn repository_registered_kernels() -> Vec<RegisteredKernel> {
-    let repository_root = repository_root_above(Path::new(env!("CARGO_MANIFEST_DIR")))
+    // Read at run time, not compile time: a test binary run from a nextest
+    // archive on another runner gets the workspace's new place there.
+    let manifest_directory = std::env::var("CARGO_MANIFEST_DIR")
+        .map_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")), PathBuf::from);
+    let repository_root = repository_root_above(&manifest_directory)
         .expect("the acceptance crate is in the workspace");
     let shared_header_directory = repository_root.join(SHARED_HEADER_DIRECTORY);
     let mut registered_kernels = Vec::new();
