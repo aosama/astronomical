@@ -23,6 +23,14 @@ pub enum ArtifactValidationError {
         description: String,
     },
 
+    /// A folded ternary pack failed its own validation, or cannot be read as
+    /// the Qwen 3.5 text model it extends.
+    #[error("folded ternary pack is not valid: {description}")]
+    InvalidFoldedTernaryPack {
+        /// What was found wrong with the pack.
+        description: String,
+    },
+
     /// An Expert Atlas model's resident weight bundle is not a valid safetensors file.
     #[error("Expert Atlas resident weight bundle is not a valid safetensors file: {source}")]
     InvalidResidentBundle {

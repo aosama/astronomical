@@ -89,7 +89,9 @@ pub use decisions::{
     DecisionTrainingCommand, DecisionsCommand, DecisionsValidationError,
     MINIMUM_DECISION_TOKENS_PER_QUESTION, WorkerDecisionCapabilities,
 };
-pub use draft_model_status::{DraftModelGeneration, DraftModelLocation, DraftModelStatus};
+pub use draft_model_status::{
+    BUNDLED_DRAFTER_FOLDER_NAMES, DraftModelGeneration, DraftModelLocation, DraftModelStatus,
+};
 pub use embeddings::{
     EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, EmbeddingsValidationError,
 };

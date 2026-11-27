@@ -10,8 +10,8 @@
 use runtime_integration::MlxRuntime;
 
 use super::paged_execution::RoutedExpertAssignmentOutputs;
+use super::routed_layer_input::RoutedLayerInput;
 use crate::qwen3_5_text::expert_streaming::RoutedExpertCoverage;
-use crate::qwen3_5_text::expert_streaming::expert_pager::Qwen3_5ExpertPager;
 use crate::qwen3_5_text::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use crate::qwen3_5_text::model::Qwen3_5MoEPagedExecutionMode;
 use crate::qwen3_5_text::model::Qwen3_5Model;
@@ -193,22 +193,25 @@ impl Qwen3_5Model {
     /// `astro_expert_cache`-plus-streamed route, and runs one mixed forward. The warm-insert
     /// offer for the streamed experts stays inside the streaming call, so a
     /// mixed forward still warms what it read.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn forward_moe_mixed_decode_route_with_performance_attribution(
         &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
+        routed_layer_input: &RoutedLayerInput<'_>,
         route_order_expert_ids: &[usize],
         route_coverage: &RoutedExpertCoverage,
         expert_capacity: usize,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
-        should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+            ..
+        } = *routed_layer_input;
         let retained_expert_ids = &route_coverage.retained_expert_ids;
         let missing_expert_ids = &route_coverage.missing_expert_ids;
         // With the fused kernel the warm table is multiplied in place; without

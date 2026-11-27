@@ -55,6 +55,7 @@ use super::super::expert_streaming::expert_pager::Qwen3_5ExpertPager;
 use super::Qwen3_5MoEPagedExecutionMode;
 use super::expert_reuse::ExpertPageDisposition;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
+use super::routed_layer_input::RoutedLayerInput;
 
 impl Qwen3_5Model {
     /// Routes once, then selects contiguous resident arrays or native paging.
@@ -78,6 +79,16 @@ impl Qwen3_5Model {
             },
         )?;
 
+        let routed_layer_input = RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            token_count,
+            selected_indices: &selected_indices,
+            selected_scores: &selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+        };
         let should_use_loaded_model_mode = matches!(
             paged_execution_mode,
             Qwen3_5MoEPagedExecutionMode::ProductionDefault
@@ -90,17 +101,8 @@ impl Qwen3_5Model {
             performance_attribution.is_enabled(),
         );
         if should_use_loaded_model_mode
-            && let Some(handled) = self.dispatch_without_host_route(
-                hidden_states,
-                mixture_of_experts_weights,
-                expert_pager,
-                layer_index,
-                token_count,
-                &selected_indices,
-                &selected_scores,
-                should_use_compiled_elementwise_graphs,
-                performance_attribution,
-            )?
+            && let Some(handled) =
+                self.dispatch_without_host_route(&routed_layer_input, performance_attribution)?
         {
             return Ok(handled);
         }
@@ -122,18 +124,11 @@ impl Qwen3_5Model {
             && let Some(routed_expert_ids) = sorted_unique_expert_ids.as_ref()
             && self.astro_expert_cache.is_some()
             && let Some(handled) = self.dispatch_routed_disposition(
-                expert_pager,
-                layer_index,
-                token_count,
+                &routed_layer_input,
                 self.fused_jangtq2_gathered_projection_kernel.is_some(),
-                &selected_indices,
-                &selected_scores,
                 selected_expert_ids,
                 routed_expert_ids,
-                mixture_of_experts_weights,
-                hidden_states,
                 paged_execution_mode,
-                should_use_compiled_elementwise_graphs,
                 performance_attribution,
             )?
         {
@@ -141,14 +136,7 @@ impl Qwen3_5Model {
         }
 
         self.forward_unhandled_route(
-            hidden_states,
-            mixture_of_experts_weights,
-            expert_pager,
-            layer_index,
-            token_count,
-            &selected_indices,
-            &selected_scores,
-            should_use_compiled_elementwise_graphs,
+            &routed_layer_input,
             paged_execution_mode,
             sorted_unique_expert_ids.as_deref(),
             performance_attribution,
@@ -170,31 +158,14 @@ impl Qwen3_5Model {
     /// completion evaluation. Codebook pages that would decode the whole
     /// table fall through to the host-side route and decode only their
     /// routed union.
-    #[allow(clippy::too_many_arguments)]
     fn dispatch_without_host_route(
         &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        token_count: i32,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
+        routed_layer_input: &RoutedLayerInput<'_>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
-        if token_count > 1
-            && let Some(handled) = self.dispatch_complete_layer_page_in_hand(
-                expert_pager,
-                layer_index,
-                token_count,
-                hidden_states,
-                mixture_of_experts_weights,
-                selected_indices,
-                selected_scores,
-                should_use_compiled_elementwise_graphs,
-                performance_attribution,
-            )?
+        if routed_layer_input.token_count > 1
+            && let Some(handled) = self
+                .dispatch_complete_layer_page_in_hand(routed_layer_input, performance_attribution)?
         {
             return Ok(Some(handled));
         }
@@ -206,15 +177,8 @@ impl Qwen3_5Model {
             return Ok(None);
         }
         self.dispatch_table_page_without_host_route(
-            expert_pager,
-            layer_index,
-            token_count,
+            routed_layer_input,
             self.fused_jangtq2_gathered_projection_kernel.is_some(),
-            selected_indices,
-            selected_scores,
-            mixture_of_experts_weights,
-            hidden_states,
-            should_use_compiled_elementwise_graphs,
             performance_attribution,
         )
     }
@@ -247,20 +211,22 @@ impl Qwen3_5Model {
     /// multiplies the whole table without a transient decode is served from
     /// the table with the route remapped on-device. `Ok(None)` falls through
     /// to the routed-dispatch paths.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_retained_full_hit_packed_page(
         &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        token_count: i32,
+        routed_layer_input: &RoutedLayerInput<'_>,
         decode_tokens_multiply_packed_pages: bool,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        hidden_states: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            token_count,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+        } = *routed_layer_input;
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         if !matches!(
             self.expert_page_disposition(layer_index, expert_capacity),
@@ -335,23 +301,20 @@ impl Qwen3_5Model {
 
     /// Records the routed demand on the retained tables and dispatches on the
     /// layer's page disposition; both dispositions are terminal here.
-    #[allow(clippy::too_many_arguments)]
     fn dispatch_routed_disposition(
         &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        token_count: i32,
+        routed_layer_input: &RoutedLayerInput<'_>,
         decode_tokens_multiply_packed_pages: bool,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
         selected_expert_ids: &[usize],
         routed_expert_ids: &[usize],
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        hidden_states: &MlxArray,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
-        should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            ..
+        } = *routed_layer_input;
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
             astro_expert_cache.borrow_mut().record_expert_demand(
@@ -362,32 +325,19 @@ impl Qwen3_5Model {
         }
         match self.expert_page_disposition(layer_index, expert_capacity) {
             ExpertPageDisposition::FullHit => Ok(Some(self.dispatch_full_hit_routed_page(
-                layer_index,
+                routed_layer_input,
                 expert_capacity,
-                token_count,
                 decode_tokens_multiply_packed_pages,
-                selected_indices,
-                selected_scores,
                 selected_expert_ids,
                 routed_expert_ids,
-                mixture_of_experts_weights,
-                hidden_states,
-                should_use_compiled_elementwise_graphs,
                 performance_attribution,
             )?)),
             ExpertPageDisposition::Miss => Ok(Some(self.dispatch_miss_route(
-                expert_pager,
-                layer_index,
+                routed_layer_input,
                 expert_capacity,
-                token_count,
-                selected_indices,
-                selected_scores,
                 selected_expert_ids,
                 routed_expert_ids,
-                mixture_of_experts_weights,
-                hidden_states,
                 paged_execution_mode,
-                should_use_compiled_elementwise_graphs,
                 performance_attribution,
             )?)),
         }
@@ -396,22 +346,25 @@ impl Qwen3_5Model {
     /// Serves a full table hit from the seated layer: multi-token chunks
     /// decode exactly their routed union, decode tokens with the fused kernel
     /// decode the complete packed page.
-    #[allow(clippy::too_many_arguments)]
     fn dispatch_full_hit_routed_page(
         &self,
-        layer_index: usize,
+        routed_layer_input: &RoutedLayerInput<'_>,
         expert_capacity: usize,
-        token_count: i32,
         decode_tokens_multiply_packed_pages: bool,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
         selected_expert_ids: &[usize],
         routed_expert_ids: &[usize],
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        hidden_states: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        let RoutedLayerInput {
+            layer_index,
+            token_count,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+            ..
+        } = *routed_layer_input;
         performance_attribution.record_counter(
             PerformanceCounter::RetainedRouteAssignmentHitCount,
             u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
@@ -474,21 +427,23 @@ impl Qwen3_5Model {
     /// Serves every route the retained fast paths declined: multi-token
     /// chunks pick their configured paging mode, decode tokens fall through
     /// to expert-store paging.
-    #[allow(clippy::too_many_arguments)]
     fn forward_unhandled_route(
         &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        token_count: i32,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
+        routed_layer_input: &RoutedLayerInput<'_>,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         sorted_unique_expert_ids: Option<&[usize]>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            token_count,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+        } = *routed_layer_input;
         if token_count > 1 {
             return match paged_execution_mode {
                 Qwen3_5MoEPagedExecutionMode::ProductionDefault => self
@@ -507,27 +462,11 @@ impl Qwen3_5Model {
                     ),
                 Qwen3_5MoEPagedExecutionMode::CompactPromptDiagnostic => self
                     .forward_moe_with_direct_prefill_paging(
-                        hidden_states,
-                        mixture_of_experts_weights,
-                        expert_pager,
-                        layer_index,
-                        token_count,
-                        selected_indices,
-                        selected_scores,
-                        should_use_compiled_elementwise_graphs,
+                        routed_layer_input,
                         performance_attribution,
                     ),
                 Qwen3_5MoEPagedExecutionMode::TokenLocalDiagnostic => self
-                    .forward_moe_with_per_token_paging(
-                        hidden_states,
-                        mixture_of_experts_weights,
-                        expert_pager,
-                        layer_index,
-                        selected_indices,
-                        selected_scores,
-                        should_use_compiled_elementwise_graphs,
-                        performance_attribution,
-                    ),
+                    .forward_moe_with_per_token_paging(routed_layer_input, performance_attribution),
             };
         }
         self.forward_moe_with_expert_store_paging(

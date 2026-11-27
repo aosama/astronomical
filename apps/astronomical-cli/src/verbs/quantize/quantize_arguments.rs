@@ -36,6 +36,17 @@ pub enum QuantizeCommand {
     Inspect(QuantizeInspectArguments),
     Convert(QuantizeConvertArguments),
     Evaluate(QuantizeEvaluateArguments),
+    Drafter(QuantizeDrafterArguments),
+}
+
+/// `quantize drafter DRAFTER_DIR --output DIR`: a DFlash drafter rewritten
+/// in the packing Astronomical serves it in.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QuantizeDrafterArguments {
+    /// The drafter's own folder: its `config.json` and bf16 `model.safetensors`.
+    pub drafter_directory: PathBuf,
+    /// A new folder for the packed drafter; it must not exist yet.
+    pub output_directory: PathBuf,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,7 +145,18 @@ fn parse_quantize_sub_verb(
         "plan" => parse_plan_arguments(flag_arguments).map(QuantizeCommand::Plan),
         "inspect" => parse_inspect_arguments(flag_arguments).map(QuantizeCommand::Inspect),
         "convert" => parse_convert_arguments(flag_arguments).map(QuantizeCommand::Convert),
+        other_sub_verb => parse_model_quantize_sub_verb(other_sub_verb, flag_arguments),
+    }
+}
+
+/// The sub-verbs that read a finished model: `evaluate` and `drafter`.
+fn parse_model_quantize_sub_verb(
+    sub_verb: &str,
+    flag_arguments: &[OsString],
+) -> Result<QuantizeCommand, UsageError> {
+    match sub_verb {
         "evaluate" => parse_evaluate_arguments(flag_arguments).map(QuantizeCommand::Evaluate),
+        "drafter" => parse_drafter_arguments(flag_arguments).map(QuantizeCommand::Drafter),
         unknown_target => Err(UsageError::UnknownQuantizeTarget(unknown_target.to_owned())),
     }
 }
@@ -287,6 +309,26 @@ fn parse_inspect_arguments(arguments: &[OsString]) -> Result<QuantizeInspectArgu
     Ok(QuantizeInspectArguments {
         artifact_directory: required(artifact_directory, "ARTIFACT_DIR")?,
         render_json,
+    })
+}
+
+/// `quantize drafter DRAFTER_DIR --output DIR`.
+fn parse_drafter_arguments(arguments: &[OsString]) -> Result<QuantizeDrafterArguments, UsageError> {
+    let mut cursor = QuantizeArgumentCursor::new(arguments);
+    let mut drafter_directory = None;
+    let mut output_directory = None;
+    while let Some(argument) = cursor.next_argument() {
+        if argument == "--output" {
+            output_directory = Some(PathBuf::from(cursor.flag_value("--output")?));
+        } else if argument.starts_with('-') || drafter_directory.is_some() {
+            return Err(UsageError::UnknownArgument(argument));
+        } else {
+            drafter_directory = Some(PathBuf::from(argument));
+        }
+    }
+    Ok(QuantizeDrafterArguments {
+        drafter_directory: required(drafter_directory, "DRAFTER_DIR")?,
+        output_directory: required(output_directory, "--output")?,
     })
 }
 

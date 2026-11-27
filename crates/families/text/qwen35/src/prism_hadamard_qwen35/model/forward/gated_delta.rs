@@ -45,7 +45,7 @@ use super::super::weights::LinearLayerWeights;
 impl super::super::PrismHadamardTextModel {
     /// Runs one linear-attention layer through the selected shared gated-delta
     /// route, advancing this layer's convolution and recurrent state.
-    pub(super) fn forward_linear_attention_layer(
+    pub(in crate::prism_hadamard_qwen35::model) fn forward_linear_attention_layer(
         &self,
         normalized_input: &MlxArray,
         token_count: i32,

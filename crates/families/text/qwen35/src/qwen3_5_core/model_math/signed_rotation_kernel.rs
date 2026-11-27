@@ -3,8 +3,8 @@
 //! The composed rotation is three launches per activation: the compiled
 //! float32 cast with the sign flip, MLX's block Hadamard kernel, and the
 //! cast back to the activation dtype, with two float32 intermediates round
-//! tripping through memory between them. Decode on the folded pack issues
-//! that rotation four times per decoder layer, so the composed route costs
+//! tripping through memory between them. Decode on a folded ternary pack
+//! issues that rotation four times per decoder layer, so the composed route costs
 //! roughly five hundred launches per generated token on a path whose
 //! per-token time is already launch-bound. This kernel does the same work in
 //! one launch: each threadgroup owns one Hadamard block of one row, loads
@@ -37,7 +37,7 @@ const READ_WIDTH: i32 = 4;
 /// different addition order, so blocks above it keep the composed route.
 const MAX_SINGLE_STAGE_BLOCK: u32 = 8192;
 
-const KERNEL_NAME: &str = "astronomical_prism_hadamard_signed_rotation";
+const KERNEL_NAME: &str = "astronomical_signed_hadamard_rotation";
 const OPERATION: &str = "apply the fused signed Hadamard rotation";
 
 /// True when the one-launch rotation reproduces MLX's single-stage block

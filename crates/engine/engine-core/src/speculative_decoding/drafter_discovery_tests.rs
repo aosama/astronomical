@@ -3,8 +3,13 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use super::drafter_discovery::{
-    BUNDLED_DRAFTER_DIRECTORY_NAME, DrafterPairing, paired_drafter_directory,
+    DrafterPairing, is_bundled_drafter_directory, paired_drafter_directory,
 };
+
+/// The folder Astronomical's own packages keep their drafter in.
+const BUNDLED_DRAFTER_DIRECTORY_NAME: &str = "drafter";
+/// The folder community packs for Apple Silicon keep their drafter in.
+const COMMUNITY_DRAFTER_DIRECTORY_NAME: &str = "dflash";
 
 const TARGET_27B: DrafterPairing = DrafterPairing {
     target_layer_count: 64,
@@ -238,4 +243,82 @@ fn should_keep_a_bundled_dflash_drafter_over_a_dflash2_library_drafter() {
         .expect("the library lists")
         .expect("a drafter pairs");
     assert_eq!(found_directory, bundled);
+}
+
+/// Community packs keep the drafter in `dflash`, so that loaders globbing
+/// `model*.safetensors` at the root do not read it as target weights; it is
+/// the model's own drafter all the same.
+#[test]
+fn should_find_a_drafter_bundled_in_a_dflash_folder() {
+    let library_root = tempfile::tempdir().expect("a temporary directory");
+    let target = library_root.path().join("community").join("ternary-27b");
+    write_config(&target, &json!({"model_type": "prism_hadamard_qwen35"}));
+    let community_drafter = target.join(COMMUNITY_DRAFTER_DIRECTORY_NAME);
+    write_config(&community_drafter, &drafter_document(64));
+    write_config(
+        &library_root.path().join("lab").join("a-library-drafter"),
+        &drafter_document(64),
+    );
+
+    let (found_directory, _) = paired_drafter_directory(&target, &TARGET_27B)
+        .expect("the library lists")
+        .expect("the bundled drafter pairs");
+
+    assert_eq!(found_directory, community_drafter);
+    assert!(is_bundled_drafter_directory(&target, &found_directory));
+}
+
+#[test]
+fn should_try_the_drafter_folder_before_the_dflash_folder() {
+    let library_root = tempfile::tempdir().expect("a temporary directory");
+    let target = library_root.path().join("local").join("target-27b");
+    write_config(&target, &json!({"model_type": "qwen3_5"}));
+    let astronomical_drafter = target.join(BUNDLED_DRAFTER_DIRECTORY_NAME);
+    write_config(
+        &astronomical_drafter,
+        &first_generation_drafter_document(64),
+    );
+    write_config(
+        &target.join(COMMUNITY_DRAFTER_DIRECTORY_NAME),
+        &drafter_document(64),
+    );
+
+    let (found_directory, _) = paired_drafter_directory(&target, &TARGET_27B)
+        .expect("the library lists")
+        .expect("a bundled drafter pairs");
+
+    assert_eq!(found_directory, astronomical_drafter);
+}
+
+#[test]
+fn should_pass_over_a_dflash_folder_that_does_not_pair() {
+    let library_root = tempfile::tempdir().expect("a temporary directory");
+    let target = library_root.path().join("community").join("ternary-27b");
+    write_config(&target, &json!({"model_type": "prism_hadamard_qwen35"}));
+    write_config(
+        &target.join(COMMUNITY_DRAFTER_DIRECTORY_NAME),
+        &drafter_document(40),
+    );
+
+    assert!(
+        paired_drafter_directory(&target, &TARGET_27B)
+            .expect("the library lists")
+            .is_none()
+    );
+}
+
+#[test]
+fn should_not_call_a_library_drafter_or_another_folder_bundled() {
+    let target = PathBuf::from("/library/community/ternary-27b");
+
+    assert!(is_bundled_drafter_directory(
+        &target,
+        &target.join("drafter")
+    ));
+    assert!(!is_bundled_drafter_directory(
+        &target,
+        &PathBuf::from("/library/lab/a-library-drafter")
+    ));
+    assert!(!is_bundled_drafter_directory(&target, &target.join("mtp")));
+    assert!(!is_bundled_drafter_directory(&target, &target));
 }

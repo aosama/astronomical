@@ -34,8 +34,14 @@ fn validated_visual_embeddings_in_text_dtype(
             description: "text embedding shape does not match the prefill chunk",
         });
     }
+    // BF16 visual rows meet float32 text rows where MLX computes on its CPU,
+    // and float16 text rows on a folded ternary pack; both hold every BF16
+    // value of an embedding's size exactly.
     let widens_to_text_dtype = visual_embeddings.dtype() == mlx_bridge::MlxDtype::BFloat16
-        && text_embeddings.dtype() == mlx_bridge::MlxDtype::Float32;
+        && matches!(
+            text_embeddings.dtype(),
+            mlx_bridge::MlxDtype::Float32 | mlx_bridge::MlxDtype::Float16
+        );
     if visual_embedding_shape.len() != 2
         || visual_embedding_shape[1] != text_embedding_shape[2]
         || (visual_embeddings.dtype() != text_embeddings.dtype() && !widens_to_text_dtype)
@@ -47,10 +53,9 @@ fn validated_visual_embeddings_in_text_dtype(
     if !widens_to_text_dtype {
         return Ok(None);
     }
-    Ok(Some(runtime.astype(
-        visual_embeddings,
-        mlx_bridge::MlxDtype::Float32,
-    )?))
+    Ok(Some(
+        runtime.astype(visual_embeddings, text_embeddings.dtype())?,
+    ))
 }
 
 pub fn qwen3_5_inject_visual_embeddings(

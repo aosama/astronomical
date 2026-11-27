@@ -14,9 +14,11 @@ use model_serving::RequestDecoderStateStack;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use serial_test::serial;
 
-use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps};
+use super::dflash2_journey_support::{
+    TargetLogitRows, forward_with_taps, story_cell, story_prompt,
+};
 use super::dflash2_kept_per_round::{Cell, JourneyPair, RoundState, load_pair};
-use super::dflash2_tree_oracle::{ORACLE_CELLS, prefill, target_picks};
+use super::dflash2_tree_oracle::{CODE_CELL, prefill, target_picks};
 use super::dflash2_tree_rounds::kept_tap_rows;
 
 const BREAKDOWN_ROUND_COUNT: usize = 24;
@@ -39,7 +41,7 @@ fn should_measure_where_a_tree_round_spends_its_time() {
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    print_stage_breakdown(&pair, &ORACLE_CELLS[4], "chat 1.0");
+    print_stage_breakdown(&pair, &story_cell("story 1.0", 1_000), "story 1.0");
 }
 
 /// The Romeo and Juliet words a long prompt is cut from.
@@ -48,8 +50,6 @@ const LONG_PROMPT_SOURCE: &str =
 /// About 6,000 tokens: long enough that anything a round copies or reads
 /// per context row shows, short enough to prefill in one pass.
 const LONG_PROMPT_WORD_COUNT: usize = 4_000;
-/// About 10,000 tokens, the size the serving throughput journey sends.
-const JOURNEY_PROMPT_WORD_COUNT: usize = 7_400;
 
 /// A round's stages with a long prompt already in the target's state. A
 /// round's cost should not grow with the context beyond the attention over
@@ -71,13 +71,14 @@ fn should_measure_where_a_tree_round_spends_its_time_after_a_long_prompt() {
             .join(" ")
             .into_boxed_str(),
     );
-    let mut cell = ORACLE_CELLS[2];
+    let mut cell = CODE_CELL;
     cell.prompt = long_prompt;
     print_stage_breakdown(&pair, &cell, "long raw prompt, 1.0");
 }
 
-/// The same breakdown at the serving journey's size, about 10,000 prompt
-/// tokens, with the 4-row tree a mixture-of-experts target drafts with, so a
+/// The same breakdown after the story prompt (about 2,000 tokens on a dense
+/// target, 10,000 on a mixture-of-experts one),
+/// with the 4-row tree a mixture-of-experts target drafts with, so a
 /// round's growth with the prompt is placed on its stage.
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
@@ -87,15 +88,8 @@ fn should_measure_where_a_small_tree_round_spends_its_time_after_a_journey_promp
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    let journey_prompt: &'static str = Box::leak(
-        LONG_PROMPT_SOURCE
-            .split_whitespace()
-            .take(JOURNEY_PROMPT_WORD_COUNT)
-            .collect::<Vec<_>>()
-            .join(" ")
-            .into_boxed_str(),
-    );
-    let mut prompts = vec![("short prompt".to_owned(), ORACLE_CELLS[2].prompt)];
+    let journey_prompt = story_prompt();
+    let mut prompts = vec![("short prompt".to_owned(), CODE_CELL.prompt)];
     for word_count in [750, 2_200, LONG_PROMPT_WORD_COUNT] {
         let prompt: &'static str = Box::leak(
             LONG_PROMPT_SOURCE
@@ -107,7 +101,7 @@ fn should_measure_where_a_small_tree_round_spends_its_time_after_a_journey_promp
         );
         prompts.push((format!("{word_count}-word prompt"), prompt));
     }
-    prompts.push(("journey prompt".to_owned(), journey_prompt));
+    prompts.push(("story prompt".to_owned(), journey_prompt));
     // Each context through both tree attention paths: where the row-exact
     // kernel's round starts costing less than serving's MLX attention.
     for (prompt_label, prompt) in prompts {
@@ -119,7 +113,7 @@ fn should_measure_where_a_small_tree_round_spends_its_time_after_a_journey_promp
             } else {
                 pair.target.set_row_exact_tree_attention_aside();
             }
-            let mut cell = ORACLE_CELLS[2];
+            let mut cell = CODE_CELL;
             cell.prompt = prompt;
             cell.node_budget = 3;
             let path_label = if uses_kernel {
@@ -157,22 +151,15 @@ fn should_separate_a_long_contexts_attention_work_from_copies_of_its_keys() {
             .join(" ")
             .into_boxed_str(),
     );
-    let mut long_cell = ORACLE_CELLS[2];
+    let mut long_cell = CODE_CELL;
     long_cell.prompt = long_prompt;
-    let journey_prompt: &'static str = Box::leak(
-        LONG_PROMPT_SOURCE
-            .split_whitespace()
-            .take(JOURNEY_PROMPT_WORD_COUNT)
-            .collect::<Vec<_>>()
-            .join(" ")
-            .into_boxed_str(),
-    );
-    let mut journey_cell = ORACLE_CELLS[2];
+    let journey_prompt = story_prompt();
+    let mut journey_cell = CODE_CELL;
     journey_cell.prompt = journey_prompt;
     for (context_label, cell) in [
-        ("short prompt", ORACLE_CELLS[2]),
+        ("short prompt", CODE_CELL),
         ("long prompt", long_cell),
-        ("journey prompt", journey_cell),
+        ("story prompt", journey_cell),
     ] {
         // 4 rows is the round a mixture-of-experts target verifies.
         for row_count in [1_usize, 4, 16] {
@@ -363,7 +350,7 @@ fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows()
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    let cell = &ORACLE_CELLS[3];
+    let cell = &story_cell("story greedy", 0);
     let mut row_tokens = Vec::with_capacity(16);
     let mut chain = DraftTree::default();
     for row in 0..16_usize {
@@ -433,7 +420,7 @@ fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows()
 fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
     use model_serving::{PerformanceAttribution, PerformanceOperation};
     let pair = load_pair();
-    let cell = &ORACLE_CELLS[3];
+    let cell = &story_cell("story greedy", 0);
     let row_tokens: Vec<u32> = (1_000..1_016).collect();
     let stages = [
         ("DeltaNet input projections", PerformanceOperation::PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait),
@@ -523,12 +510,9 @@ fn should_leave_the_trained_rows_unchanged_when_the_block_is_longer() {
             .join(" ")
             .into_boxed_str(),
     );
-    let mut long_cell = ORACLE_CELLS[2];
+    let mut long_cell = CODE_CELL;
     long_cell.prompt = long_prompt;
-    for (label, cell) in [
-        ("short prompt", ORACLE_CELLS[2]),
-        ("long prompt", long_cell),
-    ] {
+    for (label, cell) in [("short prompt", CODE_CELL), ("long prompt", long_cell)] {
         let (round, _state, first_token_id) = prefill(&pair, &cell);
         let trained_row_count = configuration.block_size as usize;
         let mut trained_rows_by_block = Vec::new();

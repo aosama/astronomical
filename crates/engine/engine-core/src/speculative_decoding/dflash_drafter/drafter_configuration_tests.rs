@@ -7,7 +7,7 @@ use super::drafter_configuration::{
 
 /// The published `z-lab/Qwen3.8-27B-DFlash2` configuration's fields that
 /// shape the forward pass.
-fn qwen38_27b_drafter_document() -> Value {
+pub(super) fn qwen38_27b_drafter_document() -> Value {
     json!({
         "architectures": ["DFlash2DraftModel"],
         "dflash_config": {

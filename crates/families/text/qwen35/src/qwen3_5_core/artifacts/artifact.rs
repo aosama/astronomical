@@ -63,8 +63,10 @@ impl Qwen3_5ArtifactValidator {
         // no shard index; it validates against its own manifest and resident
         // weight bundle. The manifest's format is checked, not just its file
         // name: a stock checkpoint may ship an unrelated `manifest.json`.
-        if expert_atlas::declares_atlas_manifest(model_directory) {
-            return Self::validate_atlas_artifact(model_directory, max_output_tokens);
+        // A folded ternary pack, likewise, declares its own model type and
+        // carries one weights file and a sign table instead of a shard index.
+        if super::folded_ternary_artifact::declares_layout_without_shard_index(model_directory) {
+            return Self::validate_artifact_without_shard_index(model_directory, max_output_tokens);
         }
 
         let required_files = validated_core_required_files(model_directory)?;
@@ -141,6 +143,7 @@ impl Qwen3_5ArtifactValidator {
             revision,
             max_output_tokens,
             expert_atlas: None,
+            hadamard_contract: None,
         })
     }
 }

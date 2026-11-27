@@ -179,6 +179,33 @@ impl ValidatedSafetensorsSource {
         self.validate_locations(&source_locations, canonical_profiles)
     }
 
+    /// As `validate_required_inventory_profiles`, for a source that also
+    /// stores tensors its inventory deliberately leaves out: a folded ternary
+    /// pack keeps a sign copy beside every rotated module, and its vision
+    /// tower, in the one file, and its own contract checks both. A physical
+    /// tensor `is_left_out` names is passed over; every other physical tensor
+    /// must be in the inventory, and every inventoried tensor must match its
+    /// profile.
+    pub fn validate_inventory_profiles_leaving_out(
+        &self,
+        inventory: &TensorInventory,
+        canonical_profiles: &[TensorProfile],
+        is_left_out: fn(&str) -> bool,
+    ) -> Result<(), ArtifactValidationError> {
+        let source_locations = self.source_locations(inventory);
+        let declared_stored_names = declared_stored_names(&source_locations);
+        for physical_stored_name in self.tensor_metadata_by_stored_name.keys() {
+            if !is_left_out(physical_stored_name)
+                && !declared_stored_names.contains(physical_stored_name.as_str())
+            {
+                return Err(ArtifactValidationError::UnexpectedTensor {
+                    tensor_name: physical_stored_name.clone(),
+                });
+            }
+        }
+        self.validate_locations(&source_locations, canonical_profiles)
+    }
+
     fn source_locations<'inventory>(
         &self,
         inventory: &'inventory TensorInventory,
@@ -193,10 +220,7 @@ impl ValidatedSafetensorsSource {
         &self,
         source_locations: &[&TensorLocation],
     ) -> Result<(), ArtifactValidationError> {
-        let declared_stored_names = source_locations
-            .iter()
-            .map(|location| location.stored_name())
-            .collect::<BTreeSet<_>>();
+        let declared_stored_names = declared_stored_names(source_locations);
         let physical_stored_names = self
             .tensor_metadata_by_stored_name
             .keys()
@@ -440,4 +464,14 @@ pub struct ValidatedStoredTensorRange<'source> {
     pub shape: &'source [usize],
     pub file_start_offset: u64,
     pub file_end_offset: u64,
+}
+
+/// The stored names an inventory declares for one source's tensors.
+fn declared_stored_names<'inventory>(
+    source_locations: &[&'inventory TensorLocation],
+) -> BTreeSet<&'inventory str> {
+    source_locations
+        .iter()
+        .map(|location| location.stored_name())
+        .collect()
 }

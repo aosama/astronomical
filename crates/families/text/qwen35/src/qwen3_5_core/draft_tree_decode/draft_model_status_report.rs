@@ -71,6 +71,7 @@ pub fn failed_load_status(loading_error: &Qwen3_5SpeculativeDraftLoadingError) -
             "the memory limit leaves no room for it beside the model"
         }
         Qwen3_5SpeculativeDraftLoadingError::WeightsUnreadable { .. }
+        | Qwen3_5SpeculativeDraftLoadingError::CheckpointFormat(_)
         | Qwen3_5SpeculativeDraftLoadingError::Weights(_) => "its weights could not be read",
         Qwen3_5SpeculativeDraftLoadingError::LibraryUnlistable(_) => {
             engine_core::speculative_decoding::unused_drafter_status::LIBRARY_UNSEARCHABLE_REASON

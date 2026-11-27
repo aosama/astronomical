@@ -246,11 +246,12 @@ fn feed_forward_output_dtype(
     })
 }
 
-/// A dense projection's dtype contract. A projection converted into register
-/// order holds bf16 scales and biases, so its products promote exactly as a
-/// bf16 weight's do.
+/// A dense projection's dtype contract, from its weights as stored (a
+/// rotated module's included: a folded pack's float16 scales make its
+/// products float16). A projection converted into register order holds bf16
+/// scales and biases, so its products promote exactly as a bf16 weight's do.
 fn dense_contract(projection: &Qwen3_5DenseProjection) -> AffineDtypeContract {
-    match projection.bound() {
+    match projection.stored_affine_weights() {
         Some(bound_weights) => affine_contract(bound_weights),
         None => AffineDtypeContract::Native {
             weight: mlx_bridge::MlxDtype::BFloat16,

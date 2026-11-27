@@ -115,6 +115,7 @@ mod resident_layer_accounting;
 mod route_id_materialization;
 #[cfg(feature = "direct-mlx")]
 pub mod route_observation;
+mod routed_layer_input;
 #[cfg(feature = "direct-mlx")]
 pub mod routed_reply_recording;
 #[cfg(feature = "direct-mlx")]

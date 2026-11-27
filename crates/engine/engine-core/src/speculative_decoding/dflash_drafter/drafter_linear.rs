@@ -1,5 +1,6 @@
-//! One drafter linear layer, kept either as the checkpoint stores it (bf16)
-//! or quantized to 4 bits at load.
+//! One drafter linear layer, kept either as the checkpoint stores it (bf16,
+//! or MLX's 4-bit packing in a checkpoint published already quantized) or
+//! quantized to 4 bits at load.
 //!
 //! The drafter streams all its weights every round, so its precision is a
 //! direct cost: the 27B's drafter is 3.6 GB in bf16, 14.7 ms a round on an M5
@@ -15,8 +16,10 @@ use model_primitives::row_batched_matmul::{
     register_ordered_matmul_any_rows,
 };
 
-const QUANTIZATION_GROUP_SIZE: i32 = 64;
-const QUANTIZATION_BITS: i32 = 4;
+/// The one packing a drafter linear is served in, whether quantized at load
+/// or stored that way in the checkpoint.
+pub const QUANTIZATION_GROUP_SIZE: i32 = 64;
+pub const QUANTIZATION_BITS: i32 = 4;
 
 pub enum DrafterLinear {
     /// The checkpoint's bf16 weight as the transposed view MLX's matmul reads
@@ -76,48 +79,56 @@ impl DrafterLinear {
     }
 
     /// Quantizes a full-precision linear to 4 bits in place and materializes
-    /// it, so the bf16 view can be released; with `use_register_order` it is
+    /// it, so the bf16 view can be released; with `use_register_order` a
+    /// 4-bit linear, quantized here or already 4-bit in the checkpoint, is
     /// then converted into register order unless its shape cannot be tiled.
-    /// A linear already quantized is left alone.
+    /// A linear already in register order is left alone.
     pub fn quantize_in_place(
         &mut self,
         runtime: &MlxRuntime,
         use_register_order: bool,
     ) -> Result<(), MlxRuntimeError> {
-        let Self::FullPrecision { transposed_weight } = self else {
-            return Ok(());
-        };
-        let weight = runtime.transpose_axes(transposed_weight, &[1, 0])?;
-        let (packed_weight, scales, biases) =
-            runtime.quantize_affine(&weight, QUANTIZATION_GROUP_SIZE, QUANTIZATION_BITS)?;
-        runtime.evaluate_arrays(&[&packed_weight, &scales, &biases])?;
-        if use_register_order {
-            let kernels = RowBatchedMatmulKernels::declare()?;
-            match RegisterOrderedWeight::convert(
-                runtime,
-                &kernels,
-                &packed_weight,
-                &scales,
-                &biases,
-            ) {
-                Ok(converted) => {
-                    runtime.evaluate_arrays(&[&converted.codes, &converted.scale_bias_words])?;
-                    *self = Self::RegisterOrdered {
-                        weight: converted,
-                        kernels,
-                    };
-                    return Ok(());
-                }
-                Err(RowBatchedProjectionError::Refused(_)) => {}
-                Err(conversion_error) => return Err(projection_failure(conversion_error)),
-            }
+        if let Self::FullPrecision { transposed_weight } = self {
+            let weight = runtime.transpose_axes(transposed_weight, &[1, 0])?;
+            let (packed_weight, scales, biases) =
+                runtime.quantize_affine(&weight, QUANTIZATION_GROUP_SIZE, QUANTIZATION_BITS)?;
+            runtime.evaluate_arrays(&[&packed_weight, &scales, &biases])?;
+            *self = Self::Quantized {
+                packed_weight,
+                scales,
+                biases,
+            };
         }
-        *self = Self::Quantized {
+        if use_register_order {
+            self.convert_to_register_order(runtime)?;
+        }
+        Ok(())
+    }
+
+    /// Converts a 4-bit linear into register order, keeping MLX's packing
+    /// when the kernel refuses its shape.
+    fn convert_to_register_order(&mut self, runtime: &MlxRuntime) -> Result<(), MlxRuntimeError> {
+        let Self::Quantized {
             packed_weight,
             scales,
             biases,
+        } = self
+        else {
+            return Ok(());
         };
-        Ok(())
+        let kernels = RowBatchedMatmulKernels::declare()?;
+        match RegisterOrderedWeight::convert(runtime, &kernels, packed_weight, scales, biases) {
+            Ok(converted) => {
+                runtime.evaluate_arrays(&[&converted.codes, &converted.scale_bias_words])?;
+                *self = Self::RegisterOrdered {
+                    weight: converted,
+                    kernels,
+                };
+                Ok(())
+            }
+            Err(RowBatchedProjectionError::Refused(_)) => Ok(()),
+            Err(conversion_error) => Err(projection_failure(conversion_error)),
+        }
     }
 }
 

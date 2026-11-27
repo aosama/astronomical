@@ -23,8 +23,8 @@
 use mlx_bridge::{MlxArray, MlxCError};
 use runtime_integration::MlxRuntime;
 
-use super::fwht::RotatedActivations;
 use super::weights::{PackedProjection, slice_last_dimension_raw};
+use crate::qwen3_5_core::model_math::hadamard_rotation::RotatedActivations;
 
 /// `MEMBER_COUNT` sibling rotated projections of one input width, fused into
 /// a single packed matmul whose output rows are the members' rows stacked in

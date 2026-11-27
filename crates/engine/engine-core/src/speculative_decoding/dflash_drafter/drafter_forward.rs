@@ -8,7 +8,9 @@ use runtime_integration::{MlxRuntime, MlxRuntimeError};
 use super::drafter_attention::{BlockAttentionRows, attend_block_to_context};
 use super::drafter_configuration::DFlashDrafterConfiguration;
 use super::drafter_context_state::{DrafterContextStates, DrafterLayerContextState};
-use super::drafter_weights::{DFlashDrafterWeights, DrafterLayerWeights, LayerConvolutionWeights};
+use super::drafter_weights::{
+    DFlashDrafterWeights, DrafterLayerWeights, LayerConvolutionWeights, in_bfloat16,
+};
 use super::grouped_dynamic_convolution::{convolve_sublayer_input, convolve_sublayer_output};
 
 /// What the drafter borrows from its target: it has no vocabulary of its own.
@@ -43,12 +45,9 @@ pub fn drafted_hidden_rows(
     block_token_ids: &MlxArray,
     target_tap_rows: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
-    let fused_context_rows = runtime.rms_norm(
-        &weights.tap_fusion.forward(runtime, target_tap_rows)?,
-        &weights.tap_fusion_normalization,
-        configuration.rms_norm_epsilon,
-    )?;
-    let mut block_rows = target.embedded_rows(runtime, block_token_ids)?;
+    let fused_context_rows =
+        fused_target_context(runtime, weights, configuration, target_tap_rows)?;
+    let mut block_rows = embedded_block(runtime, target, block_token_ids)?;
     let layer_states = weights.layers.iter().zip(context_states.layers.iter_mut());
     for (layer_index, (layer, context_state)) in layer_states.enumerate() {
         let attention_inputs = LayerAttentionInputs {
@@ -71,6 +70,37 @@ pub fn drafted_hidden_rows(
         &weights.final_normalization,
         configuration.rms_norm_epsilon,
     )?)
+}
+
+// The drafter runs in bf16, its weights' dtype, whatever its target runs in:
+// a float16 target hands over float16 taps, and a rotated embedding float32
+// rows. The register-ordered matmul reads bf16 rows only, and mixed dtypes
+// would widen every drafter activation to float32. Both entry steps below
+// cast to bf16; bf16 inputs pass untouched.
+
+/// The target's tapped rows fused to the drafter's width and normalized.
+fn fused_target_context(
+    runtime: &MlxRuntime,
+    weights: &DFlashDrafterWeights,
+    configuration: &DFlashDrafterConfiguration,
+    target_tap_rows: &MlxArray,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let target_tap_rows = in_bfloat16(runtime, target_tap_rows.retain()?)?;
+    let fused_rows = weights.tap_fusion.forward(runtime, &target_tap_rows)?;
+    Ok(runtime.rms_norm(
+        &fused_rows,
+        &weights.tap_fusion_normalization,
+        configuration.rms_norm_epsilon,
+    )?)
+}
+
+/// The block's tokens embedded by the target, in the drafter's bf16.
+fn embedded_block(
+    runtime: &MlxRuntime,
+    target: &dyn DFlashDraftTarget,
+    block_token_ids: &MlxArray,
+) -> Result<MlxArray, MlxRuntimeError> {
+    in_bfloat16(runtime, target.embedded_rows(runtime, block_token_ids)?)
 }
 
 /// One layer's attention sublayer: the normalized, possibly convolved block

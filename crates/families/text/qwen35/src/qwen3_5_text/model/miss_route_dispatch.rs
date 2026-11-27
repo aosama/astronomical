@@ -11,30 +11,31 @@ use crate::qwen3_5_text::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter};
 use text_generation::execution_error::TextExecutionError;
 
-use super::super::expert_streaming::expert_pager::Qwen3_5ExpertPager;
 use super::Qwen3_5MoEPagedExecutionMode;
-use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
+use super::routed_layer_input::RoutedLayerInput;
 
 impl Qwen3_5Model {
     /// Serves a table miss: a multi-token chunk streams its routed-expert
     /// union; a reply token is served by `dispatch_reply_token_miss`.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_miss_route(
         &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
+        routed_layer_input: &RoutedLayerInput<'_>,
         expert_capacity: usize,
-        token_count: i32,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
         selected_expert_ids: &[usize],
         routed_expert_ids: &[usize],
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        hidden_states: &MlxArray,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
-        should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            token_count,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+        } = *routed_layer_input;
         performance_attribution.record_counter(
             PerformanceCounter::RetainedRouteAssignmentMissCount,
             u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
@@ -44,17 +45,11 @@ impl Qwen3_5Model {
             .serves_misses_as_reply_tokens(token_count)
         {
             return self.dispatch_reply_token_miss(
-                expert_pager,
-                layer_index,
+                routed_layer_input,
                 expert_capacity,
-                selected_indices,
-                selected_scores,
                 selected_expert_ids,
                 routed_expert_ids,
-                mixture_of_experts_weights,
-                hidden_states,
                 paged_execution_mode,
-                should_use_compiled_elementwise_graphs,
                 performance_attribution,
             );
         }
@@ -92,22 +87,25 @@ impl Qwen3_5Model {
     /// it can take them (the route is then a table hit); otherwise a route
     /// partly in the table is served mixed, a route wholly in it from
     /// retained memory, and a route wholly outside it streams.
-    #[allow(clippy::too_many_arguments)]
     fn dispatch_reply_token_miss(
         &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
+        routed_layer_input: &RoutedLayerInput<'_>,
         expert_capacity: usize,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
         selected_expert_ids: &[usize],
         routed_expert_ids: &[usize],
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        hidden_states: &MlxArray,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
-        should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+            ..
+        } = *routed_layer_input;
         let production_default_paging =
             paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault;
         let route_coverage = self.record_decode_route_coverage(
@@ -136,17 +134,11 @@ impl Qwen3_5Model {
             // Mixed serving: serve the covered assignments from retained RAM
             // and stream only the missing experts.
             return self.forward_moe_mixed_decode_route_with_performance_attribution(
-                hidden_states,
-                mixture_of_experts_weights,
-                expert_pager,
-                layer_index,
-                selected_indices,
-                selected_scores,
+                routed_layer_input,
                 selected_expert_ids,
                 &route_coverage,
                 expert_capacity,
                 paged_execution_mode,
-                should_use_compiled_elementwise_graphs,
                 performance_attribution,
             );
         }

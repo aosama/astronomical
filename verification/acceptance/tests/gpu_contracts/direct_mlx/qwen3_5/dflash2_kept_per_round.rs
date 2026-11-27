@@ -5,13 +5,12 @@
 //! its own `drafter` folder measures that pair instead.
 //!
 //! Kept per round = tokens emitted / verify rounds, the bonus token included,
-//! as the drafter's model card defines it. z-lab's own reference loop kept
-//! 6.07 on the code prompt at temperature 0.7 and 3.00 on the chat prompt at
-//! 1.0 on the 27B pair (single path, 256 tokens, thinking off), so the floors
-//! below sit about 10% under those. Greedy runs only as a labelled diagnostic.
-//! A third cell follows TensorFold's community benchmark, which sends the
-//! code prompt as a raw completion (its chat cell is the chat cell here), with
-//! its top-k 20 and top-p 0.95, so its speed compares like for like.
+//! as the drafter's model card defines it. Every code journey decodes one
+//! code cell: TensorFold's community benchmark, which sends the code prompt
+//! as a raw completion at 0.7 with its top-k 20 and top-p 0.95, so its speed
+//! compares like for like. z-lab's 6.07 was measured on the chat-template
+//! form of the prompt, so the code cell reports without a floor, as does the
+//! story at 1.0.
 //!
 //! It also prints each cell's decode speed (prefill excluded); every stage
 //! still syncs with the GPU, so `dflash2_round_cost` is where stages are timed.
@@ -37,9 +36,9 @@ use runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use serial_test::serial;
 
 use super::dflash2_journey_support::{
-    TargetLogitRows, UniformStream, VerifiedBlock, forward_with_taps, host_values, tap_rows,
-    verify_block_with_taps,
+    UniformStream, VerifiedBlock, host_values, tap_rows, verify_block_with_taps,
 };
+use super::kept_prompt_state::{KeptPromptState, ReadPrompt, no_kept_prompt_state, read_prompt};
 
 mod round_drafting;
 
@@ -47,7 +46,6 @@ use round_drafting::{drafter_distribution_of_path, propose_path};
 
 pub(crate) const CODE_PROMPT: &str =
     "Write a short Python function that computes the Fibonacci sequence and explain it.";
-pub(crate) const CHAT_PROMPT: &str = "Explain how matrix multiplication uses a GPU in plain English, then give a small numerical example.";
 pub(crate) const OUTPUT_TOKENS: usize = 256;
 const SAMPLING_SEED: u64 = 1234;
 /// The engine's draft-tree node budget, `DraftTreeOptions::default()`;
@@ -75,7 +73,7 @@ pub(crate) struct Cell {
     pub(crate) label: &'static str,
     pub(crate) prompt: &'static str,
     /// The prompt as a raw completion rather than a chat turn: TensorFold's
-    /// community benchmark sends its code cell this way, its chat cell as chat.
+    /// community benchmark sends its code cell this way.
     pub(crate) is_raw_completion: bool,
     pub(crate) temperature_thousandths: u16,
     pub(crate) minimum_kept_per_round: f64,
@@ -89,50 +87,35 @@ pub(crate) struct Cell {
     pub(crate) keyed_seed: u64,
 }
 
-const CELLS: [Cell; 4] = [
-    Cell {
-        label: "code",
-        is_raw_completion: false,
-        prompt: CODE_PROMPT,
-        temperature_thousandths: 700,
-        minimum_kept_per_round: 5.5,
-        keyed_seed: SAMPLING_SEED,
-        node_budget: ENGINE_NODE_BUDGET,
-        children_per_node: ENGINE_CHILDREN_PER_NODE,
-    },
-    Cell {
-        label: "chat",
-        is_raw_completion: false,
-        prompt: CHAT_PROMPT,
-        temperature_thousandths: 1_000,
-        minimum_kept_per_round: 2.7,
-        keyed_seed: SAMPLING_SEED,
-        node_budget: ENGINE_NODE_BUDGET,
-        children_per_node: ENGINE_CHILDREN_PER_NODE,
-    },
-    // TensorFold's community code cell: the same prompt as a raw completion.
-    // No z-lab figure exists for it, so it reports without a floor.
-    Cell {
-        label: "code completion (TensorFold cell)",
-        is_raw_completion: true,
-        prompt: CODE_PROMPT,
-        temperature_thousandths: 700,
-        minimum_kept_per_round: 0.0,
-        keyed_seed: SAMPLING_SEED,
-        node_budget: ENGINE_NODE_BUDGET,
-        children_per_node: ENGINE_CHILDREN_PER_NODE,
-    },
-    Cell {
-        label: "chat greedy (diagnostic)",
-        is_raw_completion: false,
-        prompt: CHAT_PROMPT,
-        temperature_thousandths: 0,
-        minimum_kept_per_round: 2.8,
-        keyed_seed: SAMPLING_SEED,
-        node_budget: ENGINE_NODE_BUDGET,
-        children_per_node: ENGINE_CHILDREN_PER_NODE,
-    },
-];
+impl Cell {
+    /// How many seeds a journey decodes this cell with, given the count it
+    /// pools for a sampled story. Greedy text is fixed, so it runs once. The
+    /// code cell runs once too: its kept count moved by 0.2 at most across
+    /// three seeds on the Bonsai 2.5 pair, a spread three seeds cannot narrow
+    /// enough to tell a real change from, so the extra decodes bought nothing.
+    pub(crate) fn seed_count(&self, sampled_story_seed_count: u64) -> u64 {
+        if self.temperature_thousandths == 0 || self.prompt == CODE_PROMPT {
+            1
+        } else {
+            sampled_story_seed_count
+        }
+    }
+}
+
+/// The one code cell, then the story. z-lab publishes a floor only for
+/// its chat-template code cell, so neither reports against one.
+fn kept_per_round_cells() -> Vec<Cell> {
+    vec![
+        Cell {
+            keyed_seed: SAMPLING_SEED,
+            ..super::dflash2_tree_oracle::CODE_CELL
+        },
+        Cell {
+            keyed_seed: SAMPLING_SEED,
+            ..super::dflash2_journey_support::story_cell("story 1.0", 1_000)
+        },
+    ]
+}
 
 pub(crate) struct JourneyPair {
     pub(crate) target: Qwen3_5TextModel,
@@ -143,6 +126,9 @@ pub(crate) struct JourneyPair {
     pub(crate) drafter_weights: DFlashDrafterWeights,
     /// Keeps the drafter's lazily mapped tensors alive.
     _drafter_checkpoint: MlxSafetensors,
+    /// The last prompt this pair read, so the next decode of it skips the
+    /// reading (`kept_prompt_state`).
+    pub(crate) kept_prompt_state: std::cell::RefCell<Option<KeptPromptState>>,
 }
 
 #[test]
@@ -156,16 +142,13 @@ fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
         journey_started_at.elapsed().as_secs()
     );
     let mut failures = Vec::new();
-    for (cell_index, cell) in CELLS.iter().enumerate() {
+    let cells = kept_per_round_cells();
+    for (cell_index, cell) in cells.iter().enumerate() {
         let cell_started_at = Instant::now();
-        // A sampled cell's kept count swings with the text it happens to
-        // sample (about 0.16 either way over one 256-token run), so sampled
-        // cells pool three seeds; greedy text is fixed and runs once.
-        let seed_count = if cell.temperature_thousandths == 0 {
-            1
-        } else {
-            SAMPLED_SEED_COUNT
-        };
+        // A sampled story's kept count swings with the text it happens to
+        // sample (about 0.16 either way over one 256-token run), so it pools
+        // three seeds; see `Cell::seed_count` for the cells that run once.
+        let seed_count = cell.seed_count(SAMPLED_SEED_COUNT);
         let (mut rounds, mut emitted, mut decode_seconds) = (0, 0, 0.0);
         for seed_offset in 0..seed_count {
             let seed_outcome = run_cell(&pair, cell, SAMPLING_SEED + seed_offset);
@@ -177,12 +160,12 @@ fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
         let decode_tokens_per_second = emitted as f64 / decode_seconds;
         let elapsed_seconds = journey_started_at.elapsed().as_secs_f64();
         let remaining_seconds =
-            elapsed_seconds / (cell_index + 1) as f64 * (CELLS.len() - cell_index - 1) as f64;
+            elapsed_seconds / (cell_index + 1) as f64 * (cells.len() - cell_index - 1) as f64;
         eprintln!(
             "[dflash2-gate1 {}/{} ETA {remaining_seconds:.0} s] {} T={:.1}: {kept_per_round:.2} kept per round, \
              {decode_tokens_per_second:.1} tok/s decode ({emitted} tokens in {rounds} rounds, {:.0} s)",
             cell_index + 1,
-            CELLS.len(),
+            cells.len(),
             cell.label,
             f64::from(cell.temperature_thousandths) / 1_000.0,
             cell_started_at.elapsed().as_secs_f64()
@@ -205,7 +188,7 @@ fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
 /// configuration's `model_directory` when one is selected, so the same
 /// journeys measure any paired target, otherwise the installed dense 27B
 /// package (`dense_drafting` in `registry/e2e_test_model_names.json`).
-fn pair_directories() -> (PathBuf, PathBuf, String) {
+pub(crate) fn pair_directories() -> (PathBuf, PathBuf, String) {
     let target_directory = test_harness::test_run::TestRunContext::current()
         .configuration
         .model_directory
@@ -308,6 +291,7 @@ pub(crate) fn load_pair() -> JourneyPair {
         drafter_configuration,
         drafter_weights,
         _drafter_checkpoint: drafter_checkpoint,
+        kept_prompt_state: no_kept_prompt_state(),
     }
 }
 
@@ -356,40 +340,22 @@ pub(crate) struct CellOutcome {
 }
 
 pub(crate) fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> CellOutcome {
-    let tap_layer_ids = &pair.drafter_configuration.target_tap_layer_ids;
-    let prompt = if cell.is_raw_completion {
-        completion_token_ids(pair, cell.prompt)
-    } else {
-        prompt_token_ids(pair, cell.prompt)
-    };
-    let mut decoder_state = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
-        &pair.target.astro_decoder_state_cache_layout(),
-        256,
-    )
-    .expect("the decoder state allocates");
+    let ReadPrompt {
+        mut decoder_state,
+        last_logits: first_logits,
+        tap_rows: pending_tap_rows,
+        prompt_token_count,
+    } = read_prompt(pair, cell);
     let mut uniforms = UniformStream::seeded(sampling_seed);
     let mut random_state = pair
         .target
         .runtime()
         .random_key(sampling_seed)
         .expect("a key builds");
-    let prefill = forward_with_taps(
-        &pair.target,
-        &prompt,
-        0,
-        &mut decoder_state,
-        tap_layer_ids,
-        TargetLogitRows::LastRowOnly,
-    );
-    let first_logits = prefill.logits;
     let mut round = RoundState {
         last_token_id: decide(pair, cell, &[], &first_logits, None, &mut uniforms).next_token_id,
-        fed_token_count: prompt.len() as u32,
-        pending_tap_rows: tap_rows(
-            pair.target.runtime(),
-            &prefill.hidden_state_taps,
-            prompt.len() as i32,
-        ),
+        fed_token_count: prompt_token_count as u32,
+        pending_tap_rows,
         context_states: DrafterContextStates::new(&pair.drafter_configuration, 0),
     };
     let decode_started_at = Instant::now();
@@ -562,4 +528,26 @@ fn decide(
         uniform_draws.push(uniforms.next_uniform());
     }
     decide_by_rejection_sampling(&drafted_slots, &rows, &uniform_draws)
+}
+
+#[test]
+fn should_decode_the_code_cell_and_greedy_cells_once_and_sampled_stories_at_the_pooled_count() {
+    let sampled_story = Cell {
+        label: "story 1.0",
+        prompt: "Continue the story.",
+        is_raw_completion: false,
+        temperature_thousandths: 1_000,
+        minimum_kept_per_round: 0.0,
+        node_budget: ENGINE_NODE_BUDGET,
+        children_per_node: ENGINE_CHILDREN_PER_NODE,
+        keyed_seed: SAMPLING_SEED,
+    };
+    let greedy_story = Cell {
+        temperature_thousandths: 0,
+        ..sampled_story
+    };
+    assert_eq!(sampled_story.seed_count(3), 3);
+    assert_eq!(sampled_story.seed_count(0), 0, "a zero count stays zero");
+    assert_eq!(greedy_story.seed_count(3), 1);
+    assert_eq!(super::dflash2_tree_oracle::CODE_CELL.seed_count(3), 1);
 }

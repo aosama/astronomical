@@ -199,7 +199,7 @@ impl PrismHadamardTextModel {
         activations: &MlxArray,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         self.rotate(activations)
-            .map(super::fwht::RotatedActivations::into_activations)
+            .map(crate::qwen3_5_core::model_math::hadamard_rotation::RotatedActivations::into_activations)
             .map_err(PrismHadamardModelError::Forward)
     }
 
@@ -302,6 +302,50 @@ impl PrismHadamardTextModel {
             });
         }
         state.forward_decoder_layer(self, layer_index, hidden_states)
+    }
+
+    /// Runs one gated-delta layer's attention half alone (no residual, no
+    /// MLP) on its already normalized input, advancing that layer's state:
+    /// where a comparison with another engine is read stage by stage.
+    pub fn probe_linear_attention(
+        &self,
+        layer_index: usize,
+        normalized_input: &MlxArray,
+        state: &mut PrismHadamardGenerationState,
+    ) -> Result<MlxArray, PrismHadamardModelError> {
+        let super::weights::DecoderLayerAttentionWeights::Linear(linear_layer) = &self
+            .weights
+            .decoder_layers
+            .get(layer_index)
+            .ok_or_else(|| PrismHadamardModelError::UnsupportedLayerType {
+                layer_type: format!("decoder layer {layer_index} does not exist"),
+            })?
+            .attention
+        else {
+            return Err(PrismHadamardModelError::UnsupportedLayerType {
+                layer_type: format!("decoder layer {layer_index} is not a gated-delta layer"),
+            });
+        };
+        let token_count = normalized_input.shape()[1];
+        let Some(crate::AstroDecoderStateCacheState::Composite {
+            convolution,
+            recurrent,
+        }) = state
+            .request_decoder_state_for(self)?
+            .layer_mut(layer_index)
+        else {
+            return Err(PrismHadamardModelError::DecoderStateLayerMismatch { layer_index });
+        };
+        self.forward_linear_attention_layer(
+            normalized_input,
+            token_count,
+            linear_layer,
+            super::forward::LinearLayerState {
+                convolution_state: convolution,
+                recurrent_state: recurrent,
+                boundary_checkpoints: None,
+            },
+        )
     }
 
     /// Advances `state` by the token count of the last layer probe so a

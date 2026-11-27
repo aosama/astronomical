@@ -12,11 +12,10 @@ use serial_test::serial;
 use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps, host_values};
 use super::dflash2_kept_per_round::{JourneyPair, load_pair};
 use super::dflash2_row_exactness::verify_chain;
-use super::dflash2_tree_oracle::{ORACLE_CELLS, prefill};
+use super::dflash2_tree_oracle::{CODE_CELL, prefill};
 
 const LONGEST_WINDOW_ROW_COUNT: usize = 16;
 const WINDOW_ROW_COUNTS: [usize; 2] = [4, 16];
-const GREEDY_CHAT_CELL_INDEX: usize = 3;
 /// Every fourth layer is full attention on the Qwen 3.5 family.
 const FULL_ATTENTION_INTERVAL: usize = 4;
 
@@ -70,12 +69,7 @@ fn should_locate_the_layer_where_tree_rows_first_leave_the_one_token_step() {
 
 /// The same tokens as one chain through the tree verify: `[layer][row]`.
 fn chain_tree_layers(pair: &JourneyPair, tap_layer_ids: &[i32], tokens: &[u32]) -> LayerRows {
-    let verified = verify_chain(
-        pair,
-        &ORACLE_CELLS[GREEDY_CHAT_CELL_INDEX],
-        tokens,
-        tap_layer_ids,
-    );
+    let verified = verify_chain(pair, &CODE_CELL, tokens, tap_layer_ids);
     layer_rows_of(pair, &verified.hidden_state_taps, tokens.len())
 }
 
@@ -93,7 +87,7 @@ fn layer_rows_of(pair: &JourneyPair, taps: &[mlx_bridge::MlxArray], row_count: u
 /// The greedy continuation fed one token a step, with every layer's output
 /// for each step: `[layer][step]`.
 fn one_token_step_layers(pair: &JourneyPair, tap_layer_ids: &[i32]) -> (Vec<u32>, LayerRows) {
-    let (round, mut state, first_token_id) = prefill(pair, &ORACLE_CELLS[GREEDY_CHAT_CELL_INDEX]);
+    let (round, mut state, first_token_id) = prefill(pair, &CODE_CELL);
     let mut fed_token_count = round.fed_token_count;
     let mut tokens = vec![first_token_id];
     let mut layers: LayerRows = vec![Vec::new(); tap_layer_ids.len()];
@@ -118,7 +112,7 @@ fn one_token_step_layers(pair: &JourneyPair, tap_layer_ids: &[i32]) -> (Vec<u32>
 
 /// The same tokens as one plain forward over a window: `[layer][row]`.
 fn window_forward_layers(pair: &JourneyPair, tap_layer_ids: &[i32], tokens: &[u32]) -> LayerRows {
-    let (round, mut state, _) = prefill(pair, &ORACLE_CELLS[GREEDY_CHAT_CELL_INDEX]);
+    let (round, mut state, _) = prefill(pair, &CODE_CELL);
     let forward = forward_with_taps(
         &pair.target,
         tokens,

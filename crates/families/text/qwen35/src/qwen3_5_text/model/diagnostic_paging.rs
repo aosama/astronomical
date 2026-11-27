@@ -6,27 +6,28 @@ use crate::PerformanceAttribution;
 use crate::qwen3_5_text::model::Qwen3_5Model;
 use text_generation::execution_error::TextExecutionError;
 
-use super::super::expert_streaming::expert_pager::{
-    Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
-};
+use super::super::expert_streaming::expert_pager::Qwen3_5ExpertStreamingRequestShape;
 use super::Qwen3_5MoEPagedExecutionMode;
-use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
+use super::routed_layer_input::RoutedLayerInput;
 
 impl Qwen3_5Model {
     /// Streams the compact union of experts routed by a diagnostic prompt.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn forward_moe_with_direct_prefill_paging(
         &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        route_token_count: i32,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
+        routed_layer_input: &RoutedLayerInput<'_>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+            ..
+        } = *routed_layer_input;
+        let route_token_count = routed_layer_input.token_count;
         let sorted_unique_expert_ids = self.copy_sorted_unique_expert_ids(selected_indices)?;
         let (streamed_expert_weights, page_manifest) = self.stream_expert_page_from_storage(
             expert_pager,
@@ -52,18 +53,21 @@ impl Qwen3_5Model {
     }
 
     /// Executes each prompt token through its own diagnostic routed page.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn forward_moe_with_per_token_paging(
         &self,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
+        routed_layer_input: &RoutedLayerInput<'_>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        let RoutedLayerInput {
+            expert_pager,
+            layer_index,
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
+            ..
+        } = *routed_layer_input;
         let hidden_state_shape = hidden_states.shape();
         if hidden_state_shape.len() != 3 || hidden_state_shape[0] != 1 {
             return Err(TextExecutionError::InvalidInput {

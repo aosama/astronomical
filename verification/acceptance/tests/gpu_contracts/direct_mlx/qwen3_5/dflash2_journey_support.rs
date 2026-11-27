@@ -166,3 +166,64 @@ impl UniformStream {
         (mixed >> 11) as f64 / (1_u64 << 53) as f64
     }
 }
+
+/// Romeo and Juliet words that, with the continuation instruction, make about
+/// 2,000 prompt tokens. A dense target reads a prompt at about 250 tokens a
+/// second, so a longer story only adds waiting to every decode that reads it.
+const DENSE_STORY_PROMPT_WORD_COUNT: usize = 1_480;
+/// About 10,000 prompt tokens, the size the serving throughput journey sends,
+/// for a mixture-of-experts target, which reads its prompt far faster.
+const SPARSE_STORY_PROMPT_WORD_COUNT: usize = 7_400;
+const STORY_INSTRUCTION: &str =
+    "Continue the supplied Romeo and Juliet story above for approximately 500 tokens.";
+
+/// The story every DFlash journey continues: a Romeo and Juliet excerpt and
+/// the continuation instruction, sized by the configured target's kind. It
+/// is the one long-reply cell the journeys keep; a short chat question adds
+/// nothing the story does not cover.
+pub(crate) fn story_prompt() -> &'static str {
+    static STORY_PROMPT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    STORY_PROMPT.get_or_init(|| {
+        let word_count = if configured_target_is_dense() {
+            DENSE_STORY_PROMPT_WORD_COUNT
+        } else {
+            SPARSE_STORY_PROMPT_WORD_COUNT
+        };
+        let words: Vec<&str> =
+            include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
+                .split_whitespace()
+                .take(word_count)
+                .collect();
+        format!("{}\n\n{STORY_INSTRUCTION}", words.join(" "))
+    })
+}
+
+/// The story as a chat turn at `temperature_thousandths`, at the engine's
+/// own tree budget.
+pub(crate) fn story_cell(
+    label: &'static str,
+    temperature_thousandths: u16,
+) -> super::dflash2_kept_per_round::Cell {
+    super::dflash2_kept_per_round::Cell {
+        label,
+        prompt: story_prompt(),
+        is_raw_completion: false,
+        temperature_thousandths,
+        minimum_kept_per_round: 0.0,
+        node_budget: super::dflash2_kept_per_round::ENGINE_NODE_BUDGET,
+        children_per_node: super::dflash2_kept_per_round::ENGINE_CHILDREN_PER_NODE,
+        keyed_seed: super::dflash2_tree_oracle::FIRST_KEYED_SEED,
+    }
+}
+
+/// Whether the configured target is a dense model (no mixture of experts),
+/// read from its validated configuration before any weight loads.
+fn configured_target_is_dense() -> bool {
+    let (target_directory, _, _) = super::dflash2_kept_per_round::pair_directories();
+    model_serving::Qwen3_5ArtifactValidator::new()
+        .validate(&target_directory, 4_096)
+        .expect("the target artifact validates")
+        .config()
+        .feed_forward_architecture()
+        == model_serving::Qwen3_5FeedForwardArchitecture::Dense
+}

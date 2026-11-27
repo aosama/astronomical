@@ -75,3 +75,22 @@ fn should_refuse_a_ledger_only_from_a_dirty_build() {
     assert_eq!(refuse_dirty_build_for_ledger(false, &dirty_build), Ok(()));
     assert!(refuse_dirty_build_for_ledger(true, &dirty_build).is_err());
 }
+
+#[test]
+fn should_read_the_configured_prompt_cache_setting_while_no_model_is_loaded() {
+    let mut configured_off_none_loaded = development_status_set_up_for_measuring();
+    configured_off_none_loaded["configuration"]["astro_ssd_prompt_cache"]["enabled"] =
+        json!({"configured": false, "default": true, "effective": null});
+    let mut default_on_none_loaded = development_status_set_up_for_measuring();
+    default_on_none_loaded["configuration"]["astro_ssd_prompt_cache"]["enabled"] =
+        json!({"configured": null, "default": true, "effective": null});
+    let mut reported_nowhere = development_status_set_up_for_measuring();
+    reported_nowhere["configuration"]["astro_ssd_prompt_cache"]["enabled"] = json!({});
+
+    assert_eq!(
+        refuse_unless_set_up_for_measuring(&configured_off_none_loaded),
+        Ok(())
+    );
+    assert!(refuse_unless_set_up_for_measuring(&default_on_none_loaded).is_err());
+    assert!(refuse_unless_set_up_for_measuring(&reported_nowhere).is_err());
+}
