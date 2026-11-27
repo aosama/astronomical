@@ -10,7 +10,9 @@
 # repository-owned patch set under third-party/patches (each patch's purpose
 # and retirement condition are documented in third-party/README.md) and
 # built as one static, Release-mode image: arm64 with Metal on macOS, the
-# host architecture with the CPU backend on Linux.
+# host architecture with the CPU backend on Linux, or, when the Rust side
+# selects the Linux CUDA recipe (ASTRONOMICAL_MLX_BUILD_CUDA), the CUDA
+# backend beside the CPU one (issue #2699).
 #
 # Consumers: the Cargo build script (build-orchestration/native_compile.rs)
 # and the standalone native-build tool drive this file identically; the
@@ -25,6 +27,7 @@ project(astronomical_runtime_integration LANGUAGES C CXX)
 include(FetchContent)
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/pins/mlx-v0.32.5.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/pins/mlx-c-v0.8.0.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/pins/mlx-cuda-sources-v0.32.5.cmake")
 find_program(PATCH_EXECUTABLE patch REQUIRED)
 
 # macOS builds the Metal backend on Apple silicon. Linux builds MLX's CPU
@@ -39,6 +42,14 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(ASTRONOMICAL_MLX_BUILD_METAL OFF)
 else()
     message(FATAL_ERROR "Astronomical's MLX runtime integration may only build on macOS or Linux")
+endif()
+
+# The CUDA backend is chosen by the Rust native build (the LinuxCuda recipe in
+# native-identity), never by default: it needs the CUDA toolkit, cuDNN and an
+# NVIDIA GPU, which the Rust side has probed and fingerprinted.
+option(ASTRONOMICAL_MLX_BUILD_CUDA "Build MLX's CUDA backend (Linux only)" OFF)
+if(ASTRONOMICAL_MLX_BUILD_CUDA AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "Astronomical builds MLX's CUDA backend on Linux only")
 endif()
 
 if(NOT DEFINED ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR OR "${ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR}" STREQUAL "")
@@ -71,6 +82,12 @@ require_pinned_archive(ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE "MLX C ${ASTRONOMICAL_M
 require_pinned_archive(ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE "metal-cpp ${ASTRONOMICAL_METAL_CPP_VERSION}" "${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE_SHA256}")
 require_pinned_archive(ASTRONOMICAL_JSON_SOURCE_ARCHIVE "nlohmann/json ${ASTRONOMICAL_NLOHMANN_JSON_VERSION}" "${ASTRONOMICAL_NLOHMANN_JSON_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_NLOHMANN_JSON_SOURCE_ARCHIVE_SHA256}")
 require_pinned_archive(ASTRONOMICAL_FMT_SOURCE_ARCHIVE "fmt ${ASTRONOMICAL_FMT_VERSION}" "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_SHA256}")
+if(ASTRONOMICAL_MLX_BUILD_CUDA)
+    require_pinned_archive(ASTRONOMICAL_CCCL_SOURCE_ARCHIVE "CCCL ${ASTRONOMICAL_CCCL_VERSION}" "${ASTRONOMICAL_CCCL_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_CCCL_SOURCE_ARCHIVE_SHA256}")
+    require_pinned_archive(ASTRONOMICAL_NVTX_SOURCE_ARCHIVE "NVTX ${ASTRONOMICAL_NVTX_VERSION}" "${ASTRONOMICAL_NVTX_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_NVTX_SOURCE_ARCHIVE_SHA256}")
+    require_pinned_archive(ASTRONOMICAL_CUDNN_FRONTEND_SOURCE_ARCHIVE "cuDNN frontend ${ASTRONOMICAL_CUDNN_FRONTEND_VERSION}" "${ASTRONOMICAL_CUDNN_FRONTEND_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_CUDNN_FRONTEND_SOURCE_ARCHIVE_SHA256}")
+    require_pinned_archive(ASTRONOMICAL_CUTLASS_SOURCE_ARCHIVE "CUTLASS ${ASTRONOMICAL_CUTLASS_VERSION}" "${ASTRONOMICAL_CUTLASS_SOURCE_ARCHIVE_FILE_NAME}" "${ASTRONOMICAL_CUTLASS_SOURCE_ARCHIVE_SHA256}")
+endif()
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build one static runtime image" FORCE)
 set(MLX_BUILD_TESTS OFF CACHE BOOL "Disable upstream MLX tests" FORCE)
@@ -80,6 +97,7 @@ set(MLX_BUILD_PYTHON_BINDINGS OFF CACHE BOOL "Exclude Python from the worker run
 set(MLX_BUILD_GGUF OFF CACHE BOOL "Disable unneeded GGUF support" FORCE)
 set(MLX_BUILD_METAL ${ASTRONOMICAL_MLX_BUILD_METAL} CACHE BOOL "Require the Metal backend on macOS" FORCE)
 set(MLX_BUILD_CPU ON CACHE BOOL "Retain bounded CPU fallback operations" FORCE)
+set(MLX_BUILD_CUDA ${ASTRONOMICAL_MLX_BUILD_CUDA} CACHE BOOL "Build the CUDA backend for the Linux CUDA recipe" FORCE)
 set(MLX_BUILD_SAFETENSORS ON CACHE BOOL "Require descriptor-backed safetensors loading" FORCE)
 set(MLX_METAL_JIT ${ASTRONOMICAL_MLX_BUILD_METAL} CACHE BOOL "Select Metal kernels for the current Apple GPU and keep them in the metal_kernel_cache" FORCE)
 set(MLX_ENABLE_X64_MAC OFF CACHE BOOL "Reject unsupported Intel macOS builds" FORCE)
@@ -100,6 +118,15 @@ option(
 FetchContent_Declare(metal_cpp URL "${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE_SHA256}")
 FetchContent_Declare(json URL "${ASTRONOMICAL_JSON_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_NLOHMANN_JSON_SOURCE_ARCHIVE_SHA256}")
 FetchContent_Declare(fmt URL "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_SHA256}")
+# The four sources MLX's CUDA backend declares, under its names and with its
+# SOURCE_SUBDIR and EXCLUDE_FROM_ALL settings, so its own declarations
+# (mlx/backend/cuda/CMakeLists.txt) resolve to these verified archives.
+if(ASTRONOMICAL_MLX_BUILD_CUDA)
+    FetchContent_Declare(cccl URL "${ASTRONOMICAL_CCCL_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_CCCL_SOURCE_ARCHIVE_SHA256}")
+    FetchContent_Declare(nvtx3 URL "${ASTRONOMICAL_NVTX_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_NVTX_SOURCE_ARCHIVE_SHA256}" SOURCE_SUBDIR c EXCLUDE_FROM_ALL)
+    FetchContent_Declare(cudnn URL "${ASTRONOMICAL_CUDNN_FRONTEND_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_CUDNN_FRONTEND_SOURCE_ARCHIVE_SHA256}" EXCLUDE_FROM_ALL)
+    FetchContent_Declare(cutlass URL "${ASTRONOMICAL_CUTLASS_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_CUTLASS_SOURCE_ARCHIVE_SHA256}" SOURCE_SUBDIR include EXCLUDE_FROM_ALL)
+endif()
 # Every patch in the two PATCH_COMMAND lists below is documented with its
 # purpose and retirement condition in the patch registry of
 # third-party/README.md. Two patches retired at the v0.32.5 bump:
@@ -132,6 +159,10 @@ FetchContent_Declare(
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.5-evaluation-counts.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.5-cuda-jit-header-directories.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 # No mlx-c release pairs with MLX v0.32.5 yet, so the pinned mlx-c v0.8.0
 # carries two version-gap bridges, each deleted at the mlx-c release that makes
@@ -140,7 +171,9 @@ FetchContent_Declare(
 # other adds the <format> include that mlx-c's io.h needs for std::format:
 # MLX v0.32.4's headers reached it through <chrono>, v0.32.5's do not, and
 # libstdc++ (GCC on Linux) then stops compiling mlx-c (issue #2682). The
-# remaining patch adds mlx_array_detach, which the C API does not offer.
+# remaining patches add what the C API does not offer: mlx_array_detach, and
+# the two CUDA run-time settings the Linux CUDA recipe needs (the folders of
+# MLX's run-time compiler headers, and TF32 for float32 matmuls).
 FetchContent_Declare(
     mlx_c
     URL "${ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE}"
@@ -158,12 +191,20 @@ FetchContent_Declare(
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-c-0.8.0-include-format-in-io-header.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-c-0.8.0-cuda-runtime-settings.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 
 FetchContent_MakeAvailable(metal_cpp json fmt mlx mlx_c)
 
 if(NOT TARGET mlx OR NOT TARGET mlxc)
     message(FATAL_ERROR "Pinned archives did not define the expected mlx and mlxc targets")
+endif()
+
+if(ASTRONOMICAL_MLX_BUILD_CUDA)
+    include("${CMAKE_CURRENT_LIST_DIR}/cuda_runtime_facts.cmake")
 endif()
 
 if(ASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE)

@@ -1,0 +1,108 @@
+diff --git a/mlx/backend/cuda/cuda.h b/mlx/backend/cuda/cuda.h
+index d6b8b73..aba1d3f 100644
+--- a/mlx/backend/cuda/cuda.h
++++ b/mlx/backend/cuda/cuda.h
+@@ -17,6 +17,18 @@ MLX_API bool is_available();
+ /* Get the CUDA architectures MLX was compiled for. */
+ MLX_API std::vector<std::string> get_arch_list();
+ 
++/* Name the folders MLX's run-time CUDA compiler (NVRTC) reads headers from,
++ * for a program that links MLX statically and so has no `include/` folder
++ * beside the binary MLX is in: `bundled_headers_directory` holds the CUTLASS
++ * and CuTe headers MLX installs (with CCCL's in its `cccl/` subfolder), and
++ * `cuda_toolkit_include_directory` the CUDA runtime headers. An empty string
++ * keeps MLX's own search for that folder. Call it before the first
++ * evaluation that compiles a kernel; later calls have no effect. A no-op in
++ * a build without the CUDA backend. (Astronomical patch.) */
++MLX_API void set_jit_header_directories(
++    const std::string& bundled_headers_directory,
++    const std::string& cuda_toolkit_include_directory);
++
+ /* Get information about a CUDA device. */
+ MLX_API const
+     std::unordered_map<std::string, std::variant<std::string, size_t>>&
+diff --git a/mlx/backend/cuda/jit_module.cpp b/mlx/backend/cuda/jit_module.cpp
+index 56d074d..6085c40 100644
+--- a/mlx/backend/cuda/jit_module.cpp
++++ b/mlx/backend/cuda/jit_module.cpp
+@@ -1,6 +1,7 @@
+ // Copyright © 2025 Apple Inc.
+ 
+ #include "mlx/backend/cuda/jit_module.h"
++#include "mlx/backend/cuda/cuda.h"
+ #include "mlx/backend/cuda/device.h"
+ #include "mlx/version.h"
+ 
+@@ -62,16 +63,31 @@ inline const char* cudart_dirname() {
+ #endif
+ }
+ 
++// The folders named through set_jit_header_directories, read once by
++// include_path_args. Empty means MLX's own search.
++struct JitHeaderDirectories {
++  std::string bundled_headers_directory;
++  std::string cuda_toolkit_include_directory;
++};
++
++JitHeaderDirectories& configured_jit_header_directories() {
++  static JitHeaderDirectories directories;
++  return directories;
++}
++
+ // Return the --include-path args used for invoking NVRTC.
+ const std::vector<std::string>& include_path_args() {
+   static std::vector<std::string> cached_args = []() {
+     std::vector<std::string> args;
++    const JitHeaderDirectories& configured = configured_jit_header_directories();
+     // Add path to bundled headers.
+     auto root_dir = current_binary_dir();
+ #if !defined(_WIN32)
+     root_dir = root_dir.parent_path();
+ #endif
+-    auto path = root_dir / "include";
++    auto path = configured.bundled_headers_directory.empty()
++        ? root_dir / "include"
++        : std::filesystem::path(configured.bundled_headers_directory);
+     if (std::filesystem::exists(path)) {
+       args.push_back(fmt::format("--include-path={}", path.string()));
+     }
+@@ -83,9 +99,11 @@ const std::vector<std::string>& include_path_args() {
+     if (std::filesystem::exists(path)) {
+       args.push_back(fmt::format("--include-path={}", path.string()));
+     }
+-    // Add path to CUDA runtime headers, try local-installed python package
+-    // first and then system-installed headers.
+-    path = root_dir.parent_path() / "nvidia" / cudart_dirname() / "include";
++    // Add path to CUDA runtime headers: the configured folder, then a
++    // local-installed python package, then system-installed headers.
++    path = configured.cuda_toolkit_include_directory.empty()
++        ? root_dir.parent_path() / "nvidia" / cudart_dirname() / "include"
++        : std::filesystem::path(configured.cuda_toolkit_include_directory);
+     if (!std::filesystem::exists(path)) {
+       const char* home = std::getenv("CUDA_HOME");
+       if (!home) {
+@@ -499,4 +517,11 @@ JitModule& get_jit_module(
+   return it->second;
+ }
+ 
++void set_jit_header_directories(
++    const std::string& bundled_headers_directory,
++    const std::string& cuda_toolkit_include_directory) {
++  configured_jit_header_directories() = {
++      bundled_headers_directory, cuda_toolkit_include_directory};
++}
++
+ } // namespace mlx::core::cu
+diff --git a/mlx/backend/cuda/no_cuda.cpp b/mlx/backend/cuda/no_cuda.cpp
+index 8126790..3737e5e 100644
+--- a/mlx/backend/cuda/no_cuda.cpp
++++ b/mlx/backend/cuda/no_cuda.cpp
+@@ -15,6 +15,8 @@ std::vector<std::string> get_arch_list() {
+   return {};
+ }
+ 
++void set_jit_header_directories(const std::string&, const std::string&) {}
++
+ } // namespace cu
+ 
+ namespace fast {

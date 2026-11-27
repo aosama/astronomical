@@ -18,6 +18,7 @@
 //! - `safetensors_io` — the runtime-level entry points that hand the custom
 //!   input/output engines under `crate::safetensors` to callers.
 
+mod cuda_runtime_settings;
 mod error_classification;
 mod initialization;
 pub use initialization::platform_bindings_context;

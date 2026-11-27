@@ -21,9 +21,16 @@ never resolves an upstream repository live.
 | nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.5.cmake` | MLX transitive |
 | MLX performance profiler | 0.7.0 | release tag `v0.7.0` (commit `0425dc05e`) | `pins/mlx-performance-profiler-v0.7.0.cmake` | measurement tooling, not shipped |
+| CCCL | 3.1.3 | release asset `v3.1.3/cccl-v3.1.3.zip` | `pins/mlx-cuda-sources-v0.32.5.cmake` | MLX CUDA transitive |
+| NVTX | 3.1.1 | tag `v3.1.1` (commit `6230bdf71`) | `pins/mlx-cuda-sources-v0.32.5.cmake` | MLX CUDA transitive |
+| cuDNN frontend | 1.16.0 | tag `v1.16.0` (commit `be6c079be`) | `pins/mlx-cuda-sources-v0.32.5.cmake` | MLX CUDA transitive |
+| CUTLASS | 4.4.2 | tag `v4.4.2` (commit `da5e086da`) | `pins/mlx-cuda-sources-v0.32.5.cmake` | MLX CUDA transitive |
 
 metal-cpp, nlohmann/json, and fmt are source dependencies that MLX's own
-CMake declares through FetchContent. Astronomical pre-declares them with
+CMake declares through FetchContent, and so are CCCL, NVTX, the cuDNN
+frontend and CUTLASS for its CUDA backend, which only the Linux CUDA recipe
+extracts (issue #2699; every platform provisions them so one manifest serves
+every machine). Astronomical pre-declares them with
 verified local archives; FetchContent's first-declaration-wins rule means
 MLX's nested requests are always satisfied from the pinned digests instead of
 the network.
@@ -37,6 +44,10 @@ recorded here for review:
 - nlohmann/json `3.11.3`: `https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz` — SHA-256 `d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d`
 - fmt `12.1.0`: `https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz` — SHA-256 `ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea`
 - MLX performance profiler `0.7.0`: `https://github.com/aosama/mlx-performance-profiler/releases/download/v0.7.0/mlx-performance-profiler-0.7.0.tar.gz` — SHA-256 `3466770490611f4131cda49e1568c58ed73fffd2162548c251adffdaf7040233`
+- CCCL `3.1.3`: `https://github.com/NVIDIA/cccl/releases/download/v3.1.3/cccl-v3.1.3.zip` — SHA-256 `30f388ef784eb691d7de9d2cf918d53ab33464672500a17945b99d16af136cd6`
+- NVTX `3.1.1`: `https://github.com/NVIDIA/NVTX/archive/6230bdf710bc94f44d433acceba735aaa9090ba5.tar.gz` — SHA-256 `1c515cf0e6c05597b62f3b3a190f7a759446597aa88a27afdc08d1730a905e29`
+- cuDNN frontend `1.16.0`: `https://github.com/NVIDIA/cudnn-frontend/archive/be6c079be8aaffa0fc079fcf039887e637c289c7.tar.gz` — SHA-256 `bf3eef8b07394a40f73a510f6ce1d1deb11de253c5cff46a71adc9ab6fee3b00`
+- CUTLASS `4.4.2`: `https://github.com/NVIDIA/cutlass/archive/da5e086dab31d63815acafdac9a9c5893b1c69e2.tar.gz` — SHA-256 `7f735e3e8cf03ef3d898edf7a7329f92b5cf7bc5bb9049a0299f524d43d37919`
 
 Tooling pins (not part of the native runtime image): `tool-pins/Cargo.toml`
 pins `sccache 0.19.0` and `cargo-about 0.9.3`, the latter for the
@@ -111,6 +122,20 @@ MLX patches (`mlx-0.32.5-*.patch`):
   backend's completion handler), so a span's wall time can be split into
   the GPU working and the GPU waiting.
   Retires if upstream reports the same counts.
+- `cuda-jit-header-directories` — Astronomical feature (issue #2699). MLX
+  compiles some CUDA kernels at run time with NVRTC (its quantized matrix
+  multiplies among them) and looks for their CUTLASS, CuTe and CCCL headers
+  in the `include/` folder beside the binary MLX lives in, and for the CUDA
+  runtime headers through `CUDA_HOME`, `CUDA_PATH` or `/usr/local/cuda`
+  (`jit_module.cpp`, `include_path_args`). Astronomical links MLX
+  statically, so that binary is the worker and nothing is beside it; every
+  such kernel then fails with `cannot open source file
+  "cute/numeric/numeric_types.hpp"`. The patch adds
+  `mlx::core::cu::set_jit_header_directories`, which names both folders
+  before the first compile (a no-op in a build without CUDA, through
+  `no_cuda.cpp`); the native build publishes the headers into its store
+  entry and the runtime passes the folders at start-up. Retires when
+  upstream lets a program name those folders.
 - `stable-prefill-split-k` — serving performance. Keeps the quantized matmul
   split-K topology stable once row tiles already expose parallelism, so
   prefill numerics do not change with batch shape. Retires if upstream
@@ -171,6 +196,18 @@ MLX-C patches (`mlx-c-0.8.0-*.patch`):
   nothing there. Retires at the MLX-C release whose `io.h` includes
   `<format>` itself.
 
+- `cuda-runtime-settings` — Astronomical feature (issue #2699). Adds
+  `mlx_cuda_set_jit_header_directories`, the C side of the MLX patch above,
+  and `mlx_set_tf32_enabled`, which sets MLX's process-wide
+  `MLX_ENABLE_TF32` through `mlx::core::config::update` (Metal's NAX
+  kernels read it too, but only CUDA builds set it). MLX's CUDA backend runs float32
+  matrix multiplies on TF32 tensor cores by default; on Laya's projections
+  that made the largest difference from a float32 product 200 to 1,000
+  times larger, and Astronomical never lowers a model's precision, so the
+  runtime turns it off at start-up instead of through an environment
+  variable. The Rust declarations live in the `mlx-c-fork` crate. Retires
+  when MLX-C exposes both settings.
+
 - `gather-qmm-global-scale-compatibility` — retired at the v0.8.0 bump. MLX
   carries, since v0.32.3, a `global_scale` parameter in `gather_qmm` before
   `sorted_indices`; MLX-C v0.7.0 did not expose it, so the patch forwarded the
@@ -224,9 +261,10 @@ To bump a pinned dependency:
    vendored stock MLX-C headers at build time. Bump the workspace
    `mlx-bridge` dependency to the release matching the new pin, reconcile
    call sites against its surface, and check the fork delta: the pinned
-   patch set adds exactly one C symbol (`mlx_array_detach`, owned by
-   `crates/foundation/mlx-c-fork`); a new patch that adds more symbols must extend
-   that crate and its `FORK_BRIDGED_FUNCTIONS`. The coverage contract
+   patch set adds three C symbols (`mlx_array_detach`,
+   `mlx_cuda_set_jit_header_directories` and `mlx_set_tf32_enabled`, owned
+   by `crates/foundation/mlx-c-fork`); a new patch that adds more symbols must
+   extend that crate and its `FORK_BRIDGED_FUNCTIONS`. The coverage contract
    (run by `cargo xtask mlx-c-coverage-inventory`) fails on any
    unbridged, stale, or unjustified symbol across both crates. Before the
    first native build of the new pin, diff the C header surface itself with
@@ -266,7 +304,7 @@ raw bindgen declarations over its vendored stock headers, the
 captured-error translation, the owned handle types, the per-worker bindings
 context, and every operation wrapper family; it never invokes CMake.
 `crates/foundation/mlx-c-fork` owns the Astronomical patch delta over that stock
-surface — today the single `mlx_array_detach` symbol.
+surface — today `mlx_array_detach` and the two CUDA run-time settings.
 `crates/foundation/runtime-integration` owns the Astronomical policy over that
 boundary — memory-limit enforcement, metallib resolution and verification,
 the safetensors vtable policies, and native build orchestration — and links

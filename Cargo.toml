@@ -63,8 +63,9 @@ version = "0.2.137"
 # directives and runtime-integration owns the linker — the Astronomical
 # pair is patched, and the ladder's stock pair must never be selected
 # (upstream aosama/mlx-bridge#19 introduced this mode for exactly that
-# consumer class). The Astronomical fork delta (the patched mlx_array_detach
-# symbol) lives in the local mlx-c-fork crate; bump this
+# consumer class). The Astronomical fork delta (the patched MLX-C symbols:
+# mlx_array_detach and the CUDA run-time settings) lives in the local
+# mlx-c-fork crate; bump this
 # dependency together with the third-party MLX/MLX-C pins.
 mlx-bridge = { version = "0.32.5-alpha.1", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }

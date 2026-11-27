@@ -2,8 +2,10 @@
 //!
 //! # Why one module
 //!
-//! The pinned runtime builds the Metal backend with Xcode on macOS and MLX's
-//! CPU backend with the host's compilers on Linux (issue #2424). Keeping each
+//! The pinned runtime builds the Metal backend with Xcode on macOS, MLX's
+//! CPU backend with the host's compilers on Linux (issue #2424), and MLX's
+//! CUDA backend beside it on a Linux host with the CUDA toolkit and an NVIDIA
+//! GPU (the `LinuxCuda` recipe, issue #2699). Keeping each
 //! difference here, behind one [`NativeTargetPlatform`] value, keeps
 //! operating-system checks out of the compile, store and link executors, and
 //! gives later backends (Vulkan, CUDA, Windows) one place to add a recipe.
@@ -42,6 +44,14 @@ pub const MLX_SUBPROJECT_BUILD_RELATIVE_DIRECTORY: &str = "_deps/mlx-build";
 /// Linux link reads back (see `native_link_directives`).
 pub const MLX_TARGETS_RELATIVE_PATH: &str = "share/cmake/MLX/MLXTargets.cmake";
 
+/// Whether a published product is one file or a folder of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeProductKind {
+    File,
+    /// Copied whole, symlinks refused, like the MLX headers.
+    Directory,
+}
+
 /// A product a platform's build publishes into the store beside the static
 /// archives and headers every platform shares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +61,7 @@ pub struct PlatformNativeProduct {
     /// Where the store publishes it, relative to the entry directory.
     pub entry_relative_path: &'static str,
     pub description: &'static str,
+    pub kind: NativeProductKind,
 }
 
 impl PlatformNativeProduct {
@@ -66,13 +77,72 @@ const MACOS_NATIVE_PRODUCTS: &[PlatformNativeProduct] = &[PlatformNativeProduct 
     build_relative_path: "_deps/mlx-build/mlx/backend/metal/kernels/mlx.metallib",
     entry_relative_path: "share/mlx/mlx.metallib",
     description: "published MLX metallib",
+    kind: NativeProductKind::File,
 }];
 
-const LINUX_NATIVE_PRODUCTS: &[PlatformNativeProduct] = &[PlatformNativeProduct {
+const MLX_TARGETS_PRODUCT: PlatformNativeProduct = PlatformNativeProduct {
     build_relative_path: "mlx-package/share/cmake/MLX/MLXTargets.cmake",
     entry_relative_path: MLX_TARGETS_RELATIVE_PATH,
     description: "published MLX CMake package targets",
-}];
+    kind: NativeProductKind::File,
+};
+
+const LINUX_NATIVE_PRODUCTS: &[PlatformNativeProduct] = &[MLX_TARGETS_PRODUCT];
+
+/// The CUDA and cuDNN libraries to link, one linker input per line, which the
+/// native build resolves because MLX's package names them only as CMake
+/// targets (`native/cuda_runtime_facts.cmake`).
+pub const CUDA_LINK_LIBRARIES_RELATIVE_PATH: &str = "share/astronomical/cuda-link-libraries.txt";
+/// The CUDA runtime headers' folder, for MLX's run-time CUDA compiler.
+pub const CUDA_TOOLKIT_INCLUDE_DIRECTORY_RELATIVE_PATH: &str =
+    "share/astronomical/cuda-toolkit-include-directory.txt";
+
+/// The JIT header folder as a literal, so each header product's path is
+/// built from it with `concat!` instead of repeating it.
+macro_rules! cuda_jit_headers_relative_directory {
+    () => {
+        "share/mlx/cuda-jit-headers"
+    };
+}
+
+/// The CUTLASS, CuTe and CCCL headers MLX installs for its run-time CUDA
+/// compiler, which a statically linked MLX cannot find beside itself, so the
+/// runtime names this folder to MLX (`mlx_cuda_set_jit_header_directories`).
+pub const CUDA_JIT_HEADERS_RELATIVE_DIRECTORY: &str = cuda_jit_headers_relative_directory!();
+
+const LINUX_CUDA_NATIVE_PRODUCTS: &[PlatformNativeProduct] = &[
+    MLX_TARGETS_PRODUCT,
+    PlatformNativeProduct {
+        build_relative_path: "cuda/link-libraries.txt",
+        entry_relative_path: CUDA_LINK_LIBRARIES_RELATIVE_PATH,
+        description: "published CUDA link libraries",
+        kind: NativeProductKind::File,
+    },
+    PlatformNativeProduct {
+        build_relative_path: "cuda/toolkit-include-directory.txt",
+        entry_relative_path: CUDA_TOOLKIT_INCLUDE_DIRECTORY_RELATIVE_PATH,
+        description: "published CUDA toolkit include directory",
+        kind: NativeProductKind::File,
+    },
+    PlatformNativeProduct {
+        build_relative_path: "mlx-package/include/cute",
+        entry_relative_path: concat!(cuda_jit_headers_relative_directory!(), "/cute"),
+        description: "published CuTe headers for MLX's run-time CUDA compiler",
+        kind: NativeProductKind::Directory,
+    },
+    PlatformNativeProduct {
+        build_relative_path: "mlx-package/include/cutlass",
+        entry_relative_path: concat!(cuda_jit_headers_relative_directory!(), "/cutlass"),
+        description: "published CUTLASS headers for MLX's run-time CUDA compiler",
+        kind: NativeProductKind::Directory,
+    },
+    PlatformNativeProduct {
+        build_relative_path: "mlx-package/include/cccl",
+        entry_relative_path: concat!(cuda_jit_headers_relative_directory!(), "/cccl"),
+        description: "published CCCL headers for MLX's run-time CUDA compiler",
+        kind: NativeProductKind::Directory,
+    },
+];
 
 /// Resolves the platform to build for and refuses a build the host cannot
 /// produce archives for.
@@ -87,6 +157,7 @@ pub fn native_build_platform(
     host_triple: &str,
 ) -> Result<NativeTargetPlatform, Box<dyn Error>> {
     native_build_platform_for_host(target_triple, host_triple, host_platform())
+        .map(NativeTargetPlatform::with_host_gpu_backend)
 }
 
 /// The host decision as a pure function, so every refusal is testable on
@@ -130,7 +201,7 @@ pub const fn host_platform() -> Option<NativeTargetPlatform> {
 /// does, so its link reads the libraries MLX chose from MLX's own published
 /// package; the Metal build links a fixed framework set and needs none.
 pub const fn installs_mlx_package(native_target_platform: NativeTargetPlatform) -> bool {
-    matches!(native_target_platform, NativeTargetPlatform::Linux)
+    native_target_platform.is_linux()
 }
 
 /// Environment variables the platform's native build identity reads, beyond
@@ -143,22 +214,75 @@ pub const fn installs_mlx_package(native_target_platform: NativeTargetPlatform) 
 pub const fn identity_environment_variables(
     native_target_platform: NativeTargetPlatform,
 ) -> &'static [&'static str] {
-    match native_target_platform {
-        NativeTargetPlatform::MacOs => &[],
-        NativeTargetPlatform::Linux => &LINUX_IDENTITY_ENVIRONMENT_VARIABLES,
-    }
+    platform_recipe_facts(native_target_platform).identity_environment_variables
 }
 
-const LINUX_IDENTITY_ENVIRONMENT_VARIABLES: [&str; 10] =
+const BLAS_SEARCH_VARIABLE_COUNT: usize = native_identity::probes::BLAS_SEARCH_VARIABLES.len();
+const CUDA_SEARCH_VARIABLE_COUNT: usize = native_identity::probes::CUDA_SEARCH_VARIABLES.len();
+
+const LINUX_IDENTITY_ENVIRONMENT_VARIABLES: [&str; BLAS_SEARCH_VARIABLE_COUNT] =
     native_identity::probes::BLAS_SEARCH_VARIABLES;
+
+/// A CUDA build also hashes the CUDA toolkit search settings.
+const LINUX_CUDA_IDENTITY_ENVIRONMENT_VARIABLES: [&str;
+    BLAS_SEARCH_VARIABLE_COUNT + CUDA_SEARCH_VARIABLE_COUNT] = concatenate_variable_names(
+    native_identity::probes::BLAS_SEARCH_VARIABLES,
+    native_identity::probes::CUDA_SEARCH_VARIABLES,
+);
+
+const fn concatenate_variable_names(
+    blas_variables: [&'static str; BLAS_SEARCH_VARIABLE_COUNT],
+    cuda_variables: [&'static str; CUDA_SEARCH_VARIABLE_COUNT],
+) -> [&'static str; BLAS_SEARCH_VARIABLE_COUNT + CUDA_SEARCH_VARIABLE_COUNT] {
+    let mut variable_names = [""; BLAS_SEARCH_VARIABLE_COUNT + CUDA_SEARCH_VARIABLE_COUNT];
+    let mut variable_index = 0;
+    while variable_index < blas_variables.len() {
+        variable_names[variable_index] = blas_variables[variable_index];
+        variable_index += 1;
+    }
+    let mut cuda_index = 0;
+    while cuda_index < cuda_variables.len() {
+        variable_names[variable_index + cuda_index] = cuda_variables[cuda_index];
+        cuda_index += 1;
+    }
+    variable_names
+}
 
 /// The products a platform publishes beyond the shared archives and headers.
 pub const fn platform_native_products(
     native_target_platform: NativeTargetPlatform,
 ) -> &'static [PlatformNativeProduct] {
+    platform_recipe_facts(native_target_platform).native_products
+}
+
+/// What one platform recipe fingerprints from the environment and publishes
+/// beyond what every recipe shares, kept in one table so a recipe is one
+/// entry and every per-recipe lookup reads the same row.
+struct PlatformRecipeFacts {
+    identity_environment_variables: &'static [&'static str],
+    native_products: &'static [PlatformNativeProduct],
+}
+
+const MACOS_RECIPE_FACTS: PlatformRecipeFacts = PlatformRecipeFacts {
+    identity_environment_variables: &[],
+    native_products: MACOS_NATIVE_PRODUCTS,
+};
+const LINUX_RECIPE_FACTS: PlatformRecipeFacts = PlatformRecipeFacts {
+    identity_environment_variables: &LINUX_IDENTITY_ENVIRONMENT_VARIABLES,
+    native_products: LINUX_NATIVE_PRODUCTS,
+};
+const LINUX_CUDA_RECIPE_FACTS: PlatformRecipeFacts = PlatformRecipeFacts {
+    identity_environment_variables: &LINUX_CUDA_IDENTITY_ENVIRONMENT_VARIABLES,
+    native_products: LINUX_CUDA_NATIVE_PRODUCTS,
+};
+
+const fn platform_recipe_facts(
+    native_target_platform: NativeTargetPlatform,
+) -> &'static PlatformRecipeFacts {
     match native_target_platform {
-        NativeTargetPlatform::MacOs => MACOS_NATIVE_PRODUCTS,
-        NativeTargetPlatform::Linux => LINUX_NATIVE_PRODUCTS,
+        NativeTargetPlatform::MacOs => &MACOS_RECIPE_FACTS,
+        NativeTargetPlatform::Linux => &LINUX_RECIPE_FACTS,
+        NativeTargetPlatform::LinuxCuda => &LINUX_CUDA_RECIPE_FACTS,
     }
 }
 
@@ -177,19 +301,32 @@ pub fn compiler_configure_arguments(
     native_target_platform: NativeTargetPlatform,
 ) -> Result<Vec<String>, Box<dyn Error>> {
     match native_target_platform {
-        NativeTargetPlatform::MacOs => {
-            let clang_compiler_path = discover_xcrun_path(&["--find", "clang"])?;
-            let clang_cxx_compiler_path = discover_xcrun_path(&["--find", "clang++"])?;
-            let macos_sdk_path = discover_xcrun_path(&["--sdk", "macosx", "--show-sdk-path"])?;
-            Ok(vec![
-                format!("-DCMAKE_C_COMPILER={}", clang_compiler_path.display()),
-                format!("-DCMAKE_CXX_COMPILER={}", clang_cxx_compiler_path.display()),
-                format!("-DCMAKE_OSX_SYSROOT={}", macos_sdk_path.display()),
-                "-DCMAKE_OSX_ARCHITECTURES=arm64".to_owned(),
-            ])
-        }
+        NativeTargetPlatform::MacOs => macos_compiler_configure_arguments(),
         NativeTargetPlatform::Linux => Ok(linux_compiler_configure_arguments()),
+        NativeTargetPlatform::LinuxCuda => host_linux_cuda_compiler_configure_arguments(),
     }
+}
+
+/// The macOS half of [`compiler_configure_arguments`]: Xcode's compilers and
+/// SDK, resolved through `xcrun`, for arm64.
+fn macos_compiler_configure_arguments() -> Result<Vec<String>, Box<dyn Error>> {
+    let clang_compiler_path = discover_xcrun_path(&["--find", "clang"])?;
+    let clang_cxx_compiler_path = discover_xcrun_path(&["--find", "clang++"])?;
+    let macos_sdk_path = discover_xcrun_path(&["--sdk", "macosx", "--show-sdk-path"])?;
+    Ok(vec![
+        format!("-DCMAKE_C_COMPILER={}", clang_compiler_path.display()),
+        format!("-DCMAKE_CXX_COMPILER={}", clang_cxx_compiler_path.display()),
+        format!("-DCMAKE_OSX_SYSROOT={}", macos_sdk_path.display()),
+        "-DCMAKE_OSX_ARCHITECTURES=arm64".to_owned(),
+    ])
+}
+
+/// The Linux CUDA half of [`compiler_configure_arguments`], for this host's
+/// detected CUDA build target.
+fn host_linux_cuda_compiler_configure_arguments() -> Result<Vec<String>, Box<dyn Error>> {
+    let cuda_build_target = native_identity::linux_gpu_backend::detected_cuda_build_target()
+        .ok_or("the Linux CUDA recipe was chosen, but this host has no CUDA build target")?;
+    Ok(linux_cuda_compiler_configure_arguments(cuda_build_target))
 }
 
 /// The Linux half of [`compiler_configure_arguments`], which runs no tool.
@@ -198,6 +335,29 @@ pub fn linux_compiler_configure_arguments() -> Vec<String> {
         "-DCMAKE_C_COMPILER=cc".to_owned(),
         "-DCMAKE_CXX_COMPILER=c++".to_owned(),
     ]
+}
+
+/// The Linux CUDA recipe's configure arguments: the Linux compilers, then
+/// MLX's CUDA backend with the detected CUDA compiler, the host C++ compiler
+/// as its host compiler (the one the identity probed), and the detected GPU
+/// architectures.
+pub fn linux_cuda_compiler_configure_arguments(
+    cuda_build_target: &native_identity::linux_gpu_backend::CudaBuildTarget,
+) -> Vec<String> {
+    let mut configure_arguments = linux_compiler_configure_arguments();
+    configure_arguments.extend([
+        "-DASTRONOMICAL_MLX_BUILD_CUDA=ON".to_owned(),
+        format!(
+            "-DCMAKE_CUDA_COMPILER={}",
+            cuda_build_target.cuda_compiler_path.display()
+        ),
+        "-DCMAKE_CUDA_HOST_COMPILER=c++".to_owned(),
+        format!(
+            "-DMLX_CUDA_ARCHITECTURES={}",
+            cuda_build_target.cuda_architectures
+        ),
+    ]);
+    configure_arguments
 }
 
 pub(crate) fn discover_xcrun_path(arguments: &[&str]) -> Result<PathBuf, Box<dyn Error>> {

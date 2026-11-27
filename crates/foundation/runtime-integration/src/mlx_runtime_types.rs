@@ -260,6 +260,8 @@ pub enum MlxRuntimeError {
     },
     #[error("invalid MLX AOT metallib path: {description}")]
     InvalidMetallibPath { description: String },
+    #[error("failed to apply MLX's CUDA run-time settings: {description}")]
+    CudaRuntimeSettings { description: String },
     #[error("MLX runtime already uses AOT metallib {configured_path:?}")]
     MetallibAlreadyConfigured { configured_path: PathBuf },
     #[error("failed to {operation}: {description}")]

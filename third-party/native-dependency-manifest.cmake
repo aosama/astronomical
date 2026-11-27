@@ -10,6 +10,7 @@ endif()
 include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-v0.32.5.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-c-v0.8.0.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-performance-profiler-v0.7.0.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/pins/mlx-cuda-sources-v0.32.5.cmake")
 
 function(append_native_dependency_manifest_entry archive_file_name archive_url archive_sha256 dependency_description)
     file(
@@ -55,4 +56,31 @@ append_native_dependency_manifest_entry(
     "${ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_SOURCE_ARCHIVE_URL}"
     "${ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_SOURCE_ARCHIVE_SHA256}"
     "Performance profiler for MLX ${ASTRONOMICAL_MLX_PERFORMANCE_PROFILER_VERSION}"
+)
+# The four sources MLX's CUDA backend declares (issue #2699). Every platform
+# provisions them, so one manifest serves every machine; only a Linux build
+# with the CUDA backend extracts them.
+append_native_dependency_manifest_entry(
+    "${ASTRONOMICAL_CCCL_SOURCE_ARCHIVE_FILE_NAME}"
+    "${ASTRONOMICAL_CCCL_SOURCE_ARCHIVE_URL}"
+    "${ASTRONOMICAL_CCCL_SOURCE_ARCHIVE_SHA256}"
+    "CCCL ${ASTRONOMICAL_CCCL_VERSION}"
+)
+append_native_dependency_manifest_entry(
+    "${ASTRONOMICAL_NVTX_SOURCE_ARCHIVE_FILE_NAME}"
+    "${ASTRONOMICAL_NVTX_SOURCE_ARCHIVE_URL}"
+    "${ASTRONOMICAL_NVTX_SOURCE_ARCHIVE_SHA256}"
+    "NVTX ${ASTRONOMICAL_NVTX_VERSION}"
+)
+append_native_dependency_manifest_entry(
+    "${ASTRONOMICAL_CUDNN_FRONTEND_SOURCE_ARCHIVE_FILE_NAME}"
+    "${ASTRONOMICAL_CUDNN_FRONTEND_SOURCE_ARCHIVE_URL}"
+    "${ASTRONOMICAL_CUDNN_FRONTEND_SOURCE_ARCHIVE_SHA256}"
+    "cuDNN frontend ${ASTRONOMICAL_CUDNN_FRONTEND_VERSION}"
+)
+append_native_dependency_manifest_entry(
+    "${ASTRONOMICAL_CUTLASS_SOURCE_ARCHIVE_FILE_NAME}"
+    "${ASTRONOMICAL_CUTLASS_SOURCE_ARCHIVE_URL}"
+    "${ASTRONOMICAL_CUTLASS_SOURCE_ARCHIVE_SHA256}"
+    "CUTLASS ${ASTRONOMICAL_CUTLASS_VERSION}"
 )

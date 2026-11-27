@@ -55,7 +55,9 @@ use std::{
 use fs4::TryLockError;
 
 use crate::native_host_platform::{
-    MLX_TARGETS_RELATIVE_PATH, NativeTargetPlatform, platform_native_products,
+    CUDA_JIT_HEADERS_RELATIVE_DIRECTORY, CUDA_LINK_LIBRARIES_RELATIVE_PATH,
+    CUDA_TOOLKIT_INCLUDE_DIRECTORY_RELATIVE_PATH, MLX_TARGETS_RELATIVE_PATH, NativeProductKind,
+    NativeTargetPlatform, PlatformNativeProduct, platform_native_products,
 };
 
 mod build_slot;
@@ -385,19 +387,32 @@ impl NativeBuildStore {
 }
 
 /// Copies the products only this platform's build produces (the Metallib on
-/// macOS, the link library list on Linux) into the payload.
+/// macOS, the link library list on Linux, the CUDA link list and run-time
+/// compiler headers on Linux with CUDA) into the payload.
 fn copy_platform_products(
     native_target_platform: NativeTargetPlatform,
     cmake_build_directory: &Path,
     payload_directory: &Path,
 ) -> Result<(), Box<dyn Error>> {
     for platform_product in platform_native_products(native_target_platform) {
-        copy_required_file(
-            &cmake_build_directory.join(platform_product.build_relative_path),
-            &payload_directory.join(platform_product.entry_relative_path),
-        )?;
+        copy_platform_product(platform_product, cmake_build_directory, payload_directory)?;
     }
     Ok(())
+}
+
+/// Copies one platform product from the CMake tree into the payload: a file
+/// as a file, a header folder as a folder without symlinks.
+fn copy_platform_product(
+    platform_product: &PlatformNativeProduct,
+    cmake_build_directory: &Path,
+    payload_directory: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let build_path = cmake_build_directory.join(platform_product.build_relative_path);
+    let entry_path = payload_directory.join(platform_product.entry_relative_path);
+    match platform_product.kind {
+        NativeProductKind::File => copy_required_file(&build_path, &entry_path),
+        NativeProductKind::Directory => copy_directory_without_symlinks(&build_path, &entry_path),
+    }
 }
 
 fn store_schema_version() -> &'static str {
@@ -460,6 +475,26 @@ impl NativeBuildArtifacts {
     /// the libraries MLX was configured to link.
     pub fn mlx_targets_path(&self) -> PathBuf {
         self.entry_directory.join(MLX_TARGETS_RELATIVE_PATH)
+    }
+
+    /// Published for the Linux CUDA recipe only: the CUDA and cuDNN libraries
+    /// to link, one linker input per line.
+    pub fn cuda_link_libraries_path(&self) -> PathBuf {
+        self.entry_directory.join(CUDA_LINK_LIBRARIES_RELATIVE_PATH)
+    }
+
+    /// Published for the Linux CUDA recipe only: a file naming the CUDA
+    /// runtime headers' folder.
+    pub fn cuda_toolkit_include_directory_path(&self) -> PathBuf {
+        self.entry_directory
+            .join(CUDA_TOOLKIT_INCLUDE_DIRECTORY_RELATIVE_PATH)
+    }
+
+    /// Published for the Linux CUDA recipe only: the CUTLASS, CuTe and CCCL
+    /// headers MLX's run-time CUDA compiler reads.
+    pub fn cuda_jit_headers_directory(&self) -> PathBuf {
+        self.entry_directory
+            .join(CUDA_JIT_HEADERS_RELATIVE_DIRECTORY)
     }
 
     /// Present only for the `core+memory-contract` profile.

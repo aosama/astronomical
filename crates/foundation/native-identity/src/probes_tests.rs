@@ -15,13 +15,12 @@ fn overridden_request() -> FingerprintRequest<'static> {
             xcode: Some("Xcode 26.0 Build 17A1".to_owned()),
             sdk: Some("version=15.4\nbuild=24A123".to_owned()),
             clang: Some("version=17.0.0\ntarget=arm64-apple-darwin24".to_owned()),
-            c_compiler: None,
-            cxx_compiler: None,
-            blas_search: None,
+            has_cuda_build_target: Some(false),
             cmake: Some("cmake version 4.2.1".to_owned()),
             rustc: Some("rustc 1.97.1".to_owned()),
             target_triple: Some("aarch64-apple-darwin".to_owned()),
             build_type: Some("Release".to_owned()),
+            ..crate::probes::ToolchainOverrides::none()
         },
     }
 }
@@ -225,6 +224,7 @@ fn overridden_linux_request() -> FingerprintRequest<'static> {
             c_compiler: Some("cc (GCC) 16.2.1".to_owned()),
             cxx_compiler: Some("c++ (GCC) 16.2.1".to_owned()),
             blas_search: Some("CMAKE_PREFIX_PATH=".to_owned()),
+            has_cuda_build_target: Some(false),
             cmake: Some("cmake version 4.2.1".to_owned()),
             rustc: Some("rustc 1.97.1".to_owned()),
             target_triple: Some("x86_64-unknown-linux-gnu".to_owned()),
@@ -309,5 +309,79 @@ fn should_preserve_the_linux_toolchain_manifest_digest_for_direct_fixtures() {
     assert_eq!(
         digest_bytes(manifest_lines.as_bytes()),
         "1cb40686b7ff9aaaca4de483ba7a46efc46551fb33eb338d6fbda1460d7f55b6"
+    );
+}
+
+fn overridden_linux_cuda_request() -> FingerprintRequest<'static> {
+    let mut request = overridden_linux_request();
+    request.overrides.has_cuda_build_target = Some(true);
+    request.overrides.cuda_compiler = Some("Cuda compilation tools, release 13.4".to_owned());
+    request.overrides.cuda_architectures = Some("86".to_owned());
+    request.overrides.cuda_search = Some("CUDA_PATH=/toolkit".to_owned());
+    request.overrides.cudnn_version = Some("9.27.0".to_owned());
+    request
+}
+
+// --- positive ---
+
+#[test]
+fn should_probe_the_cuda_compiler_architectures_search_settings_and_cudnn_for_a_cuda_build() {
+    let probe_values = toolchain_probe_values(&overridden_linux_cuda_request()).unwrap();
+    let probe_names: Vec<&str> = probe_values
+        .iter()
+        .map(|probe_value| probe_value.name)
+        .collect();
+    for cuda_probe_name in [
+        "cuda-compiler",
+        "cuda-architectures",
+        "cuda-search",
+        "cudnn-version",
+    ] {
+        assert!(
+            probe_names.contains(&cuda_probe_name),
+            "{cuda_probe_name} in {probe_names:?}"
+        );
+    }
+    assert!(probe_names.contains(&"c-compiler") && probe_names.contains(&"blas-search"));
+}
+
+// --- edge / boundary ---
+
+#[test]
+fn should_key_another_identity_for_another_gpu_architecture() {
+    let ampere_manifest = toolchain_manifest_lines(&overridden_linux_cuda_request()).unwrap();
+    let mut hopper_request = overridden_linux_cuda_request();
+    hopper_request.overrides.cuda_architectures = Some("90a".to_owned());
+    assert_ne!(
+        toolchain_manifest_lines(&hopper_request).unwrap(),
+        ampere_manifest
+    );
+}
+
+#[test]
+fn should_key_another_identity_after_a_cudnn_upgrade() {
+    let cudnn_9_manifest = toolchain_manifest_lines(&overridden_linux_cuda_request()).unwrap();
+    let mut upgraded_request = overridden_linux_cuda_request();
+    upgraded_request.overrides.cudnn_version = Some("10.0.0".to_owned());
+    assert_ne!(
+        toolchain_manifest_lines(&upgraded_request).unwrap(),
+        cudnn_9_manifest
+    );
+}
+
+// --- negative ---
+
+#[test]
+fn should_add_no_cuda_probe_to_a_cpu_linux_build() {
+    let probe_values = toolchain_probe_values(&overridden_linux_request()).unwrap();
+    assert!(
+        !probe_values
+            .iter()
+            .any(|probe_value| probe_value.name.starts_with("cuda")
+                || probe_value.name.starts_with("cudnn"))
+    );
+    assert_ne!(
+        toolchain_manifest_lines(&overridden_linux_request()).unwrap(),
+        toolchain_manifest_lines(&overridden_linux_cuda_request()).unwrap()
     );
 }

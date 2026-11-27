@@ -148,3 +148,100 @@ fn should_rerun_on_the_linux_identity_inputs_and_nothing_new_on_macos() {
     }
     assert!(identity_environment_variables(NativeTargetPlatform::MacOs).is_empty());
 }
+
+fn cuda_build_target_for_tests() -> native_identity::linux_gpu_backend::CudaBuildTarget {
+    native_identity::linux_gpu_backend::CudaBuildTarget {
+        cuda_compiler_path: std::path::PathBuf::from("/toolkit/bin/nvcc"),
+        cuda_architectures: "86".to_owned(),
+    }
+}
+
+// --- positive ---
+
+#[test]
+fn should_configure_the_cuda_recipe_with_the_detected_compiler_and_architectures() {
+    let configure_arguments =
+        super::linux_cuda_compiler_configure_arguments(&cuda_build_target_for_tests());
+    assert_eq!(
+        configure_arguments,
+        [
+            "-DCMAKE_C_COMPILER=cc",
+            "-DCMAKE_CXX_COMPILER=c++",
+            "-DASTRONOMICAL_MLX_BUILD_CUDA=ON",
+            "-DCMAKE_CUDA_COMPILER=/toolkit/bin/nvcc",
+            "-DCMAKE_CUDA_HOST_COMPILER=c++",
+            "-DMLX_CUDA_ARCHITECTURES=86",
+        ]
+    );
+}
+
+#[test]
+fn should_publish_the_cuda_link_list_and_run_time_compiler_headers_for_the_cuda_recipe() {
+    let cuda_products = platform_native_products(NativeTargetPlatform::LinuxCuda);
+    let entry_paths: Vec<&str> = cuda_products
+        .iter()
+        .map(|platform_product| platform_product.entry_relative_path)
+        .collect();
+    assert!(entry_paths.contains(&MLX_TARGETS_RELATIVE_PATH));
+    assert!(entry_paths.contains(&super::CUDA_LINK_LIBRARIES_RELATIVE_PATH));
+    assert!(entry_paths.contains(&super::CUDA_TOOLKIT_INCLUDE_DIRECTORY_RELATIVE_PATH));
+    for header_folder in ["cute", "cutlass", "cccl"] {
+        let header_product = cuda_products
+            .iter()
+            .find(|platform_product| {
+                platform_product
+                    .entry_relative_path
+                    .ends_with(header_folder)
+            })
+            .expect(header_folder);
+        assert_eq!(header_product.kind, super::NativeProductKind::Directory);
+        assert!(
+            header_product
+                .entry_relative_path
+                .starts_with(super::CUDA_JIT_HEADERS_RELATIVE_DIRECTORY)
+        );
+    }
+}
+
+// --- edge / boundary ---
+
+#[test]
+fn should_rerun_the_cuda_recipe_on_the_blas_and_cuda_search_settings() {
+    let cuda_variables = identity_environment_variables(NativeTargetPlatform::LinuxCuda);
+    for identity_input in native_identity::probes::BLAS_SEARCH_VARIABLES
+        .iter()
+        .chain(native_identity::probes::CUDA_SEARCH_VARIABLES.iter())
+    {
+        assert!(cuda_variables.contains(identity_input), "{identity_input}");
+    }
+    assert_eq!(
+        cuda_variables.len(),
+        native_identity::probes::BLAS_SEARCH_VARIABLES.len()
+            + native_identity::probes::CUDA_SEARCH_VARIABLES.len()
+    );
+    assert!(installs_mlx_package(NativeTargetPlatform::LinuxCuda));
+}
+
+#[test]
+fn should_keep_the_cpu_recipe_products_unchanged() {
+    assert_eq!(
+        platform_native_products(NativeTargetPlatform::Linux).len(),
+        1
+    );
+}
+
+// --- negative ---
+
+#[test]
+fn should_never_promote_a_macos_target_to_cuda() {
+    let macos_platform = native_build_platform_for_host(
+        "aarch64-apple-darwin",
+        "aarch64-apple-darwin",
+        Some(NativeTargetPlatform::MacOs),
+    )
+    .unwrap();
+    assert_eq!(
+        macos_platform.with_gpu_backend(true),
+        NativeTargetPlatform::MacOs
+    );
+}

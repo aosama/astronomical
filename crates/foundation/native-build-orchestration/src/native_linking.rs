@@ -36,7 +36,10 @@ use std::{
 use sha2::{Digest, Sha256};
 
 use crate::native_host_platform::NativeTargetPlatform;
-use crate::native_link_directives::{linux_link_directives, macos_link_directive_lines};
+use crate::native_link_directives::{
+    NativeLinkDirectives, linux_cuda_link_directives, linux_link_directives,
+    macos_link_directive_lines,
+};
 use crate::native_store::NativeBuildArtifacts;
 
 /// Emits every `cargo:` directive needed to link and run against a store entry.
@@ -59,14 +62,11 @@ pub fn configure_rust_linking(
         &native_library_directory.join("libmlxc.a"),
         "MLX C static library",
     )?;
-    match native_target_platform {
-        NativeTargetPlatform::MacOs => {
-            configure_macos_rust_linking(native_build_artifacts, &native_library_directory)?;
-        }
-        NativeTargetPlatform::Linux => {
-            configure_linux_rust_linking(native_build_artifacts, &native_library_directory)?;
-        }
-    }
+    configure_platform_rust_linking(
+        native_build_artifacts,
+        native_target_platform,
+        &native_library_directory,
+    )?;
     if let Some(memory_contract_probe_path) = native_build_artifacts.memory_contract_probe_path() {
         println!(
             "cargo:rustc-env=ASTRONOMICAL_MLX_MEMORY_CONTRACT_PROBE={}",
@@ -74,6 +74,25 @@ pub fn configure_rust_linking(
         );
     }
     Ok(())
+}
+
+/// Emits the link of the platform's own recipe.
+fn configure_platform_rust_linking(
+    native_build_artifacts: &NativeBuildArtifacts,
+    native_target_platform: NativeTargetPlatform,
+    native_library_directory: &Path,
+) -> Result<(), Box<dyn Error>> {
+    match native_target_platform {
+        NativeTargetPlatform::MacOs => {
+            configure_macos_rust_linking(native_build_artifacts, native_library_directory)
+        }
+        NativeTargetPlatform::Linux => {
+            configure_linux_rust_linking(native_build_artifacts, native_library_directory)
+        }
+        NativeTargetPlatform::LinuxCuda => {
+            configure_linux_cuda_rust_linking(native_build_artifacts, native_library_directory)
+        }
+    }
 }
 
 /// Links the Metal build and hands the runtime its verified Metallib.
@@ -116,7 +135,61 @@ fn configure_linux_rust_linking(
     let mlx_targets_path = native_build_artifacts.mlx_targets_path();
     require_file(&mlx_targets_path, "MLX CMake package targets")?;
     let mlx_targets_text = fs::read_to_string(&mlx_targets_path)?;
-    let link_directives = linux_link_directives(native_library_directory, &mlx_targets_text);
+    emit_linux_link_directives(&linux_link_directives(
+        native_library_directory,
+        &mlx_targets_text,
+    ))
+}
+
+/// Links the CUDA build: the CPU build's line plus the CUDA and cuDNN
+/// libraries the native build resolved, and hands the runtime the two header
+/// folders MLX's run-time CUDA compiler needs, as compile-time values
+/// (`ASTRONOMICAL_MLX_CUDA_JIT_HEADERS_DIRECTORY` and
+/// `ASTRONOMICAL_MLX_CUDA_TOOLKIT_INCLUDE_DIRECTORY`), which the runtime
+/// passes to MLX at start-up.
+fn configure_linux_cuda_rust_linking(
+    native_build_artifacts: &NativeBuildArtifacts,
+    native_library_directory: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let mlx_targets_path = native_build_artifacts.mlx_targets_path();
+    require_file(&mlx_targets_path, "MLX CMake package targets")?;
+    let cuda_link_libraries_path = native_build_artifacts.cuda_link_libraries_path();
+    require_file(&cuda_link_libraries_path, "CUDA link libraries")?;
+    let toolkit_include_directory_path =
+        native_build_artifacts.cuda_toolkit_include_directory_path();
+    require_file(
+        &toolkit_include_directory_path,
+        "CUDA toolkit include directory",
+    )?;
+    let cuda_jit_headers_directory = native_build_artifacts.cuda_jit_headers_directory();
+    if !cuda_jit_headers_directory.is_dir() {
+        return Err(format!(
+            "missing MLX's run-time CUDA compiler headers at {}",
+            cuda_jit_headers_directory.display()
+        )
+        .into());
+    }
+    emit_linux_link_directives(&linux_cuda_link_directives(
+        native_library_directory,
+        &fs::read_to_string(&mlx_targets_path)?,
+        &fs::read_to_string(&cuda_link_libraries_path)?,
+    ))?;
+    println!(
+        "cargo:rustc-env=ASTRONOMICAL_MLX_CUDA_JIT_HEADERS_DIRECTORY={}",
+        cuda_jit_headers_directory.display()
+    );
+    println!(
+        "cargo:rustc-env=ASTRONOMICAL_MLX_CUDA_TOOLKIT_INCLUDE_DIRECTORY={}",
+        fs::read_to_string(&toolkit_include_directory_path)?.trim()
+    );
+    Ok(())
+}
+
+/// Prints a Linux link line, refusing one whose recorded library files have
+/// gone since the entry was built.
+fn emit_linux_link_directives(
+    link_directives: &NativeLinkDirectives,
+) -> Result<(), Box<dyn Error>> {
     // The store entry is keyed by the BLAS search settings, not by the
     // library files themselves; a file removed since the entry was built
     // would otherwise surface as an obscure linker error.

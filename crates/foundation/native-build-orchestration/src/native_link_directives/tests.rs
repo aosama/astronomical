@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use super::{
-    NativeLinkDirectives, linux_link_directives, macos_link_directive_lines,
-    mlx_exported_link_libraries,
+    NativeLinkDirectives, linux_cuda_link_directives, linux_link_directives,
+    macos_link_directive_lines, mlx_exported_link_libraries,
 };
 
 const NATIVE_LIBRARY_DIRECTORY: &str = "/store/entries/identity/lib";
@@ -292,5 +292,121 @@ fn should_warn_when_mlx_targets_defines_no_mlx_properties() {
             .last()
             .map(String::as_str),
         Some("cargo:rustc-link-lib=dylib=stdc++")
+    );
+}
+
+/// The resolved CUDA list a Linux CUDA build writes
+/// (`native/cuda_runtime_facts.cmake`): toolkit libraries by path, cuDNN by
+/// path, and the driver by name.
+const CUDA_LINK_LIBRARIES: &str =
+    "/opt/cuda/lib64/libcublasLt.so\n/opt/cuda/lib64/libcudart.so\n/usr/lib/libcudnn.so\n-lcuda\n";
+
+fn linux_cuda_directives(
+    link_library_entries: &[&str],
+    cuda_link_libraries: &str,
+) -> NativeLinkDirectives {
+    linux_cuda_link_directives(
+        Path::new(NATIVE_LIBRARY_DIRECTORY),
+        &mlx_targets_linking(link_library_entries),
+        cuda_link_libraries,
+    )
+}
+
+// --- positive ---
+
+#[test]
+fn should_link_each_resolved_cuda_library_before_the_cpp_runtime() {
+    let link_directives = linux_cuda_directives(&["$<LINK_ONLY:dl>"], CUDA_LINK_LIBRARIES);
+    let cargo_directive_lines = &link_directives.cargo_directive_lines;
+    let cublas_line = "cargo:rustc-link-lib=dylib:+verbatim=libcublasLt.so";
+    let driver_line = "cargo:rustc-link-lib=dylib=cuda";
+    assert!(cargo_directive_lines.contains(&cublas_line.to_owned()));
+    assert!(
+        cargo_directive_lines
+            .contains(&"cargo:rustc-link-lib=dylib:+verbatim=libcudnn.so".to_owned())
+    );
+    assert!(cargo_directive_lines.contains(&driver_line.to_owned()));
+    assert_eq!(
+        cargo_directive_lines.last().map(String::as_str),
+        Some("cargo:rustc-link-lib=dylib=stdc++")
+    );
+    assert!(
+        link_directives.warning_messages.is_empty(),
+        "{:?}",
+        link_directives.warning_messages
+    );
+}
+
+#[test]
+fn should_give_the_toolkit_folder_a_run_path_but_not_a_system_folder() {
+    let link_directives = linux_cuda_directives(&[], CUDA_LINK_LIBRARIES);
+    let cargo_directive_lines = &link_directives.cargo_directive_lines;
+    assert!(
+        cargo_directive_lines
+            .contains(&"cargo:rustc-link-arg=-Wl,-rpath,/opt/cuda/lib64".to_owned())
+    );
+    assert!(
+        !cargo_directive_lines.contains(&"cargo:rustc-link-arg=-Wl,-rpath,/usr/lib".to_owned())
+    );
+}
+
+// --- edge / boundary ---
+
+#[test]
+fn should_drop_mlxs_cuda_targets_without_a_warning_when_the_list_resolves_them() {
+    let link_directives = linux_cuda_directives(
+        &[
+            "$<LINK_ONLY:CUDA::cublasLt>",
+            "$<LINK_ONLY:CUDNN::cudnn_all>",
+            "CUDA::cuda_driver",
+        ],
+        CUDA_LINK_LIBRARIES,
+    );
+    assert!(
+        link_directives.warning_messages.is_empty(),
+        "{:?}",
+        link_directives.warning_messages
+    );
+}
+
+#[test]
+fn should_link_the_driver_by_name_so_the_toolkit_stub_never_becomes_a_run_path() {
+    let link_directives = linux_cuda_directives(&[], "-lcuda\n");
+    assert!(
+        !link_directives
+            .cargo_directive_lines
+            .iter()
+            .any(|cargo_directive_line| cargo_directive_line.contains("stubs"))
+    );
+    assert!(link_directives.linked_library_files.is_empty());
+}
+
+#[test]
+fn should_skip_blank_lines_in_the_cuda_list() {
+    let link_directives = linux_cuda_directives(&[], "\n  \n-lcuda\n\n");
+    assert!(link_directives.warning_messages.is_empty());
+    assert!(
+        link_directives
+            .cargo_directive_lines
+            .contains(&"cargo:rustc-link-lib=dylib=cuda".to_owned())
+    );
+}
+
+// --- negative ---
+
+#[test]
+fn should_still_warn_about_cuda_targets_on_the_cpu_line() {
+    let link_directives = linux_directives(&["CUDA::cublasLt"]);
+    assert_eq!(link_directives.warning_messages.len(), 1);
+}
+
+#[test]
+fn should_refuse_a_relative_entry_in_the_cuda_list() {
+    let link_directives = linux_cuda_directives(&[], "libcublas.so\n");
+    assert_eq!(link_directives.warning_messages.len(), 1);
+    assert!(
+        !link_directives
+            .cargo_directive_lines
+            .contains(&"cargo:rustc-link-lib=dylib:+verbatim=libcublas.so".to_owned())
     );
 }
