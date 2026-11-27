@@ -25,6 +25,18 @@ memory-policy = { path = "../crates/foundation/memory-policy" }
 native-identity = { path = "../crates/foundation/native-identity" }
 test-harness = { path = "../crates/foundation/test-harness" }
 lowercase-hex = { path = "../crates/foundation/lowercase-hex" }
+# check-metal-kernels reads the kernels' signature blocks and rebuilds MLX's
+# wrapper with the crate the kernels' build scripts use, and compiles against
+# the patched MLX sources the native build provisions.
+metal-kernel-declarations = { path = "../crates/foundation/metal-kernel-declarations" }
+native-build-orchestration = { path = "../crates/foundation/native-build-orchestration" }
+# check-metal-kernels lexes Rust files to find C++ or Metal program text in
+# their string literals: proc-macro2 tokenizes a file (dropping comments,
+# keeping strings inside macro calls) and reports each literal's line with
+# span-locations; syn reads a literal token's value, escapes and raw strings
+# included.
+proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
+syn = { version = "2.0.119", default-features = false, features = ["parsing"] }
 # Signal handlers, process-group signaling, access(2), and localtime_r for
 # the disposable-target lifecycle runner: the one sanctioned unsafe edge.
 libc.workspace = true

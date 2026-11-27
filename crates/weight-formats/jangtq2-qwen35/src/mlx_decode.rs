@@ -29,10 +29,11 @@ use mlx_bridge::{
 };
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
+use model_primitives::metal_kernel_declaration::declare_metal_kernel;
+
 use super::codebook;
 use super::hadamard32;
-
-mod kernel_sources;
+use super::metal_kernels::ASTRO_FORMAT_JANGTQ2_PAGE_DECODE;
 
 const CODEBOOK_DECODE_OPERATION: &str = "decode jangtq2 codebook expert rows";
 const HADAMARD_ACTIVATION_ROTATION_OPERATION: &str = "rotate jangtq2 expert activations";
@@ -274,13 +275,7 @@ thread_local! {
 
 impl PageDecodeKernel {
     fn new() -> Result<Self, MlxRuntimeError> {
-        let kernel = MlxMetalKernel::new(
-            "jangtq2_page_decode",
-            &["packed_weights", "row_scales", "codebook_levels"],
-            &["decoded"],
-            &kernel_sources::page_decode_kernel_source(),
-        )
-        .map_err(MlxRuntimeError::from)?;
+        let kernel = declare_metal_kernel(&ASTRO_FORMAT_JANGTQ2_PAGE_DECODE, &[])?;
         Ok(Self {
             kernel,
             codebook_level_tables_by_bit_width: HashMap::new(),

@@ -1,0 +1,1 @@
+Y[0] = X[0] * X_shape[0] * X_ndim; // thread_position_in_grid

@@ -20,24 +20,27 @@
 //! the compiled signed cast (`float(x) * sign` is exact for `sign` in ±1),
 //! and the single store rounds `float * scale` to the activation dtype exactly
 //! where the composed route's final cast rounds its float32 product. The
-//! capability probe and the fixture-pack unit test both check this equality
-//! bit for bit, and the upstream parity journey is the end-to-end witness.
+//! capability probe checks this equality bit for bit, and the upstream parity
+//! journey is the end-to-end witness. The Metal is in
+//! `metal/astro_family_qwen35_signed_hadamard_rotation.metal`.
 
 use mlx_bridge::{
     MlxArray, MlxCError, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput,
     MlxMetalKernelTemplateArgument,
 };
+use model_primitives::metal_kernel_declaration::{declare_metal_kernel, float_define};
 use runtime_integration::MlxRuntime;
 
-/// MLX's largest butterfly radix and its device read width; the block must
-/// be at least one radix wide so every pass uses the same radix MLX uses.
+use crate::metal_kernels::ASTRO_FAMILY_QWEN35_SIGNED_HADAMARD_ROTATION;
+
+/// MLX's largest butterfly radix, which the kernel's `max_radix` repeats; the
+/// block must be at least one radix wide so every pass uses the same radix
+/// MLX uses.
 const MAX_RADIX: i32 = 16;
-const READ_WIDTH: i32 = 4;
 /// MLX splits transforms wider than this into two strided stages with a
 /// different addition order, so blocks above it keep the composed route.
 const MAX_SINGLE_STAGE_BLOCK: u32 = 8192;
 
-const KERNEL_NAME: &str = "astronomical_signed_hadamard_rotation";
 const OPERATION: &str = "apply the fused signed Hadamard rotation";
 
 /// True when the one-launch rotation reproduces MLX's single-stage block
@@ -63,13 +66,14 @@ pub fn signed_rotation_kernel(block_size: u32) -> Result<MlxMetalKernel, MlxCErr
         });
     }
     let scale = 1.0 / (block_size as f32).sqrt();
-    MlxMetalKernel::new_with_header(
-        KERNEL_NAME,
-        &["activations", "signs"],
-        &["rotated"],
-        SIGNED_ROTATION_KERNEL_HEADER,
-        &signed_rotation_kernel_source(scale),
+    declare_metal_kernel(
+        &ASTRO_FAMILY_QWEN35_SIGNED_HADAMARD_ROTATION,
+        &[float_define("SIGNED_ROTATION_SCALE", scale)],
     )
+    .map_err(|declaration_error| MlxCError {
+        operation: OPERATION,
+        description: declaration_error.to_string(),
+    })
 }
 
 /// Rotates every row of `activations` (last axis `width`, a multiple of the
@@ -133,122 +137,4 @@ pub fn apply_signed_rotation(
         operation: OPERATION,
         description: "the fused rotation kernel returned no output".to_owned(),
     })
-}
-
-/// The thread-local radix butterfly of MLX's `hadamard.h` (`radix_func`).
-/// The butterfly index names (`h` for the half-span, `j` and `k` for the
-/// butterfly pair positions) are kept as MLX writes them so the two sources
-/// can be audited side by side; the arithmetic order is what parity relies on.
-const SIGNED_ROTATION_KERNEL_HEADER: &str = r#"
-template <short R>
-METAL_FUNC void astronomical_hadamard_radix(thread float* butterfly_values) {
-  constexpr short logR = __builtin_ctz(R);
-  short h = 1;
-  // Full unrolling (as MLX's STEEL_PRAGMA_UNROLL does) keeps every index
-  // constant so the butterfly array stays in registers; a rolled loop
-  // indexes thread memory dynamically and runs several times slower.
-#pragma clang loop unroll(full)
-  for (short stage = 0; stage < logR; stage++) {
-#pragma clang loop unroll(full)
-    for (short pair_index = 0; pair_index < R / 2; pair_index++) {
-      short k = pair_index & (h - 1);
-      short j = ((pair_index - k) << 1) + k;
-      float upper = butterfly_values[j];
-      float lower = butterfly_values[j + h];
-      butterfly_values[j] = upper + lower;
-      butterfly_values[j + h] = upper - lower;
-    }
-    h <<= 1;
-  }
-}
-"#;
-
-/// The kernel body: MLX's `hadamard_n<T, N, 16, 4>` schedule with the signed
-/// float32 load in place of its plain read and the dtype-rounding store in
-/// place of its float32 write. One threadgroup of `N / 16` threads owns one
-/// Hadamard block of one row; `threadgroup_position_in_grid.y` is that block
-/// row, and the block's position within its activation row selects the slice
-/// of the sign vector it multiplies by.
-fn signed_rotation_kernel_source(scale: f32) -> String {
-    let scale_literal = format!("{scale:.9e}");
-    format!(
-        r#"
-    constexpr int N = 1 << LOG_BLOCK;
-    constexpr short max_radix = {MAX_RADIX};
-    constexpr short read_width = {READ_WIDTH};
-    constexpr short num_threads = N / max_radix;
-    constexpr short logN = LOG_BLOCK;
-    constexpr short logR = 4;
-    constexpr short num_steps = logN / logR;
-    constexpr short logFinal = logN % logR;
-    constexpr short final_radix = 1 << logFinal;
-
-    const uint block_row = threadgroup_position_in_grid.y;
-    const int block_offset = int(block_row) * N;
-    const int sign_offset = int(block_row % uint(BLOCKS_PER_ROW)) * N;
-    const short thread_index = short(thread_position_in_threadgroup.x);
-
-    threadgroup float block_values[N];
-
-#pragma clang loop unroll(full)
-    for (short read_step = 0; read_step < max_radix / read_width; read_step++) {{
-        short element_index = read_step * read_width * num_threads + thread_index * read_width;
-#pragma clang loop unroll(full)
-        for (short lane = 0; lane < read_width; lane++) {{
-            block_values[element_index + lane] =
-                float(activations[block_offset + element_index + lane]) * signs[sign_offset + element_index + lane];
-        }}
-    }}
-
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    float butterfly_values[max_radix];
-    short h = 1;
-
-#pragma clang loop unroll(full)
-    for (short pass = 0; pass < num_steps; pass++) {{
-        short k = thread_index & (h - 1);
-        short j = ((thread_index - k) << logR) + k;
-#pragma clang loop unroll(full)
-        for (short radix_index = 0; radix_index < max_radix; radix_index++) {{
-            butterfly_values[radix_index] = block_values[j + h * radix_index];
-        }}
-        astronomical_hadamard_radix<max_radix>(butterfly_values);
-#pragma clang loop unroll(full)
-        for (short radix_index = 0; radix_index < max_radix; radix_index++) {{
-            block_values[j + h * radix_index] = butterfly_values[radix_index];
-        }}
-        h <<= logR;
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-    }}
-
-    if (final_radix > 1) {{
-#pragma clang loop unroll(full)
-        for (int butterfly = 0; butterfly < max_radix / final_radix; butterfly++) {{
-            short butterfly_index = thread_index + butterfly * num_threads;
-            short k = butterfly_index & (h - 1);
-            short j = ((butterfly_index - k) << logFinal) + k;
-#pragma clang loop unroll(full)
-            for (short radix_index = 0; radix_index < final_radix; radix_index++) {{
-                butterfly_values[radix_index] = block_values[j + h * radix_index];
-            }}
-            astronomical_hadamard_radix<final_radix>(butterfly_values);
-#pragma clang loop unroll(full)
-            for (short radix_index = 0; radix_index < final_radix; radix_index++) {{
-                block_values[j + h * radix_index] = butterfly_values[radix_index];
-            }}
-        }}
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-    }}
-
-#pragma clang loop unroll(full)
-    for (short read_step = 0; read_step < max_radix / read_width; read_step++) {{
-        short element_index = read_step * read_width * num_threads + thread_index * read_width;
-#pragma clang loop unroll(full)
-        for (short lane = 0; lane < read_width; lane++) {{
-            rotated[block_offset + element_index + lane] = T(block_values[element_index + lane] * {scale_literal}f);
-        }}
-    }}
-"#
-    )
 }

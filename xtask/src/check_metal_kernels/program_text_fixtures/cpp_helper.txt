@@ -1,0 +1,4 @@
+#include <vector>
+namespace astro {
+inline int doubled(int value) { return value * 2; }
+}

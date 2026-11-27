@@ -1,34 +1,20 @@
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::gated_delta_inputs::GatedDeltaInputs;
-use super::gated_delta_pipelined_kernel::{
-    THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE, gated_delta_pipelined_kernel_source,
-};
+use super::gated_delta_launch_geometry::{THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE};
 use super::gated_delta_sequence_contract::{
     GatedDeltaSequenceShape, gated_delta_sequence_error, template_arguments,
     validate_gated_delta_sequence_shapes,
 };
+use crate::metal_kernels::ASTRO_FAMILY_QWEN35_GATED_DELTA_SEQUENCE;
 use mlx_bridge::{MlxArray, MlxMetalKernel, MlxMetalKernelOutput};
+use model_primitives::metal_kernel_declaration::declare_metal_kernel;
 
-/// Builds the fused Qwen3.5 gated-delta sequence kernel.
+/// Builds the fused Qwen3.5 gated-delta sequence kernel
+/// (`metal/astro_family_qwen35_gated_delta_sequence.metal`).
 pub fn qwen3_5_gated_delta_kernel() -> Result<MlxMetalKernel, runtime_integration::MlxRuntimeError>
 {
-    let ordinary_kernel_source = gated_delta_pipelined_kernel_source("", "");
-    MlxMetalKernel::new(
-        "astronomical_qwen3_5_gated_delta_sequence",
-        &[
-            "queries",
-            "keys",
-            "values",
-            "decays",
-            "update_rates",
-            "recurrent_state",
-            "token_count",
-        ],
-        &["outputs", "next_recurrent_state"],
-        &ordinary_kernel_source,
-    )
-    .map_err(runtime_integration::MlxRuntimeError::from)
+    declare_metal_kernel(&ASTRO_FAMILY_QWEN35_GATED_DELTA_SEQUENCE, &[])
 }
 
 /// Applies fused Qwen3.5 gated-delta recurrence across one prompt/decode

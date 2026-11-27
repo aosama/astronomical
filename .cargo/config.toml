@@ -542,6 +542,24 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # against HEAD^1; `--write` records lower counts, and only after that check
 # passes. It runs in about three seconds.
 #
+# `cargo xtask check-metal-kernels [--fresh] [--skip-compile]` (issue #2712)
+# checks Astronomical's own Metal kernels without a GPU: every file in a
+# `metal/` folder (and `model-primitives/src/metal_common/`) follows
+# `astro_<scope>_[<owner>_]<operation>[_<variant>]` with the scope its crate
+# gives it, every registered kernel's signature block names its contract and
+# probe, no Rust file declares a kernel from text (`MlxMetalKernel::new`
+# outside `declare_metal_kernel`), no Rust string literal holds C, C++ or
+# Metal program text (a statement line with a C++ or Metal word; the port of
+# MLX's signature writer is the one exception), and every kernel compiles with Apple's
+# offline Metal compiler wrapped exactly as MLX wraps it, for every
+# `@compile-with` instantiation, every way MLX may pass each input, and Metal
+# 4.0 and 4.1. Sources that compiled are remembered under
+# target/metal-kernel-check, so an unchanged tree takes about a second;
+# `--fresh` compiles all (about six seconds), `--skip-compile` runs only the
+# naming and Rust-text checks (the Linux config-contracts lane). It needs the
+# patched MLX sources from `cargo xtask provision-bindgen-headers`. The
+# pre-commit hook runs it when Rust or Metal files are staged.
+#
 # `cargo xtask commit-identity --staged` (pre-commit) and
 # `cargo xtask commit-identity --pre-push` (pre-push, reads git's ref lines on
 # stdin) refuse author, committer, and Co-authored-by emails that are not safe

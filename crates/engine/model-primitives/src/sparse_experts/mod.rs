@@ -37,7 +37,6 @@ pub use gathered_projection::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use weighted_sum::{
-    SORTED_EXPERT_REDUCTION_THREADS_PER_THREADGROUP,
-    SORTED_EXPERT_WEIGHTED_REDUCTION_METAL_STATEMENTS, router_weighted_expert_inputs,
+    SORTED_EXPERT_REDUCTION_THREADS_PER_THREADGROUP, router_weighted_expert_inputs,
     sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
 };

@@ -907,6 +907,10 @@ jobs:
           cargo test --locked -p xtask --test integration_source_size_journeys
           cargo xtask check-test-channel-isolation
           cargo xtask check-architecture
+          # Metal kernel naming and no kernel declared from Rust text; the
+          # offline compile needs Apple's compiler and runs on the macOS
+          # Neural Engine lane.
+          cargo xtask check-metal-kernels --skip-compile
           # Every website page carries the one shared header and footer;
           # a page edited by hand fails here until `cargo xtask site-layout`
           # has rewritten it.
@@ -1283,6 +1287,25 @@ jobs:
       # The fixture features pull in image and base64 for this one library, so its
       # tests rebuild several crates. Here they cost the build job nothing: about 6
       # seconds of compile, plus packing and passing an archive.
+      # Every Metal kernel compiled offline exactly as MLX wraps it at run
+      # time (issue #2712), from scratch, against the pinned and patched MLX
+      # sources: a kernel that would fail on its first GPU run fails here.
+      # Provisioning the patched MLX sources needs the verified native
+      # archives, which this lane otherwise never fetches: restore them as the
+      # build lane does, and download whatever the restore did not bring.
+      - name: Restore native archives from the github_actions_cache
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: restore
+          owner: native-archives
+          path: ~/Library/Caches/Astronomical/native-dependencies
+          key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
+      - name: Compile every Metal kernel offline
+        run: |
+          cargo xtask bootstrap-native-dependencies
+          cargo xtask provision-bindgen-headers
+          cargo xtask check-metal-kernels --fresh
+        timeout-minutes: 15
       - name: Run the shared test-fixture unit tests
         run: |
           cargo test-test-harness-fixtures --locked

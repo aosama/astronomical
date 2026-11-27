@@ -3,16 +3,13 @@
 //!
 //! Speculative decoding verifies a block of drafted tokens in one target
 //! pass, which only pays when that pass costs about as much as one row. Stock
-//! MLX does not give that on M5 (see `kernel_source`); these kernels do by
+//! MLX does not give that on M5 (see
+//! `metal/astro_primitive_row_batched_matmul_4bit.metal`); these kernels do by
 //! reading each weight group once for every row.
 
 pub mod dispatch_plan;
 #[cfg(feature = "direct-mlx")]
-pub mod kernel_source;
-#[cfg(feature = "direct-mlx")]
 pub mod register_order_restoration;
-#[cfg(feature = "direct-mlx")]
-pub mod register_order_source;
 #[cfg(feature = "direct-mlx")]
 pub mod register_ordered_matmul;
 pub mod register_ordered_plan;

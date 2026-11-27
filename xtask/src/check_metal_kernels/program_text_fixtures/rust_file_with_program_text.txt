@@ -1,0 +1,20 @@
+//! A Rust file that hides Metal in strings, as kernels were written before.
+
+/// A doc example is prose for readers and passes:
+/// ```metal
+/// threadgroup float staged[16];
+/// ```
+const KERNEL_BODY: &str = r#"
+    threadgroup float staged[16];
+    staged[0] = 1.0f;
+"#;
+
+// A comment with code passes: threadgroup float staged[16];
+
+fn kernel_source(scale: f32) -> String {
+    format!("    out[0] = T(in[0] * {scale}f);\n    uint3 position = thread_position_in_grid;\n")
+}
+
+fn ordinary_strings() -> (&'static str, &'static str) {
+    ("the threadgroup holds 256 threads", "row {}; column {}")
+}

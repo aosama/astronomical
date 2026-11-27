@@ -20,7 +20,7 @@ runs:
         operation: restore
         owner: xtask-binary
         path: ~/.astronomical-ci/xtask-binary
-        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/foundation/native-identity/**', 'crates/foundation/test-harness/**', 'crates/foundation/lowercase-hex/**', 'crates/foundation/memory-policy/**', 'crates/contracts/ipc-protocol/**', 'crates/contracts/decision-contract/**', 'crates/contracts/rest-contract/**', 'crates/contracts/speech-contract/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}
+        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/foundation/native-identity/**', 'crates/foundation/test-harness/**', 'crates/foundation/lowercase-hex/**', 'crates/foundation/metal-kernel-declarations/**', 'crates/foundation/native-build-orchestration/**', 'crates/foundation/memory-policy/**', 'crates/contracts/ipc-protocol/**', 'crates/contracts/decision-contract/**', 'crates/contracts/rest-contract/**', 'crates/contracts/speech-contract/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}
     - name: Build xtask when no usable binary was restored
       id: xtask-binary-build
       shell: bash
@@ -62,4 +62,4 @@ runs:
         operation: save
         owner: xtask-binary
         path: ~/.astronomical-ci/xtask-binary
-        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/foundation/native-identity/**', 'crates/foundation/test-harness/**', 'crates/foundation/lowercase-hex/**', 'crates/foundation/memory-policy/**', 'crates/contracts/ipc-protocol/**', 'crates/contracts/decision-contract/**', 'crates/contracts/rest-contract/**', 'crates/contracts/speech-contract/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}
+        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/foundation/native-identity/**', 'crates/foundation/test-harness/**', 'crates/foundation/lowercase-hex/**', 'crates/foundation/metal-kernel-declarations/**', 'crates/foundation/native-build-orchestration/**', 'crates/foundation/memory-policy/**', 'crates/contracts/ipc-protocol/**', 'crates/contracts/decision-contract/**', 'crates/contracts/rest-contract/**', 'crates/contracts/speech-contract/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}

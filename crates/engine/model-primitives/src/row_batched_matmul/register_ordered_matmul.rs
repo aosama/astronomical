@@ -1,6 +1,6 @@
 //! A 4-bit affine projection over 1 to 128 token rows from a weight converted
 //! once into the register order TensorFold's `tf_lane_reg` reads (see
-//! `register_order_source`).
+//! `metal/astro_primitive_register_ordered_matmul_4bit.metal`).
 //!
 //! The converted weight replaces MLX's packed one rather than sitting beside
 //! it: the codes take the same bytes, and scale and bias pairs the same bytes

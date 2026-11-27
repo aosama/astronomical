@@ -7,19 +7,9 @@
 //! roughly thirteen dispatches per gated-delta layer that are kernel-launch
 //! bound at one-token decode shapes.
 //!
-//! Numerics mirror the composed production path exactly, kernel by kernel:
-//! the conv accumulates four taps in float32 and rounds once like MLX's
-//! implicit-GEMM depthwise conv; the in-kernel SiLU uses MLX's own unary
-//! sigmoid formula (exp-of-abs) with MLX's `metal::precise::exp`: the fast
-//! `metal::exp` gives another result far from zero, which once left this
-//! kernel a bf16 step away from the composed path on strongly negative
-//! values and so a one-token step away from a draft tree's rows (issue
-//! #2599); the RMS reduction follows `rms_single_row` from MLX's
-//! Metal kernels — contiguous four-element lanes, one simd-group sum, and
-//! `rsqrt(sum_of_squares / head_dimension + epsilon)` with this model's
-//! configured epsilon — followed by the ones-weight rounding cast and the
-//! separate scalar-scale rounding. The direct-MLX numerics contract proves
-//! bit-for-bit parity before any dispatch engages.
+//! The Metal source, with the numerics notes that tie it bit for bit to the
+//! composed production path, is
+//! `metal/astro_family_qwen35_gated_delta_decode_prework.metal`.
 //!
 //! The kernel geometry is fixed to the Qwen3.5 gated-delta layout: the head
 //! dimension must equal the thirty-two-lane times four-element window, and
@@ -32,9 +22,11 @@
 //! `exp` intrinsic a separately-compiled launch does not reproduce bit-for-bit,
 //! so float16 falls back to the composed path rather than risk diverging bits.
 
+use crate::metal_kernels::ASTRO_FAMILY_QWEN35_GATED_DELTA_DECODE_PREWORK;
 use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
+use model_primitives::metal_kernel_declaration::{declare_metal_kernel, float_define};
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 /// Rolling convolution rows retained across steps: conv kernel size minus one.
@@ -65,25 +57,17 @@ pub struct GdnDecodePreworkOutput {
     pub next_convolution_state: MlxArray,
 }
 
-/// Builds the fused decode prework kernel with the model's RMS epsilon baked
-/// into the source as a literal — Metal kernel template arguments carry no
-/// floats.
+/// Builds the fused decode prework kernel
+/// (`metal/astro_family_qwen35_gated_delta_decode_prework.metal`) with the
+/// model's RMS epsilon baked into the source: Metal kernel template arguments
+/// carry no floats.
 pub fn qwen3_5_gdn_decode_prework_kernel(
     rms_norm_epsilon: f32,
 ) -> Result<MlxMetalKernel, runtime_integration::MlxRuntimeError> {
-    MlxMetalKernel::new(
-        "astronomical_qwen3_5_gdn_decode_prework",
-        &[
-            "mixed_queries_keys_values",
-            "convolution_state",
-            "convolution_weight",
-            "query_scale",
-            "key_scale",
-        ],
-        &["queries", "keys", "values", "next_convolution_state"],
-        &gdn_decode_prework_kernel_source(rms_norm_epsilon),
+    declare_metal_kernel(
+        &ASTRO_FAMILY_QWEN35_GATED_DELTA_DECODE_PREWORK,
+        &[float_define("RMS_NORM_EPSILON", rms_norm_epsilon)],
     )
-    .map_err(runtime_integration::MlxRuntimeError::from)
 }
 
 /// Applies the fused decode prework. The token count comes from the mixed
@@ -269,8 +253,11 @@ fn validate_prework_shapes(
     if mixed_shape.len() != 3
         || state_shape.len() != 3
         || weight_shape.len() != 3
-        || query_scale.shape().len() > 1
-        || key_scale.shape().len() > 1
+        // MLX hands a 0-dimensional array to the kernel by value, which is how
+        // the kernel reads the scales; a one-element vector would arrive as a
+        // pointer and the kernel would not compile.
+        || !query_scale.shape().is_empty()
+        || !key_scale.shape().is_empty()
     {
         return Err(prework_error(
             "prework operands must use the production ranks: rank-three qkv, state, and weight; scalar scales",
@@ -371,92 +358,6 @@ fn prework_error(description: &'static str) -> MlxRuntimeError {
         operation: PREWORK_OPERATION,
         description: description.to_owned(),
     }
-}
-
-/// Metal source for the fused prework, adapted from an upstream open-source
-/// Qwen3.5 gated-delta kernel (see third-party/THIRD_PARTY_NOTICES for the
-/// provenance and license). The RMS epsilon placement follows this
-/// repository's `rms_norm_without_weight` reference
-/// (`rsqrt(sum_of_squares / head_dimension + epsilon)`), not the upstream
-/// source's.
-fn gdn_decode_prework_kernel_source(rms_norm_epsilon: f32) -> String {
-    let epsilon_literal = format!("{rms_norm_epsilon:.9e}");
-    format!(
-        r#"
-    uint lane = thread_position_in_threadgroup.x;
-    uint batch_index = threadgroup_position_in_grid.y / uint(S);
-    uint row = threadgroup_position_in_grid.y % uint(S);
-    uint logical_head = threadgroup_position_in_grid.z;
-    constexpr uint q_heads = uint(HK);
-    constexpr uint k_head_base = uint(HK);
-    constexpr uint v_head_base = 2 * uint(HK);
-    bool is_q = logical_head < q_heads;
-    bool is_k = logical_head >= k_head_base && logical_head < v_head_base;
-    uint head = is_q ? logical_head
-               : (is_k ? logical_head - k_head_base : logical_head - v_head_base);
-    uint channel_base = is_q ? head * uint(DK)
-                       : (is_k ? uint(HK) * uint(DK) + head * uint(DK)
-                               : 2 * uint(HK) * uint(DK) + head * uint(DV));
-    T activated[4];
-    float sum_of_squares = 0.0f;
-    for (uint element_index = 0; element_index < 4; ++element_index) {{
-        uint channel = channel_base + lane * 4 + element_index;
-        float tap_accumulator = 0.0f;
-        for (uint tap = 0; tap < 4; ++tap) {{
-            uint input_row = row + tap;
-            const T window_value = input_row < uint(NKEEP)
-                ? convolution_state[(batch_index * uint(NKEEP) + input_row) * uint(C) + channel]
-                : mixed_queries_keys_values[(batch_index * uint(S) + input_row - uint(NKEEP)) * uint(C) + channel];
-            tap_accumulator += float(window_value) * float(convolution_weight[channel * 4 + tap]);
-        }}
-        const T convolved = T(tap_accumulator);
-        T sigmoid_branch = T(1) / (T(1) + metal::precise::exp(metal::abs(convolved)));
-        const T silu_value = convolved * ((convolved < T(0)) ? sigmoid_branch : T(1) - sigmoid_branch);
-        activated[element_index] = silu_value;
-        float activated_value = float(silu_value);
-        sum_of_squares += activated_value * activated_value;
-    }}
-    if (is_q || is_k) {{
-        sum_of_squares = simd_sum(sum_of_squares);
-        float inverse_mean = metal::precise::rsqrt(sum_of_squares / float(DK) + {epsilon_literal}f);
-        const T scale = is_q ? query_scale : key_scale;
-        uint out_base = ((batch_index * uint(S) + row) * uint(HK) + head) * uint(DK) + lane * 4;
-        for (uint element_index = 0; element_index < 4; ++element_index) {{
-            const T normalized = T(1) * T(float(activated[element_index]) * inverse_mean);
-            const T scaled = scale * normalized;
-            if (is_q) {{
-                queries[out_base + element_index] = scaled;
-            }} else {{
-                keys[out_base + element_index] = scaled;
-            }}
-        }}
-    }} else {{
-        uint out_base = ((batch_index * uint(S) + row) * uint(HV) + head) * uint(DV) + lane * 4;
-        for (uint element_index = 0; element_index < 4; ++element_index) {{
-            values[out_base + element_index] = activated[element_index];
-        }}
-    }}
-    if (S < NKEEP && row == 0) {{
-        for (uint retained_row = 0; retained_row < uint(NKEEP) - uint(S); ++retained_row) {{
-            uint destination = (batch_index * uint(NKEEP) + retained_row) * uint(C)
-                               + channel_base + lane * 4;
-            uint source = (batch_index * uint(NKEEP) + retained_row + uint(S)) * uint(C)
-                          + channel_base + lane * 4;
-            for (uint element_index = 0; element_index < 4; ++element_index) {{
-                next_convolution_state[destination + element_index] = convolution_state[source + element_index];
-            }}
-        }}
-    }}
-    if (row + uint(NKEEP) >= uint(S)) {{
-        uint state_row = row + uint(NKEEP) - uint(S);
-        uint raw_base = (batch_index * uint(S) + row) * uint(C) + channel_base + lane * 4;
-        uint state_base = (batch_index * uint(NKEEP) + state_row) * uint(C) + channel_base + lane * 4;
-        for (uint element_index = 0; element_index < 4; ++element_index) {{
-            next_convolution_state[state_base + element_index] = mixed_queries_keys_values[raw_base + element_index];
-        }}
-    }}
-"#
-    )
 }
 
 #[cfg(test)]

@@ -1,5 +1,9 @@
 //! Coverage engine contracts that stay deterministic: gap naming, drift
 //! detection, and the exclusions registry.
+//!
+//! The sample headers are C, so they are files in `mlx_c_coverage/fixtures/`
+//! rather than Rust strings: `cargo xtask check-metal-kernels` refuses C++,
+//! C or Metal program text inside Rust.
 
 mod mlx_c_coverage;
 
@@ -59,8 +63,7 @@ fn should_flag_stale_bridged_symbols_missing_from_the_headers() {
 fn should_detect_a_simulated_upstream_addition_as_a_drift_gap() {
     // A future pin adds a new public operation; the contract must fail and
     // name it before any bridge work happens.
-    let fixture_header = "int mlx_sum(mlx_array* res, const mlx_stream s);\n\
-         int mlx_zz_future_operation(mlx_array* res, const mlx_array a, const mlx_stream s);\n";
+    let fixture_header = include_str!("mlx_c_coverage/fixtures/upstream_addition.h");
     let surface = parse_header_surface(fixture_header);
     let bridged = inventory_with_functions(&["mlx_sum"]);
 
@@ -77,8 +80,7 @@ fn should_detect_a_simulated_upstream_addition_as_a_drift_gap() {
 fn should_skip_internal_underscore_prefixed_declarations() {
     // The headers declare `_mlx_*` helpers marked internal; they are outside
     // the public surface this contract guards.
-    let fixture_header =
-        "int mlx_array_eval(mlx_array arr);\nint _mlx_array_wait(const mlx_array arr);\n";
+    let fixture_header = include_str!("mlx_c_coverage/fixtures/internal_helpers.h");
 
     let surface = parse_header_surface(fixture_header);
 
@@ -96,9 +98,7 @@ fn should_skip_internal_underscore_prefixed_declarations() {
 
 #[test]
 fn should_collect_typedef_types_from_the_headers() {
-    let fixture_header = "typedef struct mlx_array_ mlx_array;\n\
-         typedef enum mlx_fft_norm_ { MLX_FFT_NORM_NONE } mlx_fft_norm;\n\
-         int mlx_fft_fft(mlx_array* res, mlx_fft_norm norm, const mlx_stream s);\n";
+    let fixture_header = include_str!("mlx_c_coverage/fixtures/typedef_types.h");
 
     let surface = parse_header_surface(fixture_header);
 
@@ -113,10 +113,7 @@ fn should_collect_the_closing_alias_of_a_struct_typedef_with_members() {
     // Struct bodies carry a `;` per member, so the alias only appears in the
     // `}`-leading closer fragment; opaque public handles are declared this
     // way throughout the pinned headers.
-    let fixture_header = "typedef struct mlx_stream_ {\n\
-         void* ctx;\n\
-         } mlx_stream;\n\
-         int mlx_stream_to_string(mlx_string** res, const mlx_stream s);\n";
+    let fixture_header = include_str!("mlx_c_coverage/fixtures/struct_typedef.h");
 
     let surface = parse_header_surface(fixture_header);
 
@@ -134,13 +131,7 @@ fn should_parse_the_first_declaration_after_preprocessor_guards() {
     // Header files open with `#ifdef`/`#endif` guards around `extern "C"`;
     // preprocessor text must never leak into a return type or hide
     // conditionally compiled declarations.
-    let fixture_header = "#ifndef MLX_GUARD_H\n#define MLX_GUARD_H\n\
-         #ifdef __cplusplus\nextern \"C\" {\n#endif\n\
-         int mlx_version(mlx_string* str_);\n\
-         #ifdef HAS_BFLOAT16\n\
-         int mlx_array_item_bfloat16(uint16_t* res, const mlx_array arr);\n\
-         #endif\n\
-         #ifdef __cplusplus\n}\n#endif\n#endif\n";
+    let fixture_header = include_str!("mlx_c_coverage/fixtures/guarded_header.h");
 
     let surface = parse_header_surface(fixture_header);
 

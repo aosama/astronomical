@@ -324,3 +324,32 @@ fn should_replay_kept_rows_to_the_sequence_kernels_final_state_bit_for_bit() {
         );
     }
 }
+
+const SHARED_ROW_STEP_START: &str = "current_keys[4];";
+const SHARED_ROW_STEP_END: &str = "(remembered_value, 1);";
+
+/// The text of the row step both kernels share, from the key load to the
+/// last reduction of what the state remembers.
+fn shared_row_step(kernel: &metal_kernel_declarations::MetalKernelSource) -> String {
+    let kernel_text = kernel
+        .source_text(&[])
+        .expect("a gated-delta kernel declares no defines");
+    let step_start = kernel_text
+        .find(SHARED_ROW_STEP_START)
+        .expect("the kernel loads the row's keys");
+    let step_end = kernel_text
+        .find(SHARED_ROW_STEP_END)
+        .expect("the kernel reduces the remembered value");
+    kernel_text[step_start..step_end + SHARED_ROW_STEP_END.len()].to_owned()
+}
+
+#[test]
+fn should_keep_the_row_step_identical_in_the_tree_and_replay_kernels() {
+    let tree_step = shared_row_step(&crate::metal_kernels::ASTRO_FAMILY_QWEN35_GATED_DELTA_TREE);
+    let replay_step =
+        shared_row_step(&crate::metal_kernels::ASTRO_FAMILY_QWEN35_GATED_DELTA_REPLAY);
+
+    assert_eq!(tree_step, replay_step);
+    // A step that lost its decay would still be identical in both kernels.
+    assert!(tree_step.contains("state_fragment[fragment_index] *= current_decay;"));
+}

@@ -41,10 +41,11 @@ adapted from the oMLX project's Qwen 3.5 prefill kernels
 quantized-matmul tile selection (qwen35_qmm_nax.metal), the fa256 steel
 attention (qwen35_attention.metal), and the MoE gather
 (qwen35_moe_gather_nax.metal). The gated-delta decode prework
-(crates/families/text/qwen35/src/qwen3_5_core/model_math/gdn_decode_prework_kernel.rs) and the
-software-pipelined gated-delta prefill recurrence
-(crates/families/text/qwen35/src/qwen3_5_core/model_math/gated_delta_pipelined_kernel.rs) are
-likewise adapted from oMLX and compiled just in time from Rust source. These
+(crates/families/text/qwen35/src/qwen3_5_core/model_math/metal/astro_family_qwen35_gated_delta_decode_prework.metal)
+and the software-pipelined gated-delta prefill recurrence
+(crates/families/text/qwen35/src/qwen3_5_core/model_math/metal/astro_family_qwen35_gated_delta_sequence.metal
+and astro_family_qwen35_gated_delta_sequence_checkpoints.metal) are likewise
+adapted from oMLX and compiled just in time by MLX from those .metal files. These
 kernels are Apple MIT-licensed as part of MLX and Apache-2.0 licensed by oMLX
 for the additions. The adapted kernels point back to this notice, and the
 inline attribution comments in the corresponding MLX patches preserve that
