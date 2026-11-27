@@ -14,6 +14,7 @@ mod chat_generation_validation;
 mod chat_generation_validation_limits_tests;
 #[cfg(test)]
 mod chat_generation_validation_tests;
+mod custom_metal_kernel_report;
 mod daemon_client;
 mod daemon_listener;
 mod daemon_protocol;
@@ -77,6 +78,11 @@ pub use chat_generation::{
     StructuredGenerationConstraint, structured_regex_dfa_pattern,
 };
 pub use chat_generation_validation::ChatGenerationValidationError;
+pub use custom_metal_kernel_report::{
+    CustomMetalKernelProbeFailureKind, CustomMetalKernelProbeOutcome,
+    CustomMetalKernelProbeVerdict, CustomMetalKernelReport,
+    PROBE_FAILURE_SUMMARY_MAXIMUM_CHARACTERS, bounded_probe_failure_summary,
+};
 pub use daemon_client::DaemonIpcClient;
 pub use daemon_listener::{AcceptedDaemonConnection, DaemonIpcListener, StreamingResponseWriter};
 pub use daemon_protocol::{

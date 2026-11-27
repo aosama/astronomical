@@ -168,6 +168,7 @@ impl WorkerKernelCapabilities {
                     }),
                 },
             );
+            crate::kernel_capability_report::log_probe_verdict(probe.family(), &verdict);
             // A colliding registry key would silently let one family's
             // verdict stand in for another's — a fail-open outcome that
             // defeats the fail-closed rule — so registration refuses it.
@@ -191,6 +192,17 @@ impl WorkerKernelCapabilities {
             .unwrap_or(CustomKernelVerdict::Unsupported(
                 KernelUnsupportedReason::Unprobed,
             ))
+    }
+
+    /// Every retained verdict, sorted by family, for reporting.
+    #[must_use]
+    pub fn verdicts_by_family(&self) -> Vec<(CustomMetalKernelFamily, &CustomKernelVerdict)> {
+        let mut family_verdicts: Vec<(CustomMetalKernelFamily, &CustomKernelVerdict)> = Vec::new();
+        for (family, verdict) in &self.verdicts {
+            family_verdicts.push((*family, verdict));
+        }
+        family_verdicts.sort_by_key(|(family, _)| family.as_str());
+        family_verdicts
     }
 
     /// Returns whether production dispatch may use the custom kernel.
@@ -243,6 +255,17 @@ pub fn install_forced_worker_verdicts_for_tests(forced_verdicts: WorkerKernelCap
 #[cfg(feature = "direct-mlx")]
 static FORCED_WORKER_VERDICTS_FOR_TESTS: OnceLock<WorkerKernelCapabilities> = OnceLock::new();
 
+#[cfg(feature = "direct-mlx")]
+static WORKER_PROCESS_KERNEL_CAPABILITIES: OnceLock<WorkerKernelCapabilities> = OnceLock::new();
+
+/// The verdicts this worker process already holds, without probing: `None`
+/// until a model load has probed. For reporting what the probes decided.
+#[cfg(feature = "direct-mlx")]
+#[must_use]
+pub fn retained_worker_kernel_capabilities() -> Option<&'static WorkerKernelCapabilities> {
+    WORKER_PROCESS_KERNEL_CAPABILITIES.get()
+}
+
 /// Returns the retained kernel-capability verdicts for this worker process.
 ///
 /// Verdicts depend only on the GPU and operating system, so the first model
@@ -263,7 +286,6 @@ pub fn worker_process_kernel_capabilities(
     ) -> Vec<Box<dyn CustomMetalKernelProbe + 'runtime>>,
     performance_attribution: &mut PerformanceAttribution,
 ) -> &'static WorkerKernelCapabilities {
-    static WORKER_PROCESS_KERNEL_CAPABILITIES: OnceLock<WorkerKernelCapabilities> = OnceLock::new();
     WORKER_PROCESS_KERNEL_CAPABILITIES.get_or_init(|| {
         if let Some(forced_verdicts) = FORCED_WORKER_VERDICTS_FOR_TESTS.get() {
             return forced_verdicts.clone();

@@ -93,3 +93,40 @@ fn should_announce_a_model_without_a_drafter_rather_than_stay_silent() {
         })
     );
 }
+
+#[test]
+fn should_announce_no_custom_kernels_for_an_engine_without_them() {
+    let load_result = EngineLoadResult::new();
+    assert_eq!(load_result.custom_metal_kernels_event(), None);
+    assert!(load_result.engine_status_events().is_empty());
+}
+
+#[test]
+fn should_announce_the_custom_kernel_report_after_the_drafter() {
+    let custom_metal_kernels = ipc_protocol::CustomMetalKernelReport {
+        probe_verdicts: vec![ipc_protocol::CustomMetalKernelProbeVerdict {
+            family: "gated_delta_sequence".to_owned(),
+            outcome: ipc_protocol::CustomMetalKernelProbeOutcome::Passed,
+        }],
+        in_use: vec!["gated_delta_sequence".to_owned()],
+    };
+    let load_result = EngineLoadResult::new()
+        .with_draft_model_status(DraftModelStatus::None)
+        .with_custom_metal_kernel_report(custom_metal_kernels.clone());
+    let engine_status_events = load_result.engine_status_events();
+    assert_eq!(
+        engine_status_events.len(),
+        2,
+        "the prefill setting is off, so it announces nothing"
+    );
+    assert!(matches!(
+        engine_status_events[0],
+        WorkerEvent::DraftModelChanged { .. }
+    ));
+    assert_eq!(
+        engine_status_events[1],
+        WorkerEvent::CustomMetalKernelsChanged {
+            custom_metal_kernels
+        }
+    );
+}

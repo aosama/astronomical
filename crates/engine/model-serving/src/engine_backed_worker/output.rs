@@ -352,30 +352,30 @@ impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     /// Emits a `WorkerEvent::AstroSsdPromptCacheStats` event when the engine
     /// has an open `astro_ssd_prompt_cache`. Silently skips when the engine returns
     /// `None` (no `astro_ssd_prompt_cache` open) or when collection fails.
-    /// The last events of a model load. The Neural Engine and drafter statuses
-    /// come after the runtime configuration because the daemon clears them when
-    /// it completes a swap, which happens on that configuration.
+    /// The last events of a model load. The engine statuses (Neural Engine
+    /// prefill, drafter, custom kernels) come after the runtime configuration
+    /// because the daemon clears them when it completes a swap, which happens
+    /// on that configuration.
     pub(crate) async fn emit_astro_ssd_prompt_cache_stats_then_engine_statuses<WriteTransport>(
         &mut self,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-        neural_engine_prefill_event: Option<&WorkerEvent>,
-        draft_model_event: Option<&WorkerEvent>,
+        engine_status_events: &[WorkerEvent],
     ) -> Result<(), WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
         self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
-        self.is_neural_engine_preparation_running = matches!(
-            neural_engine_prefill_event,
-            Some(WorkerEvent::NeuralEnginePrefillChanged {
-                neural_engine_prefill: NeuralEnginePrefillStatus::Preparing { .. },
-            })
-        );
-        if let Some(neural_engine_prefill_event) = neural_engine_prefill_event {
-            event_writer.send_event(neural_engine_prefill_event).await?;
-        }
-        if let Some(draft_model_event) = draft_model_event {
-            event_writer.send_event(draft_model_event).await?;
+        self.is_neural_engine_preparation_running = false;
+        for engine_status_event in engine_status_events {
+            if matches!(
+                engine_status_event,
+                WorkerEvent::NeuralEnginePrefillChanged {
+                    neural_engine_prefill: NeuralEnginePrefillStatus::Preparing { .. },
+                }
+            ) {
+                self.is_neural_engine_preparation_running = true;
+            }
+            event_writer.send_event(engine_status_event).await?;
         }
         Ok(())
     }

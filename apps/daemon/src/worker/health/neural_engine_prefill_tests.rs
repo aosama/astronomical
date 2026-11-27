@@ -2,23 +2,10 @@
 
 use std::sync::{Arc, RwLock};
 
-use ipc_protocol::{NeuralEnginePrefillStatus, WorkerModelCapabilities};
+use ipc_protocol::NeuralEnginePrefillStatus;
 
+use super::health_test_support::{no_capabilities, ready_snapshot};
 use super::{WorkerHealthSnapshot, publish_neural_engine_prefill};
-
-fn no_capabilities() -> WorkerModelCapabilities {
-    WorkerModelCapabilities {
-        chat: None,
-        image_generation: None,
-        embeddings: None,
-        decisions: None,
-        speech: None,
-    }
-}
-
-fn ready_snapshot() -> WorkerHealthSnapshot {
-    WorkerHealthSnapshot::ready_with_model(String::from("first-model"), no_capabilities())
-}
 
 #[test]
 fn should_start_with_no_status_until_a_worker_reports_one() {
