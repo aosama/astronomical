@@ -20,6 +20,9 @@ use crate::{
 };
 
 use super::astro_ssd_prompt_cache_startup_logging;
+use super::prompt_cache_block_alignment::{
+    PromptCacheContractInputs, PromptChunkSizes, resolve_chunk_aligned_contract,
+};
 
 /// Resolves the validated artifact identity the state fields report after
 /// a successful load; losing either during loading is a fatal engine error.
@@ -119,19 +122,24 @@ fn resolve_astro_ssd_prompt_cache_model_contract(
     resolved_model_revision: &str,
     contract_resolver: AstroSsdPromptCacheContractResolver,
 ) -> Result<AstroSsdPromptCacheModelContract, InferenceEngineError> {
-    let global_astro_ssd_prompt_cache_maximum_size_bytes =
-        astro_ssd_prompt_cache_disk_store_config.global_astro_ssd_prompt_cache_maximum_size_bytes();
-    contract_resolver(
-        resolved_model_id.to_owned(),
-        resolved_model_revision.to_owned(),
-        model.astro_decoder_state_cache_layout().clone(),
-        model.maximum_position_count() as usize,
-        model.runtime().memory_limits().active_memory_limit_bytes() as u64,
-        global_astro_ssd_prompt_cache_maximum_size_bytes,
+    let contract_inputs = PromptCacheContractInputs {
+        model_id: resolved_model_id.to_owned(),
+        model_revision: resolved_model_revision.to_owned(),
+        astro_decoder_state_cache_layout: model.astro_decoder_state_cache_layout().clone(),
+        maximum_context_token_count: model.maximum_position_count() as usize,
+        active_memory_limit_bytes: model.runtime().memory_limits().active_memory_limit_bytes()
+            as u64,
+        global_quota_bytes: astro_ssd_prompt_cache_disk_store_config
+            .global_astro_ssd_prompt_cache_maximum_size_bytes(),
+        common_prefix_stride_blocks: chunking.ssd_prompt_cache_common_prefix_stride_blocks,
+    };
+    resolve_chunk_aligned_contract(
+        contract_resolver,
+        &contract_inputs,
         chunking
             .ssd_prompt_cache_block_tokens
             .map(|block_token_count| block_token_count as usize),
-        chunking.ssd_prompt_cache_common_prefix_stride_blocks,
+        PromptChunkSizes::of(chunking),
     )
     .map_err(|model_contract_error| {
         fatal_engine_error(format!(
