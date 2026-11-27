@@ -65,22 +65,26 @@ pub(crate) fn shared_core_greedy_tokens(
     let mut decoder_state = empty_shared_core_state(shared_core);
     let mut position = 0_u32;
     let mut reply_token_ids = Vec::with_capacity(maximum_token_count);
+    let mut next_token_id = None;
     for prompt_chunk in prompt_token_ids.chunks(PREFILL_CHUNK_TOKENS) {
         let logits = core_logits_after(shared_core, prompt_chunk, position, &mut decoder_state);
         position += prompt_chunk.len() as u32;
-        if position as usize == prompt_token_ids.len() {
-            reply_token_ids.push(picked_on_the_gpu(shared_core, &logits));
-        }
+        next_token_id = Some(picked_on_the_gpu(shared_core, &logits));
     }
-    while reply_token_ids.len() < maximum_token_count {
-        let last_token_id = *reply_token_ids.last().expect("the prompt picked a token");
-        if stop_token_ids.contains(&last_token_id) {
-            reply_token_ids.pop();
-            return reply_token_ids;
+    while let Some(picked_token_id) = next_token_id {
+        if reply_token_ids.len() == maximum_token_count || stop_token_ids.contains(&picked_token_id)
+        {
+            break;
         }
-        let logits = core_logits_after(shared_core, &[last_token_id], position, &mut decoder_state);
+        reply_token_ids.push(picked_token_id);
+        let logits = core_logits_after(
+            shared_core,
+            &[picked_token_id],
+            position,
+            &mut decoder_state,
+        );
         position += 1;
-        reply_token_ids.push(picked_on_the_gpu(shared_core, &logits));
+        next_token_id = Some(picked_on_the_gpu(shared_core, &logits));
     }
     reply_token_ids
 }
