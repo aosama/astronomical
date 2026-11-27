@@ -264,6 +264,11 @@ fn pseudo_random_direction(parameter_values: &[f32], parameter_index: usize) -> 
     } else {
         ZERO_ARRAY_DIRECTION_SIZE
     };
+    // The seed spreads neighbouring array positions apart with the 64-bit
+    // golden-ratio multiplier, and the step below is Knuth's MMIX linear
+    // congruential generator; its top 24 bits fill an f32 mantissa evenly.
+    // Any fixed sequence would do: what matters is that every run and every
+    // backend checks the same directions, which no seeded library promises.
     let mut sequence_state = (parameter_index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1;
     let mut direction_values = Vec::with_capacity(parameter_values.len());
     for _ in parameter_values {
