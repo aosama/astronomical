@@ -1,3 +1,11 @@
+//! How large one layer's gate and up projections are when they share an
+//! encoding, and why they do not when they differ.
+//!
+//! The engine once fused the two into one array when it held experts whole,
+//! and this plan sized that fusion's transient. Nothing fuses them now; the
+//! size survives as the working-memory reserve of the startup placement
+//! decision (`memory_geometry_measurements`), where it was measured adequate.
+
 use thiserror::Error;
 
 use engine_core::expert_paging::{

@@ -50,9 +50,10 @@ impl MeasuredExpertLayerPayload {
 
 /// Composes model geometry and startup headroom from measured expert layers.
 ///
-/// `complete_residency_transient_bytes` is the transient payload the measurement
-/// owner expects to coexist with complete residency (for example the largest
-/// resident gate-up fusion); it feeds the activation-headroom requirement.
+/// `complete_residency_transient_bytes` is the working memory the measurement
+/// owner expects to need beside complete residency (for Qwen3.5, the size of
+/// the largest layer's gate and up projections); it feeds the
+/// activation-headroom requirement.
 pub fn model_memory_geometry_from_measured_layer_facts(
     measured_layer_payloads: &[MeasuredExpertLayerPayload],
     total_model_payload_bytes: u64,
