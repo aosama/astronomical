@@ -90,9 +90,12 @@ pub fn resolve_next_prefill_chunk_span<Engine: TextExecutionCoreOwner>(
 /// Publishes the stretch's durable `astro_ssd_prompt_cache` blocks and its
 /// partial tail, then advances the request position and cursor.
 ///
-/// Publication deliberately comes first. If storage fails, the request stops
-/// at its last durable parent rather than continuing with an in-memory chain
-/// that a restart cannot reproduce; position and cursor stay where they were.
+/// Publication comes first, so the saved chain always ends at a durable
+/// parent. A block that cannot be saved ends saving for the rest of the
+/// request instead of the request itself: the cache keeps the prefix saved so
+/// far, which a later request restores and continues from, and the reply goes
+/// on. Stopping the request instead turned one unsaved block into a failed
+/// reply (Ternary Bonsai 2.5 in 0.2.136).
 pub fn publish_and_advance_durable_prefill_state<Engine: TextAstroSsdPromptCacheCapture>(
     engine: &Engine,
     active_request: &mut TextEngineRequest<Engine::RequestExtension>,
@@ -103,7 +106,7 @@ pub fn publish_and_advance_durable_prefill_state<Engine: TextAstroSsdPromptCache
     let model = execution_core.loaded_model()?;
     if let Some(astro_ssd_prompt_cache) = execution_core.astro_ssd_prompt_cache.as_ref() {
         if active_request.can_use_astro_ssd_prompt_cache && !boundary_checkpoints.is_empty() {
-            capture_astro_ssd_prompt_cache_blocks(
+            let capture_outcome = capture_astro_ssd_prompt_cache_blocks(
                 engine,
                 astro_ssd_prompt_cache,
                 model,
@@ -111,7 +114,8 @@ pub fn publish_and_advance_durable_prefill_state<Engine: TextAstroSsdPromptCache
                 read_stretch.prefill_start,
                 read_stretch.prefill_end,
                 boundary_checkpoints,
-            )?;
+            );
+            stop_saving_after_a_failed_save(active_request, capture_outcome)?;
         }
         capture_astro_ssd_prompt_cache_partial_tail_block(
             engine,
@@ -124,6 +128,26 @@ pub fn publish_and_advance_durable_prefill_state<Engine: TextAstroSsdPromptCache
     active_request.advance_position(read_stretch.token_count())?;
     active_request.prefill_cursor = read_stretch.prefill_end;
     Ok(())
+}
+
+/// A save the `astro_ssd_prompt_cache` refused, which the capture reports as
+/// an invalid request, turns saving off for the rest of this request and lets
+/// it continue; any other failure (the GPU, the model) still stops it.
+fn stop_saving_after_a_failed_save<RequestExtension>(
+    active_request: &mut TextEngineRequest<RequestExtension>,
+    capture_outcome: Result<(), InferenceEngineError>,
+) -> Result<(), InferenceEngineError> {
+    match capture_outcome {
+        Err(InferenceEngineError::InvalidRequest { reason }) => {
+            tracing::warn!(
+                %reason,
+                "astro_ssd_prompt_cache saving stopped for this request; the reply continues"
+            );
+            active_request.can_use_astro_ssd_prompt_cache = false;
+            Ok(())
+        }
+        other_outcome => other_outcome,
+    }
 }
 
 /// Retires the stretch's tape and reclaims the `mlx_buffer_cache` only when

@@ -2,6 +2,8 @@
 //! shared Qwen 3.5 core, which serves these packs since #2595:
 //!
 //! - `shared_core_validation`: the core validates the pack.
+//! - `decoder_state_dtypes`: decoder state is saved in the precision the
+//!   forward produces.
 //! - `shared_core_reply_token_profile`: where one reply token's time goes.
 //! - `stacked_sibling_projection_verdict`: stacked sibling matmuls against
 //!   one launch each.
@@ -13,6 +15,7 @@
 
 pub(crate) mod support;
 
+mod decoder_state_dtypes;
 mod elementwise_fusion_parity;
 mod shared_core;
 mod shared_core_reply_token_profile;

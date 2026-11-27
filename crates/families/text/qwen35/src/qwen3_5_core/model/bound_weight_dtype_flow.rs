@@ -35,6 +35,14 @@ pub fn embedded_hidden_state_dtype(
     embedding_output_dtype(&affine_contract(&weights.embedding_weights))
 }
 
+/// The dtype of the invariant linear-attention scales the graph builds at
+/// load (`load_invariant_linear_scales`): the stored activation dtype passed
+/// through the compute device's binding. The weights here are already bound
+/// for the compute device, so their activation dtype is that result.
+fn invariant_linear_scale_dtype(weights: &Qwen3_5Weights) -> mlx_bridge::MlxDtype {
+    crate::qwen3_5_core::model::loading_pipeline::stored_activation_dtype(weights)
+}
+
 /// Replays MLX's floating dtype propagation over the bound decoder graph without
 /// evaluating model tensors. The resulting contract therefore follows each
 /// artifact's actual affine scale and bias dtypes instead of its configured
@@ -54,6 +62,7 @@ fn derive_normalized_layer_dtypes(
     weights: &Qwen3_5Weights,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
 ) -> Result<Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes>, TextExecutionError> {
+    let invariant_scale_dtype = invariant_linear_scale_dtype(weights);
     let mut hidden_state_dtype = embedded_hidden_state_dtype(weights)?;
     let mut astro_decoder_state_cache_layer_dtypes =
         Vec::with_capacity(weights.decoder_layer_weights.len());
@@ -67,6 +76,7 @@ fn derive_normalized_layer_dtypes(
         )?;
         let (astro_decoder_state_cache_layer_dtype, attention_output_dtype) = attention_dtypes(
             normalized_input_dtype,
+            invariant_scale_dtype,
             &decoder_layer_weights.attention_weights,
         )?;
         astro_decoder_state_cache_layer_dtypes.push(astro_decoder_state_cache_layer_dtype);
@@ -101,6 +111,7 @@ fn derive_lane_mixing_layer_dtypes(
     weights: &Qwen3_5Weights,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
 ) -> Result<Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes>, TextExecutionError> {
+    let invariant_scale_dtype = invariant_linear_scale_dtype(weights);
     let mut hidden_state_dtype = embedded_hidden_state_dtype(weights)?;
     let mut layer_dtypes = Vec::with_capacity(weights.decoder_layer_weights.len());
     for (decoder_layer_index, decoder_layer_weights) in
@@ -108,6 +119,7 @@ fn derive_lane_mixing_layer_dtypes(
     {
         let (layer_dtype, attention_output_dtype) = attention_dtypes_with_norm_dtype(
             hidden_state_dtype,
+            invariant_scale_dtype,
             &decoder_layer_weights.attention_weights,
             Some(hidden_state_dtype),
         )?;
@@ -128,6 +140,7 @@ fn derive_lane_mixing_layer_dtypes(
 /// The astro decoder state cache dtypes one attention layer stores and the dtype it outputs.
 fn attention_dtypes(
     normalized_input_dtype: mlx_bridge::MlxDtype,
+    invariant_scale_dtype: mlx_bridge::MlxDtype,
     attention_weights: &Qwen3_5AttentionWeights,
 ) -> Result<
     (
@@ -140,6 +153,7 @@ fn attention_dtypes(
         Qwen3_5AttentionWeights::Linear(linear_attention_weights) => {
             linear_attention_dtypes(&LinearAttentionDtypeFlow {
                 normalized_input_dtype,
+                invariant_scale_dtype,
                 input_queries_keys_values_projection: dense_contract(
                     &linear_attention_weights.input_queries_keys_values_projection,
                 ),
@@ -161,6 +175,7 @@ fn attention_dtypes(
 /// `norm_output_dtype` rather than promoting with their weights.
 fn attention_dtypes_with_norm_dtype(
     normalized_input_dtype: mlx_bridge::MlxDtype,
+    invariant_scale_dtype: mlx_bridge::MlxDtype,
     attention_weights: &Qwen3_5AttentionWeights,
     norm_output_dtype: Option<mlx_bridge::MlxDtype>,
 ) -> Result<
@@ -178,9 +193,11 @@ fn attention_dtypes_with_norm_dtype(
                 norm_output_dtype,
             ))
         }
-        Qwen3_5AttentionWeights::Linear(_) => {
-            attention_dtypes(normalized_input_dtype, attention_weights)
-        }
+        Qwen3_5AttentionWeights::Linear(_) => attention_dtypes(
+            normalized_input_dtype,
+            invariant_scale_dtype,
+            attention_weights,
+        ),
     }
 }
 
