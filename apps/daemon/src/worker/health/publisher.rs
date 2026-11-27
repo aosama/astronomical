@@ -80,6 +80,12 @@ pub(crate) fn publish_active_request_progress(
 pub(crate) fn clear_active_request_progress(health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.active_request_progress = None;
+        // Every way a request ends clears its progress here, so its running
+        // work leaves the session averages with it; a completed request was
+        // already folded in, which dropped its running work first.
+        worker_health_snapshot
+            .serving_session
+            .clear_running_request();
         worker_health_snapshot
             .serving_session
             .neural_engine
@@ -335,6 +341,32 @@ pub(crate) fn record_serving_session(
         worker_health_snapshot
             .serving_session
             .record_completed_request(completed_request_work);
+    }
+}
+
+/// The running request's prompt work so far, for the session's reading speed.
+pub(crate) fn record_running_prefill(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    computed_token_count: u32,
+    elapsed_millis: u64,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot
+            .serving_session
+            .record_running_prefill(computed_token_count, elapsed_millis);
+    }
+}
+
+/// The running request's reply so far, for the session's writing speed.
+pub(crate) fn record_running_generation(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    generated_token_count: u32,
+    elapsed_millis: u64,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot
+            .serving_session
+            .record_running_generation(generated_token_count, elapsed_millis);
     }
 }
 

@@ -64,6 +64,11 @@ pub(in crate::worker) fn handle_worker_output(
             elapsed_millis,
         },
     );
+    crate::worker::health::record_running_generation(
+        health_snapshot,
+        u32::from(generated_token_count),
+        elapsed_millis,
+    );
     active_request.next_sequence_number = next_sequence_number;
     active_request.next_tool_call_index = next_tool_call_index;
     active_request.generated_token_count = generated_token_count;
@@ -247,6 +252,11 @@ pub(in crate::worker) fn handle_worker_generation_progress(
             maximum_output_tokens: u32::from(maximum_output_tokens),
             elapsed_millis,
         },
+    );
+    crate::worker::health::record_running_generation(
+        health_snapshot,
+        u32::from(generated_token_count),
+        elapsed_millis,
     );
     if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
         active_request.fold_observed_mlx_peak_memory_bytes(mlx_memory_snapshot.peak_memory_bytes);
