@@ -23,7 +23,8 @@ use super::weights::{DecoderLayerAttentionWeights, DenseMlpWeights};
 mod full_attention;
 mod gated_delta;
 
-use gated_delta::{LayerBoundaryCheckpoints, LinearLayerState};
+use gated_delta::LayerBoundaryCheckpoints;
+pub(super) use gated_delta::LinearLayerState;
 
 /// Every retained `astro_decoder_state_cache` array plus the forward output,
 /// as the evaluation roots one step must materialize together. Convolution

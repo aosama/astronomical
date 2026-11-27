@@ -68,6 +68,12 @@ impl ValidatedFoldedPack {
         &self.hadamard_contract
     }
 
+    /// Hands the validated rotation contract to the shared core, which
+    /// serves the pack's rotated modules from it.
+    pub fn into_hadamard_contract(self) -> HadamardContract {
+        self.hadamard_contract
+    }
+
     /// Transfers the pack's retained weights descriptor to its runtime owner.
     #[cfg(feature = "direct-mlx")]
     pub fn take_weights_file(&mut self) -> Result<ValidatedWeightsFile, FoldedPackValidationError> {

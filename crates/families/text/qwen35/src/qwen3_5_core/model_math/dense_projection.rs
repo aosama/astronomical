@@ -6,10 +6,13 @@
 //! `Qwen3_5AffineWeights`, which expert stacks share: code that only ever
 //! sees expert stacks never has to know a converted weight exists.
 
+use std::rc::Rc;
+
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
+use super::hadamard_rotation::HadamardRotation;
 use crate::row_batched_matmul::{RegisterOrderedWeight, RestoredMlxRows};
 
 /// The register-ordered matmul reads 4-bit codes in groups of 64 only.
@@ -35,6 +38,20 @@ pub enum Qwen3_5ProjectionStorage {
     /// the bound arrays, so every row count of it multiplies through the
     /// register-ordered matmul, prompt chunks included.
     RegisterOrdered(RegisterOrderedWeight),
+    /// A folded ternary pack's module: its weights were rotated offline, so
+    /// its input goes through the pack's signed block Hadamard rotation
+    /// before MLX's affine matmul. It is never converted into register
+    /// order, whose kernel would multiply the unrotated input.
+    HadamardRotated(HadamardRotatedWeights),
+}
+
+/// A module stored in a rotated basis, and the rotation its input takes.
+#[derive(Debug)]
+pub struct HadamardRotatedWeights {
+    pub weights: Qwen3_5AffineWeights,
+    /// The rotation at this module's input width, shared by every module
+    /// of that width.
+    pub rotation: Rc<HadamardRotation>,
 }
 
 impl Qwen3_5DenseProjection {
@@ -46,10 +63,24 @@ impl Qwen3_5DenseProjection {
         }
     }
 
-    /// The bound weights, unless the projection was converted.
+    /// The bound weights, unless the projection was converted or multiplies
+    /// a rotated input: code that reads them as an ordinary weight (the
+    /// register-order conversion, add-on sizing, the quantization probe)
+    /// passes over the other forms.
     pub fn bound(&self) -> Option<&Qwen3_5AffineWeights> {
         match &self.storage {
             Qwen3_5ProjectionStorage::Bound(bound_weights) => Some(bound_weights),
+            Qwen3_5ProjectionStorage::RegisterOrdered(_)
+            | Qwen3_5ProjectionStorage::HadamardRotated(_) => None,
+        }
+    }
+
+    /// The affine weights as stored, rotated basis included: what decides
+    /// the dtypes the projection's products take. None once converted.
+    pub fn stored_affine_weights(&self) -> Option<&Qwen3_5AffineWeights> {
+        match &self.storage {
+            Qwen3_5ProjectionStorage::Bound(bound_weights) => Some(bound_weights),
+            Qwen3_5ProjectionStorage::HadamardRotated(rotated) => Some(&rotated.weights),
             Qwen3_5ProjectionStorage::RegisterOrdered(_) => None,
         }
     }
@@ -59,50 +90,44 @@ impl Qwen3_5DenseProjection {
     pub fn bound_mut(&mut self) -> Option<&mut Qwen3_5AffineWeights> {
         match &mut self.storage {
             Qwen3_5ProjectionStorage::Bound(bound_weights) => Some(bound_weights),
-            Qwen3_5ProjectionStorage::RegisterOrdered(_) => None,
+            Qwen3_5ProjectionStorage::RegisterOrdered(_)
+            | Qwen3_5ProjectionStorage::HadamardRotated(_) => None,
         }
     }
 
     pub fn append_array_references<'weights>(&'weights self, arrays: &mut Vec<&'weights MlxArray>) {
-        match &self.storage {
-            Qwen3_5ProjectionStorage::Bound(bound_weights) => {
-                bound_weights.append_array_references(arrays)
-            }
-            Qwen3_5ProjectionStorage::RegisterOrdered(converted) => {
-                arrays.push(&converted.codes);
-                arrays.push(&converted.scale_bias_words);
-            }
+        if let Qwen3_5ProjectionStorage::RegisterOrdered(converted) = &self.storage {
+            arrays.push(&converted.codes);
+            arrays.push(&converted.scale_bias_words);
+            return;
+        }
+        if let Some(stored_weights) = self.stored_affine_weights() {
+            stored_weights.append_array_references(arrays);
         }
     }
 
     /// The whole weight dequantized, `[output, input]`, in its parameter
-    /// dtype (bf16 for a converted projection). None for a codebook.
+    /// dtype (bf16 for a converted projection). None for a codebook, and for
+    /// a rotated module, whose dequantized rows would multiply a rotated
+    /// input, not the hidden rows the caller holds.
     pub fn dequantized(&self, runtime: &MlxRuntime) -> Option<Result<MlxArray, MlxRuntimeError>> {
-        match &self.storage {
-            Qwen3_5ProjectionStorage::Bound(bound_weights) => {
-                bound_weights_dequantized(runtime, bound_weights)
-            }
-            Qwen3_5ProjectionStorage::RegisterOrdered(converted) => {
-                Some(converted_dequantized(runtime, converted))
-            }
+        if let Qwen3_5ProjectionStorage::RegisterOrdered(converted) = &self.storage {
+            return Some(converted_dequantized(runtime, converted));
         }
+        bound_weights_dequantized(runtime, self.bound()?)
     }
 
     /// The output rows `row_ids`, dequantized, `[row_ids.len(), input]`.
-    /// None for a codebook.
+    /// None for a codebook and for a rotated module (see `dequantized`).
     pub fn dequantized_rows(
         &self,
         runtime: &MlxRuntime,
         row_ids: &[i32],
     ) -> Option<Result<MlxArray, MlxRuntimeError>> {
-        match &self.storage {
-            Qwen3_5ProjectionStorage::Bound(bound_weights) => {
-                bound_rows_dequantized(runtime, bound_weights, row_ids)
-            }
-            Qwen3_5ProjectionStorage::RegisterOrdered(converted) => {
-                Some(converted_rows_dequantized(runtime, converted, row_ids))
-            }
+        if let Qwen3_5ProjectionStorage::RegisterOrdered(converted) = &self.storage {
+            return Some(converted_rows_dequantized(runtime, converted, row_ids));
         }
+        bound_rows_dequantized(runtime, self.bound()?, row_ids)
     }
 }
 

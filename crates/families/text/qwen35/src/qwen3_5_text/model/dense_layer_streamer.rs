@@ -8,10 +8,12 @@
 //! maps for execution, because a map entry would pin an evaluated layer's
 //! bytes for the model's lifetime.
 
+use std::rc::Rc;
+
+use crate::qwen3_5_core::model_math::folded_ternary_weights::FoldedTernaryRotations;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
-use std::rc::Rc;
 
 use mlx_bridge::MlxArray;
 use runtime_integration::MlxRuntime;
@@ -54,6 +56,9 @@ pub struct Qwen3_5DenseLayerStreamer {
     /// layers are planned again; `None` when the probe could not run, and
     /// then nothing is kept, since a plan without it would overrun.
     measured_mlx_working_buffer_bytes: Cell<Option<u64>>,
+    /// A folded ternary pack's rotations, applied to every layer read from
+    /// the SSD as they are to the layers bound at load; `None` otherwise.
+    folded_ternary_rotations: Option<Rc<FoldedTernaryRotations>>,
 }
 
 /// Where a forward finds one decoder layer.
@@ -141,7 +146,17 @@ impl Qwen3_5DenseLayerStreamer {
             layer_payload_bytes,
             kept_layer_weights: RefCell::new(Vec::new()),
             measured_mlx_working_buffer_bytes: Cell::new(None),
+            folded_ternary_rotations: None,
         })
+    }
+
+    /// Has every layer read from the SSD take a folded ternary pack's
+    /// rotations, as the layers bound at load did.
+    pub fn attach_folded_ternary_rotations(
+        &mut self,
+        folded_ternary_rotations: Rc<FoldedTernaryRotations>,
+    ) {
+        self.folded_ternary_rotations = Some(folded_ternary_rotations);
     }
 
     /// Every decoder layer's payload, in layer order.
@@ -288,14 +303,35 @@ impl Qwen3_5DenseLayerStreamer {
         for shard_read in shard_reads {
             self.read_shard_tensors(runtime, shard_read, &mut layer_tensors)?;
         }
-        bind_decoder_layer_from_tensors(
+        self.bound_layer(
+            runtime,
+            qwen3_5_config,
+            (layer_index, raw_hugging_face_norm_offsets_apply),
+            layer_tensors,
+        )
+    }
+
+    /// Binds one layer's tensors, and gives a folded pack's layer its
+    /// rotations and float16 auxiliaries.
+    fn bound_layer(
+        &self,
+        runtime: &MlxRuntime,
+        qwen3_5_config: &Qwen3_5Config,
+        (layer_index, raw_hugging_face_norm_offsets_apply): (usize, bool),
+        layer_tensors: HashMap<String, MlxArray>,
+    ) -> Result<Qwen3_5DecoderLayerWeights, TextExecutionError> {
+        let mut layer_weights = bind_decoder_layer_from_tensors(
             runtime,
             qwen3_5_config,
             layer_index,
             &self.layer_tensor_profiles[layer_index],
             raw_hugging_face_norm_offsets_apply,
             layer_tensors,
-        )
+        )?;
+        if let Some(folded_ternary_rotations) = &self.folded_ternary_rotations {
+            folded_ternary_rotations.apply_to_layer(runtime, &mut layer_weights)?;
+        }
+        Ok(layer_weights)
     }
 
     fn read_shard_tensors(

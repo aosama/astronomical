@@ -21,3 +21,8 @@ mod forward_throughput;
 mod generation_throughput;
 mod layer_throughput;
 mod operation_throughput;
+mod shared_core_by_layer;
+mod shared_core_parity;
+mod shared_core_reply_token_profile;
+mod shared_core_validation;
+mod stacked_sibling_projection_verdict;

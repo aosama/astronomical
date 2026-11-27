@@ -1,5 +1,6 @@
 //! Which draft model, if any, a model on this Mac carries in its own
-//! `drafter` folder, so the Models page can say so before the model loads.
+//! drafter folder (`drafter`, or `dflash` in community packs), so the Models
+//! page can say so before the model loads.
 //!
 //! The engine decides for real when it loads the model (it also checks that
 //! the drafter pairs with the model and that the GPU can run it, and status
@@ -10,19 +11,25 @@
 
 use std::path::Path;
 
-use ipc_protocol::DraftModelGeneration;
+use ipc_protocol::{BUNDLED_DRAFTER_FOLDER_NAMES, DraftModelGeneration};
 
-const DRAFTER_FOLDER_NAME: &str = "drafter";
 /// A drafter's `config.json` is a few kilobytes; anything larger is not one.
 const MAXIMUM_DRAFTER_CONFIGURATION_BYTES: u64 = 64 * 1024;
 
-/// The generation of the DFlash draft model in a model's own `drafter`
-/// folder, or `None` when it has none.
+/// The generation of the DFlash draft model in a model's own drafter
+/// folder, tried in the engine's order, or `None` when it has none.
 #[must_use]
 pub(crate) fn bundled_drafter_generation(model_directory: &Path) -> Option<DraftModelGeneration> {
-    let configuration_path = model_directory
-        .join(DRAFTER_FOLDER_NAME)
-        .join("config.json");
+    BUNDLED_DRAFTER_FOLDER_NAMES
+        .iter()
+        .find_map(|bundled_folder_name| {
+            folder_drafter_generation(&model_directory.join(bundled_folder_name))
+        })
+}
+
+/// The generation of the DFlash drafter in `drafter_directory`, or `None`.
+fn folder_drafter_generation(drafter_directory: &Path) -> Option<DraftModelGeneration> {
+    let configuration_path = drafter_directory.join("config.json");
     let configuration_bytes = std::fs::metadata(&configuration_path).ok()?.len();
     if configuration_bytes > MAXIMUM_DRAFTER_CONFIGURATION_BYTES {
         return None;

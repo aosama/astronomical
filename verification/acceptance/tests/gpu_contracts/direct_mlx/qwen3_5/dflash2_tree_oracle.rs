@@ -10,8 +10,8 @@
 //! target's picks along it are the truth, and the round keeps as deep as
 //! that truth runs through the tree, plus the target's next token: exactly
 //! what a tree verify of the same rows keeps. TensorFold's rounds on this
-//! pair kept 5.95 and 6.2 (code completion, greedy and 0.7) and 4.2 and 3.46
-//! (chat, greedy and 1.0).
+//! pair kept 6.2 on the code cell (code completion at 0.7). The story
+//! (greedy and 1.0) is replayed after the code cell.
 
 use mlx_bridge::MlxArray;
 use model_serving::RequestDecoderStateStack;
@@ -27,25 +27,28 @@ use model_serving::speculative_decoding::verification_decision::{
 };
 use serial_test::serial;
 
-use super::dflash2_journey_support::{
-    TargetLogitRows, forward_with_taps, host_values, tap_rows, verify_block_with_taps,
-};
+use super::dflash2_journey_support::{host_values, story_cell, verify_block_with_taps};
 use super::dflash2_kept_per_round::{
-    CHAT_PROMPT, CODE_PROMPT, Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair,
-    OUTPUT_TOKENS, RoundState, TOP_K, TOP_P_THOUSANDTHS, completion_token_ids, load_pair,
-    prompt_token_ids, settle_round,
+    CODE_PROMPT, Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS,
+    RoundState, TOP_K, TOP_P_THOUSANDTHS, load_pair, settle_round,
 };
+use super::kept_prompt_state::{ReadPrompt, read_prompt};
 
 /// TensorFold's community benchmark seeds its repetitions from 1234.
 pub(super) const FIRST_KEYED_SEED: u64 = 1234;
 
-pub(super) const ORACLE_CELLS: [Cell; 5] = [
-    oracle_cell("code completion greedy", true, CODE_PROMPT, 0),
-    oracle_cell("code completion 0.7", true, CODE_PROMPT, 700),
-    oracle_cell("code completion 1.0", true, CODE_PROMPT, 1_000),
-    oracle_cell("chat greedy", false, CHAT_PROMPT, 0),
-    oracle_cell("chat 1.0", false, CHAT_PROMPT, 1_000),
-];
+/// The one code cell every code journey decodes: a raw completion at 0.7,
+/// the temperature code is served at. The story cells (`story_cell`) are sized by the target.
+pub(crate) const CODE_CELL: Cell = oracle_cell("code completion 0.7", true, CODE_PROMPT, 700);
+
+/// Every cell the oracle replays: the code cell, then the story greedy and
+/// at 1.0.
+fn oracle_and_story_cells() -> Vec<Cell> {
+    let mut cells = vec![CODE_CELL];
+    cells.push(story_cell("story greedy", 0));
+    cells.push(story_cell("story 1.0", 1_000));
+    cells
+}
 
 const fn oracle_cell(
     label: &'static str,
@@ -70,7 +73,8 @@ const fn oracle_cell(
 #[serial]
 fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_references() {
     let pair = load_pair();
-    for (cell_index, cell) in ORACLE_CELLS.iter().enumerate() {
+    let cells = oracle_and_story_cells();
+    for (cell_index, cell) in cells.iter().enumerate() {
         let reference = decode(&pair, cell, Drafting::SinglePath, &[]);
         eprintln!(
             "[dflash2-tree-oracle] {} reference text: {:?}",
@@ -82,7 +86,7 @@ fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_refer
             "[dflash2-tree-oracle {}/{}] {}: path {:.2} kept per round, tree {:.2} \
              ({} tokens in {} rounds, {} reference divergences)",
             cell_index + 1,
-            ORACLE_CELLS.len(),
+            cells.len(),
             cell.label,
             reference.kept_per_round(),
             replay.kept_per_round(),
@@ -177,40 +181,24 @@ pub(super) fn decode(
     outcome
 }
 
-/// Prefills the prompt: the drafter's starting state, the target's decoder
+/// Reads the prompt, once per pair for a prompt it has read before
+/// (`kept_prompt_state`): the drafter's starting state, the target's decoder
 /// state, and the target's first pick.
 pub(super) fn prefill(
     pair: &JourneyPair,
     cell: &Cell,
 ) -> (RoundState, RequestDecoderStateStack, u32) {
-    let prompt = if cell.is_raw_completion {
-        completion_token_ids(pair, cell.prompt)
-    } else {
-        prompt_token_ids(pair, cell.prompt)
-    };
-    let mut decoder_state = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
-        &pair.target.astro_decoder_state_cache_layout(),
-        256,
-    )
-    .expect("the decoder state allocates");
-    let prefill = forward_with_taps(
-        &pair.target,
-        &prompt,
-        0,
-        &mut decoder_state,
-        &pair.drafter_configuration.target_tap_layer_ids,
-        TargetLogitRows::LastRowOnly,
-    );
-    let last_logits = prefill.logits;
-    let first_token_id = target_picks(pair, cell, &last_logits, &[prompt.len() as u64])[0];
+    let ReadPrompt {
+        decoder_state,
+        last_logits,
+        tap_rows: pending_tap_rows,
+        prompt_token_count,
+    } = read_prompt(pair, cell);
+    let first_token_id = target_picks(pair, cell, &last_logits, &[prompt_token_count as u64])[0];
     let round = RoundState {
         last_token_id: first_token_id,
-        fed_token_count: prompt.len() as u32,
-        pending_tap_rows: tap_rows(
-            pair.target.runtime(),
-            &prefill.hidden_state_taps,
-            prompt.len() as i32,
-        ),
+        fed_token_count: prompt_token_count as u32,
+        pending_tap_rows,
         context_states: DrafterContextStates::new(&pair.drafter_configuration, 0),
     };
     (round, decoder_state, first_token_id)
@@ -491,36 +479,4 @@ fn reference_text(pair: &JourneyPair, token_ids: &[u32]) -> String {
         }
     }
     text
-}
-
-/// TensorFold's own greedy code completion (engine 1.2.0, this prompt, 256
-/// tokens), which it drafted in 43 rounds: 5.95 kept a round.
-const TENSORFOLD_GREEDY_CODE_COMPLETION: &str =
-    include_str!("../../../fixtures/dflash_reference/tensorfold_greedy_code_completion.txt");
-
-/// The two engines' greedy outputs part after about a hundred tokens, where
-/// they round a near-tie differently, so their round counts are not on the
-/// same text. Forcing TensorFold's text through this drafter and tree is.
-#[test]
-#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-oracle"]
-#[serial]
-fn should_count_the_rounds_this_tree_needs_for_tensorfolds_own_greedy_text() {
-    let pair = load_pair();
-    let cell = &ORACLE_CELLS[0];
-    let reference = pair
-        .tokenizer
-        .encode_prompt(TENSORFOLD_GREEDY_CODE_COMPLETION)
-        .expect("the reference text tokenizes");
-    let forced = decode(&pair, cell, Drafting::TreeOnForcedText, &reference);
-    eprintln!(
-        "[dflash2-tree-oracle] TensorFold's greedy code text ({} tokens): {:.2} kept per round \
-         over {} rounds here; TensorFold drafted it at 5.95",
-        reference.len(),
-        forced.kept_per_round(),
-        forced.rounds,
-    );
-    eprintln!(
-        "[dflash2-tree-oracle] kept by round: {:?}",
-        forced.kept_by_round
-    );
 }

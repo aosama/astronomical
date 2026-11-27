@@ -8,8 +8,8 @@
 //! token a drafter proposes is still verified by the target, so a pairing
 //! can cost speed but never correctness.
 //!
-//! A drafter bundled inside the target's own directory, in a `drafter`
-//! folder, is tried first. It belongs to that one model, so a library can
+//! A drafter bundled inside the target's own directory, in a `drafter` or
+//! `dflash` folder (`BUNDLED_DRAFTER_FOLDER_NAMES`), is tried first. It belongs to that one model, so a library can
 //! hold the same target with and without drafting side by side, which is how
 //! a draft-tree build is compared with its plain twin. A library-wide drafter
 //! pairs with every target of its shape. When several library drafters pair,
@@ -26,6 +26,8 @@
 
 use std::path::{Path, PathBuf};
 
+use ipc_protocol::BUNDLED_DRAFTER_FOLDER_NAMES;
+
 use super::dflash_drafter::{DFlashDrafterConfiguration, DrafterGeneration};
 
 /// Why the library could not be searched for a drafter.
@@ -37,8 +39,6 @@ pub enum DrafterDiscoveryError {
 
 const HUGGINGFACE_SNAPSHOTS_DIRECTORY_NAME: &str = "snapshots";
 const CONFIGURATION_FILE_NAME: &str = "config.json";
-/// The folder inside a target's directory that holds its own drafter.
-pub const BUNDLED_DRAFTER_DIRECTORY_NAME: &str = "drafter";
 /// A drafter's `config.json` is a few kilobytes; larger files are other
 /// things and are not read.
 const MAXIMUM_CONFIGURATION_BYTES: u64 = 1024 * 1024;
@@ -69,13 +69,27 @@ pub fn paired_drafter_directory(
     target_model_directory: &Path,
     pairing: &DrafterPairing,
 ) -> Result<Option<(PathBuf, DFlashDrafterConfiguration)>, DrafterDiscoveryError> {
-    let bundled_directory = target_model_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME);
-    if let Some(drafter_configuration) = pairing_configuration(&bundled_directory, pairing) {
-        return Ok(Some((bundled_directory, drafter_configuration)));
+    if let Some(bundled_drafter) = bundled_pairing_drafter(target_model_directory, pairing) {
+        return Ok(Some(bundled_drafter));
     }
     let mut library_directories = sibling_model_directories(target_model_directory)?;
     library_directories.sort();
     Ok(preferred_library_drafter(library_directories, pairing))
+}
+
+/// The target's own drafter folder that pairs with it, tried in
+/// `BUNDLED_DRAFTER_FOLDER_NAMES` order.
+fn bundled_pairing_drafter(
+    target_model_directory: &Path,
+    pairing: &DrafterPairing,
+) -> Option<(PathBuf, DFlashDrafterConfiguration)> {
+    for bundled_folder_name in BUNDLED_DRAFTER_FOLDER_NAMES {
+        let bundled_directory = target_model_directory.join(bundled_folder_name);
+        if let Some(drafter_configuration) = pairing_configuration(&bundled_directory, pairing) {
+            return Some((bundled_directory, drafter_configuration));
+        }
+    }
+    None
 }
 
 /// The pairing drafter among `library_directories` (in path order): the
@@ -101,6 +115,20 @@ fn preferred_library_drafter(
         }
     }
     chosen
+}
+
+/// Whether `drafter_directory` is one of the target's own drafter folders,
+/// rather than a drafter found across the library.
+#[must_use]
+pub fn is_bundled_drafter_directory(
+    target_model_directory: &Path,
+    drafter_directory: &Path,
+) -> bool {
+    BUNDLED_DRAFTER_FOLDER_NAMES
+        .iter()
+        .any(|bundled_folder_name| {
+            drafter_directory == target_model_directory.join(bundled_folder_name)
+        })
 }
 
 /// Lower is preferred.

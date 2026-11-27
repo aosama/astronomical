@@ -1,7 +1,8 @@
 //! Whether the engine is fit to be measured, and which build it is, read from
 //! its status. Speed is measured only on Development, with the
-//! `astro_ssd_prompt_cache` and the skill declaration off, as AGENTS.md
-//! requires of throughput measurements; a release ledger also needs a clean
+//! `astro_ssd_prompt_cache` and the skill declaration off: every task reports
+//! prompt reading, which AGENTS.md measures with the `astro_ssd_prompt_cache`
+//! off, since a restored prompt would skip it; a release ledger also needs a clean
 //! build, so its figures belong to one commit.
 
 use serde_json::Value;
@@ -27,10 +28,9 @@ pub fn refuse_unless_set_up_for_measuring(status_document: &Value) -> Result<(),
             "{STATUS_PREFIX} status=refused reason=not-development: measure against the Development instance only"
         ));
     }
-    let prompt_cache_enabled =
-        status_document["configuration"]["astro_ssd_prompt_cache"]["enabled"]["effective"]
-            .as_bool()
-            .unwrap_or(true);
+    let prompt_cache_enabled = is_prompt_cache_enabled(
+        &status_document["configuration"]["astro_ssd_prompt_cache"]["enabled"],
+    );
     let skill_declared = status_document["skill"]["declared_to_models"]
         .as_bool()
         .unwrap_or(true);
@@ -40,6 +40,17 @@ pub fn refuse_unless_set_up_for_measuring(status_document: &Value) -> Result<(),
         ));
     }
     Ok(())
+}
+
+/// Whether the `astro_ssd_prompt_cache` will serve the measured replies. The
+/// effective value is null until a model loads, and a measurement starts with
+/// none loaded, so the configured value stands in, then the default; a
+/// setting reported nowhere counts as on.
+fn is_prompt_cache_enabled(enabled_setting: &Value) -> bool {
+    ["effective", "configured", "default"]
+        .iter()
+        .find_map(|source| enabled_setting[*source].as_bool())
+        .unwrap_or(true)
 }
 
 /// The engine's version and commit; a build whose cleanliness is not

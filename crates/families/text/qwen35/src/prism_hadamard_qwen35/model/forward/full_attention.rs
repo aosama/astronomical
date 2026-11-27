@@ -13,9 +13,9 @@ use crate::qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
 
 use super::super::PrismHadamardModelError;
 use super::super::fused_projection::FusedPackedProjection;
-use super::super::fwht::RotatedActivations;
 use super::super::weights::FullLayerWeights;
 use crate::FullAttentionKeyValueState;
+use crate::qwen3_5_core::model_math::hadamard_rotation::RotatedActivations;
 
 /// Head geometry of one full-attention layer, in the i32 form the runtime
 /// reshape calls take.

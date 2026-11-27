@@ -3,9 +3,10 @@
 //! every round drafts a tree, verifies all of it in one target pass, picks
 //! with the keyed sampler (or greedily), and commits the kept chain. Prints
 //! kept per round and the decode speed (prefill excluded) for TensorFold's
-//! code-completion and chat cells. On the 27B pair TensorFold's own engine
-//! measured 78.7 and 44.0 tok/s on those cells, on the Mac these journeys
-//! were first run on; compare against a TensorFold run on the Mac at hand.
+//! code-completion cell and the story (`story_cell`). On the 27B pair
+//! TensorFold's own engine measured 78.7 tok/s on that code cell, on the Mac
+//! these journeys were first run on; compare against a TensorFold run on the
+//! Mac at hand.
 //!
 //! Each stage still waits for the GPU (the lattice and the picks are read
 //! back), so this is the speed a straightforward tree loop reaches, not a
@@ -20,40 +21,23 @@ use model_serving::speculative_decoding::dflash_drafter::DraftTreeOptions;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use serial_test::serial;
 
-use model_serving::speculative_decoding::context_copy::{ContextCopier, ContextCopySettings};
-
-use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps};
+use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps, story_cell};
 use super::dflash2_kept_per_round::{
     Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS, RoundState,
-    completion_token_ids, load_pair, prompt_token_ids,
+    load_pair,
 };
 use super::dflash2_tree_oracle::{
-    Drafting, FIRST_KEYED_SEED, ORACLE_CELLS, draft_tree, prefill, target_picks,
+    CODE_CELL, Drafting, FIRST_KEYED_SEED, draft_tree, prefill, target_picks,
 };
 
 /// Seeds pooled for a sampled cell, as TensorFold's three repetitions.
 const SAMPLED_SEED_COUNT: u64 = 3;
-/// TensorFold's copied-row budget: it starts at 16 rows past the tree,
-/// doubles while copies land whole, halves when most miss, and stops at 48.
-const FIRST_COPY_ROWS: usize = 16;
-const MAXIMUM_COPY_ROWS: usize = 48;
 
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
-    decode_cells_with_trees(&ORACLE_CELLS[..3], SAMPLED_SEED_COUNT);
-}
-
-/// The chat cells on their own: a run heats the GPU, and rounds late in a
-/// 90-second run measured 6 to 10 ms slower than the same rounds from a
-/// cool start, so each family of cells gets its own process.
-#[test]
-#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
-#[serial]
-fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
-    // Sampled first: it is the cell compared with TensorFold's 44.0.
-    decode_cells_with_trees(&[ORACLE_CELLS[4], ORACLE_CELLS[3]], SAMPLED_SEED_COUNT);
+    decode_cells_with_trees(&[CODE_CELL], 1);
 }
 
 /// A story continued after a long prompt, sampled: the cell a long chat or a
@@ -63,19 +47,8 @@ fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
 #[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_a_story_after_a_long_prompt_with_draft_trees() {
-    let long_prompt: &'static str = Box::leak(
-        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-            .split_whitespace()
-            .take(2_000)
-            .collect::<Vec<_>>()
-            .join(" ")
-            .into_boxed_str(),
-    );
-    let mut cell = ORACLE_CELLS[2];
-    cell.label = "story after a long prompt, 1.0";
-    cell.prompt = long_prompt;
-    // One seed: every decode prefills the long prompt again.
-    decode_cells_with_trees(&[cell], 1);
+    // One seed: every decode reads the story prompt again.
+    decode_cells_with_trees(&[story_cell("story after a long prompt, 1.0", 1_000)], 1);
 }
 
 /// Node budgets for the tree-size ladder: 2- to 8-row rounds, where the
@@ -85,30 +58,24 @@ const LADDER_NODE_BUDGETS: [usize; 6] = [1, 2, 3, 4, 5, 7];
 /// Seeds pooled at each budget of the ladder.
 const LADDER_SEED_COUNT: u64 = 2;
 
-/// The sampled chat cell at a ladder of tree sizes. On a mixture-of-experts
+/// The sampled story at a ladder of tree sizes. On a mixture-of-experts
 /// target every verified row pays its own expert reads, so a round's cost
 /// grows with its rows while the tokens it keeps level off; this finds the
 /// size where the two meet. One process, smallest first.
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
-fn should_decode_chat_at_a_ladder_of_tree_sizes() {
-    report_plain_decode(&ORACLE_CELLS[4], LADDER_SEED_COUNT);
+fn should_decode_the_story_at_a_ladder_of_tree_sizes() {
+    report_plain_decode(&story_cell("story 1.0", 1_000), LADDER_SEED_COUNT);
     let mut cells = Vec::with_capacity(LADDER_NODE_BUDGETS.len());
     for node_budget in LADDER_NODE_BUDGETS {
-        let mut cell = ORACLE_CELLS[4];
-        cell.label = Box::leak(format!("chat 1.0, {node_budget}-node tree").into_boxed_str());
+        let mut cell = story_cell("story 1.0", 1_000);
+        cell.label = Box::leak(format!("story 1.0, {node_budget}-node tree").into_boxed_str());
         cell.node_budget = node_budget;
         cells.push(cell);
     }
     decode_cells_with_trees(&cells, LADDER_SEED_COUNT);
 }
-
-/// Romeo and Juliet words that make about 10,000 prompt tokens with the
-/// instruction, the size the serving throughput journey sends.
-const JOURNEY_PROMPT_WORD_COUNT: usize = 7_400;
-const JOURNEY_INSTRUCTION: &str =
-    "Continue the supplied Romeo and Juliet story above for approximately 500 tokens.";
 
 /// The serving journey's own cell in this harness: about 10,000 prompt
 /// tokens, a story at temperature 1.0, plain against the small trees a
@@ -119,16 +86,8 @@ const JOURNEY_INSTRUCTION: &str =
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_a_story_after_a_journey_sized_prompt_plain_and_with_small_trees() {
-    let words: Vec<&str> =
-        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-            .split_whitespace()
-            .take(JOURNEY_PROMPT_WORD_COUNT)
-            .collect();
-    let prompt: &'static str =
-        Box::leak(format!("{}\n\n{JOURNEY_INSTRUCTION}", words.join(" ")).into_boxed_str());
-    let mut cell = ORACLE_CELLS[4];
+    let mut cell = story_cell("story 1.0", 1_000);
     cell.label = "story after a journey-sized prompt, 1.0";
-    cell.prompt = prompt;
     report_plain_decode(&cell, 1);
     let mut cells = Vec::new();
     for node_budget in [3, 7] {
@@ -155,15 +114,7 @@ const KERNEL_COMPARISON_SEED_COUNT: u64 = 6;
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_compare_the_tree_attention_kernel_with_mlx_after_a_journey_sized_prompt() {
-    let words: Vec<&str> =
-        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-            .split_whitespace()
-            .take(JOURNEY_PROMPT_WORD_COUNT)
-            .collect();
-    let prompt: &'static str =
-        Box::leak(format!("{}\n\n{JOURNEY_INSTRUCTION}", words.join(" ")).into_boxed_str());
-    let mut cell = ORACLE_CELLS[4];
-    cell.prompt = prompt;
+    let mut cell = story_cell("story 1.0", 1_000);
     cell.node_budget = 3;
     cell.label = "story after a journey-sized prompt, 1.0, 3-node tree";
     compare_tree_attention_paths(
@@ -176,15 +127,14 @@ fn should_compare_the_tree_attention_kernel_with_mlx_after_a_journey_sized_promp
     );
 }
 
-/// The same comparison on the short chat prompt, where every row's keys fit
-/// one chunk, to tell a long-context effect from one at any length.
+/// The same comparison on the story prompt at every seed.
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_compare_the_tree_attention_kernel_with_mlx_after_a_short_prompt() {
-    let mut cell = ORACLE_CELLS[4];
+    let mut cell = story_cell("story 1.0", 1_000);
     cell.node_budget = 3;
-    cell.label = "chat 1.0, 3-node tree";
+    cell.label = "story 1.0, 3-node tree";
     compare_tree_attention_per_seed(&cell, KERNEL_COMPARISON_SEED_COUNT);
 }
 
@@ -230,16 +180,15 @@ const NOISE_CHECK_SEED_COUNT: u64 = 24;
 /// tokens: half the seeds keep the run near four minutes.
 const JOURNEY_NOISE_CHECK_SEED_COUNT: u64 = 12;
 
-/// The kernel against serving's attention over many seeds of the short
-/// chat prompt, each seed printed, to tell the kernel's effect on kept
+/// The kernel against serving's attention over many seeds of the story, each seed printed, to tell the kernel's effect on kept
 /// tokens from the spread between sampled texts.
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_tell_the_kernels_effect_on_kept_tokens_from_the_spread_between_seeds() {
-    let mut cell = ORACLE_CELLS[4];
+    let mut cell = story_cell("story 1.0", 1_000);
     cell.node_budget = 3;
-    cell.label = "chat 1.0, 3-node tree";
+    cell.label = "story 1.0, 3-node tree";
     compare_tree_attention_paths(
         &cell,
         NOISE_CHECK_SEED_COUNT,
@@ -272,7 +221,7 @@ fn compare_tree_attention_paths(cell: &Cell, seed_count: u64, paths: &[TreeAtten
         let mut seed_line = format!("[dflash2-tree-rounds] seed {seed_offset:>2}:");
         for (pooled_decode, path) in pooled.iter_mut().zip(paths) {
             path.configure(&mut pair);
-            let decode = decode_with_trees(&pair, &seeded_cell, false);
+            let decode = decode_with_trees(&pair, &seeded_cell);
             seed_line.push_str(&format!(
                 " {} {:.2}",
                 path.label(),
@@ -306,7 +255,7 @@ fn print_pooled(label: &str, seed_count: u64, pooled_decode: &PooledTreeDecode) 
 /// Seeds for the depth comparison, interleaved per seed.
 const DEPTH_COMPARISON_SEED_COUNT: u64 = 16;
 
-/// Looking four tokens ahead against today's three, on the short chat at
+/// Looking four tokens ahead against today's three, on the story at
 /// temperature 1.0: the 3-node tree serving uses, a 4-node tree (the same
 /// search, reaching depth 4 where the drafter is confident) and a 4-deep
 /// chain (one candidate a node, always depth 4), each seed through all three,
@@ -315,14 +264,14 @@ const DEPTH_COMPARISON_SEED_COUNT: u64 = 16;
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_compare_drafting_three_and_four_tokens_ahead() {
-    report_plain_decode(&ORACLE_CELLS[4], DEPTH_COMPARISON_SEED_COUNT);
+    report_plain_decode(&story_cell("story 1.0", 1_000), DEPTH_COMPARISON_SEED_COUNT);
     let mut cells = Vec::new();
     for (label, node_budget, children_per_node) in [
         ("3-node tree (serving)", 3, ENGINE_CHILDREN_PER_NODE),
         ("4-node tree", 4, ENGINE_CHILDREN_PER_NODE),
         ("4-deep chain", 4, 1),
     ] {
-        let mut cell = ORACLE_CELLS[4];
+        let mut cell = story_cell("story 1.0", 1_000);
         cell.label = label;
         cell.node_budget = node_budget;
         cell.children_per_node = children_per_node;
@@ -344,7 +293,7 @@ fn should_compare_a_three_node_tree_with_a_three_node_chain() {
         ("3-node tree (serving)", ENGINE_CHILDREN_PER_NODE),
         ("3-node chain", 1),
     ] {
-        let mut cell = ORACLE_CELLS[4];
+        let mut cell = story_cell("story 1.0", 1_000);
         cell.label = label;
         cell.node_budget = 3;
         cell.children_per_node = children_per_node;
@@ -374,7 +323,7 @@ fn compare_cells_per_seed(cells: &[Cell], seed_count: u64) {
                 keyed_seed: FIRST_KEYED_SEED + seed_offset,
                 ..*cell
             };
-            let decode = decode_with_trees(&pair, &seeded_cell, false);
+            let decode = decode_with_trees(&pair, &seeded_cell);
             seed_line.push_str(&format!(
                 " | {} {:.2}",
                 cell.label,
@@ -392,7 +341,8 @@ fn compare_cells_per_seed(cells: &[Cell], seed_count: u64) {
 /// Plain decoding in the same harness, the ladder's baseline: one token a
 /// step through the target's verification forward with no taps and no
 /// drafter, picked as the tree rounds pick, over the same output length.
-pub(super) fn report_plain_decode(cell: &Cell, seed_count: u64) {
+pub(super) fn report_plain_decode(cell: &Cell, sampled_story_seed_count: u64) {
+    let seed_count = cell.seed_count(sampled_story_seed_count);
     let pair = load_pair();
     let (mut emitted_count, mut decode_seconds) = (0, 0.0);
     for seed_offset in 0..seed_count {
@@ -429,45 +379,36 @@ pub(super) fn report_plain_decode(cell: &Cell, seed_count: u64) {
     );
 }
 
-/// Decodes every cell with and without context copies; a sampled cell
-/// pools up to `sampled_seed_limit` seeds.
+/// Decodes every cell with the engine's draft trees; a sampled cell pools
+/// up to `sampled_seed_limit` seeds.
 pub(super) fn decode_cells_with_trees(cells: &[Cell], sampled_seed_limit: u64) {
     let mut pair = load_pair();
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
     for (cell_index, cell) in cells.iter().enumerate() {
-        let seed_count = if cell.temperature_thousandths == 0 {
-            1
-        } else {
-            SAMPLED_SEED_COUNT.min(sampled_seed_limit)
-        };
-        // Alternating the two in one process keeps drift out of the comparison.
-        let mut pooled = [PooledTreeDecode::default(), PooledTreeDecode::default()];
+        let seed_count = cell.seed_count(SAMPLED_SEED_COUNT.min(sampled_seed_limit));
+        let mut pooled_decode = PooledTreeDecode::default();
         for seed_offset in 0..seed_count {
             let seeded_cell = Cell {
                 keyed_seed: FIRST_KEYED_SEED + seed_offset,
                 ..*cell
             };
-            for (pooled_decode, copies_context) in pooled.iter_mut().zip([false, true]) {
-                pooled_decode.add(&decode_with_trees(&pair, &seeded_cell, copies_context));
-            }
+            pooled_decode.add(&decode_with_trees(&pair, &seeded_cell));
         }
-        for (pooled_decode, label) in pooled.iter().zip(["tree", "tree + context copies"]) {
-            eprintln!(
-                "[dflash2-tree-rounds {}/{}] {} ({seed_count} seeds), {label}: {:.2} kept per \
-                 round, {:.1} tok/s decode ({} tokens in {} rounds, {:.1} ms a round)",
-                cell_index + 1,
-                cells.len(),
-                cell.label,
-                pooled_decode.emitted as f64 / pooled_decode.rounds as f64,
-                pooled_decode.emitted as f64 / pooled_decode.decode_seconds,
-                pooled_decode.emitted,
-                pooled_decode.rounds,
-                pooled_decode.decode_seconds * 1000.0 / pooled_decode.rounds as f64,
-            );
-        }
-        print_segments(pooled[0].rounds + pooled[1].rounds);
+        eprintln!(
+            "[dflash2-tree-rounds {}/{}] {} ({seed_count} seeds), tree: {:.2} kept per round, \
+             {:.1} tok/s decode ({} tokens in {} rounds, {:.1} ms a round)",
+            cell_index + 1,
+            cells.len(),
+            cell.label,
+            pooled_decode.emitted as f64 / pooled_decode.rounds as f64,
+            pooled_decode.emitted as f64 / pooled_decode.decode_seconds,
+            pooled_decode.emitted,
+            pooled_decode.rounds,
+            pooled_decode.decode_seconds * 1000.0 / pooled_decode.rounds as f64,
+        );
+        print_segments(pooled_decode.rounds);
     }
 }
 
@@ -494,44 +435,13 @@ struct TreeDecode {
     decode_seconds: f64,
 }
 
-/// The request's text so far and its copier, when the round adds copies.
-struct CopyContext {
-    history: Vec<u32>,
-    copier: ContextCopier,
-    copy_row_budget: usize,
-}
-
-fn decode_with_trees(pair: &JourneyPair, cell: &Cell, copies_context: bool) -> TreeDecode {
+fn decode_with_trees(pair: &JourneyPair, cell: &Cell) -> TreeDecode {
     let (mut round, mut decoder_state, first_token_id) = prefill(pair, cell);
-    let mut copy_context = if copies_context {
-        let mut history = if cell.is_raw_completion {
-            completion_token_ids(pair, cell.prompt)
-        } else {
-            prompt_token_ids(pair, cell.prompt)
-        };
-        history.push(first_token_id);
-        Some(CopyContext {
-            history,
-            copier: ContextCopier::new(ContextCopySettings::default()),
-            copy_row_budget: FIRST_COPY_ROWS,
-        })
-    } else {
-        None
-    };
     let decode_started_at = Instant::now();
     let mut emitted_token_ids = vec![first_token_id];
     let mut rounds = 0;
     while emitted_token_ids.len() <= OUTPUT_TOKENS {
-        let emitted = tree_round(
-            pair,
-            cell,
-            &mut round,
-            &mut decoder_state,
-            copy_context.as_mut(),
-        );
-        if let Some(copy_context) = copy_context.as_mut() {
-            copy_context.history.extend_from_slice(&emitted);
-        }
+        let emitted = tree_round(pair, cell, &mut round, &mut decoder_state);
         emitted_token_ids.extend(emitted);
         rounds += 1;
     }
@@ -542,29 +452,18 @@ fn decode_with_trees(pair: &JourneyPair, cell: &Cell, copies_context: bool) -> T
     }
 }
 
-/// Drafts a tree, hangs a context copy below it when given a copier,
-/// verifies every row, keeps the chain the target's picks follow and
+/// Drafts a tree, verifies every row, keeps the chain the target's picks follow and
 /// commits it. Returns the tokens the round emitted.
 fn tree_round(
     pair: &JourneyPair,
     cell: &Cell,
     round: &mut RoundState,
     decoder_state: &mut RequestDecoderStateStack,
-    mut copy_context: Option<&mut CopyContext>,
 ) -> Vec<u32> {
     let segment_started_at = Instant::now();
     let tree = draft_tree(pair, cell, round, Drafting::Tree);
     let segment_started_at = record_segment(0, segment_started_at);
-    let mut rows = TreeRows::from_draft_tree(round.last_token_id, &tree);
-    let first_copied_row = rows.row_count();
-    let mut copied_row_count = 0;
-    if let Some(copy_context) = copy_context.as_deref_mut() {
-        let copied = copy_context.copier.propose(
-            &copy_context.history,
-            copy_context.copy_row_budget + tree.token_ids.len(),
-        );
-        copied_row_count = rows.add_copied_chain(&copied);
-    }
+    let rows = TreeRows::from_draft_tree(round.last_token_id, &tree);
     let verification = pair
         .target
         .verify_draft_tree(
@@ -583,16 +482,6 @@ fn tree_round(
     let picks = target_picks(pair, cell, &verification.per_row_logits, &pick_positions);
     let segment_started_at = record_segment(2, segment_started_at);
     let kept = rows.kept_chain(&picks);
-    if let Some(copy_context) = copy_context {
-        let mut landed = 0;
-        for kept_row in &kept.rows {
-            if *kept_row >= first_copied_row {
-                landed += 1;
-            }
-        }
-        copy_context.copier.observe(copied_row_count, landed);
-        adapt_copy_row_budget(copy_context, copied_row_count, landed);
-    }
     round.pending_tap_rows = kept_tap_rows(pair, &verification.hidden_state_taps, &kept.rows);
     pair.target
         .commit_draft_tree(decoder_state, verification, &kept.rows)
@@ -644,19 +533,6 @@ fn print_segments(round_count: usize) {
         ));
     }
     eprintln!("[dflash2-tree-rounds] a round, unsynced:{line}");
-}
-
-/// TensorFold's rule: double the copied rows while copies land whole, halve
-/// them (not below the first budget) when fewer than half land.
-fn adapt_copy_row_budget(copy_context: &mut CopyContext, copied_row_count: usize, landed: usize) {
-    if copied_row_count == 0 {
-        return;
-    }
-    if landed == copied_row_count {
-        copy_context.copy_row_budget = (copy_context.copy_row_budget * 2).min(MAXIMUM_COPY_ROWS);
-    } else if 2 * landed < copied_row_count {
-        copy_context.copy_row_budget = (copy_context.copy_row_budget / 2).max(FIRST_COPY_ROWS);
-    }
 }
 
 /// The drafter's next input: every tap's kept rows, in chain order, joined.

@@ -32,11 +32,19 @@ pub enum DraftModelGeneration {
     Dflash2,
 }
 
+/// The folders inside a model's own directory that hold its drafter, in the
+/// order they are tried: `drafter`, as Astronomical's packages ship it, then
+/// `dflash`, where community packs for Apple Silicon keep it, so that a
+/// loader globbing `model*.safetensors` at the model's root never reads the
+/// drafter as the model's own weights.
+pub const BUNDLED_DRAFTER_FOLDER_NAMES: [&str; 2] = ["drafter", "dflash"];
+
 /// Where the drafter was found.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DraftModelLocation {
-    /// The `drafter` folder inside the model's own directory.
+    /// A drafter folder (`BUNDLED_DRAFTER_FOLDER_NAMES`) inside the model's
+    /// own directory.
     Bundled,
     /// A drafter elsewhere in the model library that pairs with this model.
     Library,

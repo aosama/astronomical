@@ -7,6 +7,7 @@ pub mod atlas_artifact;
 pub mod atlas_expert_layer_plans;
 #[cfg(feature = "direct-mlx")]
 pub mod expert_gate_up_fusion_plan;
+mod folded_ternary_artifact;
 mod memory_geometry_measurements;
 mod optiq_metadata_validation;
 pub mod quantized_expert_layer_plan;

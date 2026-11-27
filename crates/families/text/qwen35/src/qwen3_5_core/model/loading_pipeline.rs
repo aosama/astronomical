@@ -3,6 +3,7 @@
 //! invariant linear-attention scales.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use mlx_bridge::{MlxDtype, MlxMetalKernel};
 use runtime_integration::{MlxRuntime, MlxSafetensors};
@@ -11,6 +12,7 @@ use crate::artifact_validation::TensorSourceId;
 use crate::kernel_capability;
 use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Artifact};
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
+use crate::qwen3_5_core::model_math::folded_ternary_weights::FoldedTernaryRotations;
 use crate::qwen3_5_core::model_math::weights::{
     Qwen3_5Weights, WeightBindingDtype, bound_dtype_of,
 };
@@ -26,6 +28,9 @@ pub struct BoundLanguageArtifact {
     pub tensor_inventory: TensorInventory,
     pub weights: Qwen3_5Weights,
     pub vision_model: Option<Qwen3_5VisionModel>,
+    /// A folded ternary pack's rotations, already applied to `weights`, for
+    /// the layers the dense layer streamer reads later; `None` otherwise.
+    pub folded_ternary_rotations: Option<Rc<FoldedTernaryRotations>>,
 }
 
 /// Binds the language artifact with every tensor exactly as stored, as the
@@ -89,6 +94,7 @@ pub fn bind_language_artifact_for(
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<BoundLanguageArtifact, TextExecutionError> {
     let config = validated_artifact.config().clone();
+    let hadamard_contract = validated_artifact.hadamard_contract().cloned();
     let vision_config = validated_artifact.vision_config().cloned();
     let vision_binding = VisionBinding::for_request(
         should_bind_vision_weights,
@@ -124,35 +130,62 @@ pub fn bind_language_artifact_for(
             )
         },
     )?;
-    let (weights, vision_model) = performance_attribution.measure_operation(
-        PerformanceOperation::ModelTensorBinding,
-        |_performance_attribution| -> Result<_, TextExecutionError> {
-            let vision_model = bind_vision_model(
-                runtime,
-                &config,
-                &shard_index,
-                vision_config.as_ref(),
-                vision_binding,
-                sidecar_vision_model,
-                embedded_vision_shard_files,
-            )?;
-            let weights = Qwen3_5Weights::bind_from_model_shards(
-                runtime,
-                &config,
-                &shard_index,
-                model_shards,
-                weight_binding_dtype,
-            )?;
-            Ok((weights, vision_model))
-        },
-    )?;
+    let ((weights, folded_ternary_rotations), vision_model) = performance_attribution
+        .measure_operation(
+            PerformanceOperation::ModelTensorBinding,
+            |_performance_attribution| -> Result<_, TextExecutionError> {
+                let vision_model = bind_vision_model(
+                    runtime,
+                    &config,
+                    &shard_index,
+                    vision_config.as_ref(),
+                    vision_binding,
+                    sidecar_vision_model,
+                    embedded_vision_shard_files,
+                )?;
+                let bound_weights = bind_language_weights(
+                    runtime,
+                    &config,
+                    (&shard_index, model_shards),
+                    weight_binding_dtype,
+                    hadamard_contract.as_ref(),
+                )?;
+                Ok((bound_weights, vision_model))
+            },
+        )?;
     Ok(BoundLanguageArtifact {
         config,
         shard_index,
         tensor_inventory,
         weights,
         vision_model,
+        folded_ternary_rotations,
     })
+}
+
+/// Binds the language weights, and gives a folded ternary pack's modules
+/// their rotations and float16 auxiliaries.
+fn bind_language_weights(
+    runtime: &MlxRuntime,
+    config: &Qwen3_5Config,
+    (shard_index, model_shards): (&Qwen3_5ShardIndex, Vec<MlxSafetensors>),
+    weight_binding_dtype: WeightBindingDtype,
+    hadamard_contract: Option<&crate::prism_hadamard_qwen35::hadamard::HadamardContract>,
+) -> Result<(Qwen3_5Weights, Option<Rc<FoldedTernaryRotations>>), TextExecutionError> {
+    let mut weights = Qwen3_5Weights::bind_from_model_shards(
+        runtime,
+        config,
+        shard_index,
+        model_shards,
+        weight_binding_dtype,
+    )?;
+    let Some(hadamard_contract) = hadamard_contract else {
+        return Ok((weights, None));
+    };
+    let folded_ternary_rotations =
+        FoldedTernaryRotations::from_contract(runtime, hadamard_contract, config)?;
+    folded_ternary_rotations.apply_to_model(runtime, &mut weights)?;
+    Ok((weights, Some(Rc::new(folded_ternary_rotations))))
 }
 
 /// Takes the language shard files out of the validated artifact and maps each
@@ -336,26 +369,48 @@ pub struct InvariantLinearScales {
     pub key_normalization_scale_weight: mlx_bridge::MlxArray,
 }
 
-/// Constructs the invariant linear-attention scales. Qwen3.5 config validation
-/// accepts BF16 activations only, so the two scalar scales and the two folded
-/// per-channel weights are built once instead of rebuilding their scalar and
-/// cast graphs for every linear-attention forward pass. The prefill composed
-/// path folds each scale into `fast_rms_norm`'s per-channel weight so one
-/// fused launch replaces the norm kernel plus the broadcast-multiply kernel
-/// (issue #915 item 5). Every channel carries the same f32 value through the
-/// same rounding to `scale_dtype` as the scalar scales: BF16, which the fused
-/// decode-prework kernel requires, or float32 where the engine binds for a CPU
-/// compute device and that kernel is demoted anyway (#2441).
+/// Constructs the invariant linear-attention scales, in the dtype the model's
+/// activations are stored in (`stored_activation_dtype` of its weights):
+/// BF16 for every Qwen 3.5 checkpoint, float16 for a folded ternary pack. The
+/// scales must share the activations' dtype: a BF16 scale weight beside
+/// float16 queries would widen the queries and keys to float32 while the
+/// values stay float16, and the gated-delta kernel, typed by its queries,
+/// would then read the values as float32. The two scalar scales and the two
+/// folded per-channel weights are built once instead of rebuilding their
+/// scalar and cast graphs for every linear-attention forward pass. The prefill
+/// composed path folds each scale into `fast_rms_norm`'s per-channel weight so
+/// one fused launch replaces the norm kernel plus the broadcast-multiply
+/// kernel (issue #915 item 5). Every channel carries the same f32 value through
+/// the same rounding to `scale_dtype` as the scalar scales: BF16 or float16
+/// as stored, or float32 where the engine binds for a CPU compute device and
+/// the fused decode-prework kernel is demoted anyway (#2441).
 pub fn load_invariant_linear_scales(
     runtime: &MlxRuntime,
     config: &Qwen3_5Config,
+    stored_activation_dtype: MlxDtype,
     weight_binding_dtype: WeightBindingDtype,
 ) -> Result<InvariantLinearScales, TextExecutionError> {
     invariant_linear_scales_in(
         runtime,
         config,
-        bound_dtype_of(MlxDtype::BFloat16, weight_binding_dtype)?,
+        bound_dtype_of(stored_activation_dtype, weight_binding_dtype)?,
     )
+}
+
+/// The dtype the model's activations are stored in: what its embedding
+/// table hands the first layer (the scales of a quantized table, the table
+/// itself otherwise). A codebook never holds embeddings, so it reads BF16.
+#[must_use]
+pub fn stored_activation_dtype(weights: &Qwen3_5Weights) -> MlxDtype {
+    use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+    match &weights.embedding_weights {
+        Qwen3_5AffineWeights::Quantized {
+            quantization_scales,
+            ..
+        } => quantization_scales.dtype(),
+        Qwen3_5AffineWeights::NativeBfloat16 { weight } => weight.dtype(),
+        Qwen3_5AffineWeights::Jangtq2Codebook { .. } => MlxDtype::BFloat16,
+    }
 }
 
 fn invariant_linear_scales_in(

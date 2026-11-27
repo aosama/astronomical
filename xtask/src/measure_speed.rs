@@ -18,7 +18,9 @@
 //!
 //! It runs against Development, never Stable, and refuses to start unless
 //! that engine has the `astro_ssd_prompt_cache` and the skill declaration
-//! switched off, as AGENTS.md requires of throughput measurements.
+//! switched off. AGENTS.md allows the `astro_ssd_prompt_cache` on for decode
+//! measurements, but every task here also reports prompt reading, which a
+//! restored prompt would skip.
 
 #[path = "measure_speed/engine_requests.rs"]
 mod engine_requests;

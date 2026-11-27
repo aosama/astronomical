@@ -12,7 +12,7 @@ use mlx_bridge::{MlxArray, MlxCError, MlxDtype};
 use runtime_integration::MlxRuntime;
 
 use super::{CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError};
-use crate::prism_hadamard_qwen35::model::signed_rotation_kernel::{
+use crate::qwen3_5_core::model_math::signed_rotation_kernel::{
     apply_signed_rotation, signed_rotation_kernel,
 };
 

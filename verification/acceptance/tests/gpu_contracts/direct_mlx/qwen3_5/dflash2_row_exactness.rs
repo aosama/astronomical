@@ -18,17 +18,15 @@ use model_serving::speculative_decoding::dflash_drafter::DraftTree;
 use model_serving::speculative_decoding::tree_rows::TreeRows;
 use serial_test::serial;
 
-use super::dflash2_journey_support::{TargetLogitRows, forward_with_taps, host_values};
+use super::dflash2_journey_support::{
+    TargetLogitRows, forward_with_taps, host_values, story_cell, story_prompt,
+};
 use super::dflash2_kept_per_round::{
     Cell, JourneyPair, load_pair, load_pair_verifying_trees_as_served,
 };
-use super::dflash2_tree_oracle::{Drafting, ORACLE_CELLS, draft_tree, prefill};
+use super::dflash2_tree_oracle::{CODE_CELL, Drafting, draft_tree, prefill};
 
 const COMPARED_ROW_COUNT: usize = 16;
-/// The oracle's greedy chat cell: the prompt plain decoding was compared on.
-const GREEDY_CHAT_CELL_INDEX: usize = 3;
-/// About 10,000 prompt tokens, the serving journey's size.
-const JOURNEY_PROMPT_WORD_COUNT: usize = 7_400;
 
 #[test]
 #[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-row-exactness"]
@@ -38,12 +36,7 @@ fn should_report_how_far_verified_rows_drift_from_the_one_token_step() {
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    report_row_drift(
-        &pair,
-        &ORACLE_CELLS[GREEDY_CHAT_CELL_INDEX],
-        COMPARED_ROW_COUNT,
-        "16-row chain",
-    );
+    report_row_drift(&pair, &CODE_CELL, COMPARED_ROW_COUNT, "16-row chain");
 }
 
 /// The same comparison for the 4-row round a mixture-of-experts target
@@ -57,25 +50,9 @@ fn should_report_how_far_four_row_rounds_drift_after_a_short_and_a_journey_promp
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    let journey_prompt: &'static str = Box::leak(
-        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-            .split_whitespace()
-            .take(JOURNEY_PROMPT_WORD_COUNT)
-            .collect::<Vec<_>>()
-            .join(" ")
-            .into_boxed_str(),
-    );
-    let mut journey_cell = ORACLE_CELLS[GREEDY_CHAT_CELL_INDEX];
-    journey_cell.prompt = journey_prompt;
-    report_row_drift(
-        &pair,
-        &ORACLE_CELLS[GREEDY_CHAT_CELL_INDEX],
-        4,
-        "4-row chain, short prompt",
-    );
-    if labelled_prompts_the_target_reads(&pair, journey_prompt).len() > 1 {
-        report_row_drift(&pair, &journey_cell, 4, "4-row chain, journey prompt");
-    }
+    let journey_cell = story_cell("story greedy", 0);
+    report_row_drift(&pair, &CODE_CELL, 4, "4-row chain, short prompt");
+    report_row_drift(&pair, &journey_cell, 4, "4-row chain, story prompt");
 }
 
 /// One real drafted tree after the serving journey's prompt, verified twice
@@ -88,16 +65,9 @@ fn should_report_how_far_four_row_rounds_drift_after_a_short_and_a_journey_promp
 #[serial]
 fn should_give_a_real_tree_the_same_logits_through_the_kernel_and_mlx_attention() {
     let mut pair = load_pair();
-    let journey_prompt: &'static str = Box::leak(
-        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-            .split_whitespace()
-            .take(JOURNEY_PROMPT_WORD_COUNT)
-            .collect::<Vec<_>>()
-            .join(" ")
-            .into_boxed_str(),
-    );
+    let journey_prompt = story_prompt();
     for (_, prompt) in labelled_prompts_the_target_reads(&pair, journey_prompt) {
-        let mut cell = ORACLE_CELLS[4];
+        let mut cell = story_cell("story 1.0", 1_000);
         cell.prompt = prompt;
         cell.node_budget = 3;
         let mut per_path_logits = Vec::new();
@@ -153,16 +123,9 @@ fn should_count_where_tree_attention_paths_leave_float32_on_real_data() {
     let mut pair = load_pair_verifying_trees_as_served();
     pair.target
         .start_recording_tree_attention_errors_for_measurement();
-    let journey_prompt: &'static str = Box::leak(
-        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-            .split_whitespace()
-            .take(JOURNEY_PROMPT_WORD_COUNT)
-            .collect::<Vec<_>>()
-            .join(" ")
-            .into_boxed_str(),
-    );
+    let journey_prompt = story_prompt();
     for (label, prompt) in labelled_prompts_the_target_reads(&pair, journey_prompt) {
-        let mut cell = ORACLE_CELLS[4];
+        let mut cell = story_cell("story 1.0", 1_000);
         cell.prompt = prompt;
         cell.node_budget = 3;
         let (mut round, mut state, _) = prefill(&pair, &cell);
@@ -199,22 +162,17 @@ fn should_count_where_tree_attention_paths_leave_float32_on_real_data() {
     }
 }
 
-/// The short prompt, and the journey prompt for a target that can read it
-/// here. These journeys read a prompt in one direct prefill under a 30 GB
-/// limit; the dense 27B's 64 layers outgrow that on the journey prompt's
-/// 10,000 tokens (it fails the same way before a tree is ever verified), so
-/// a dense target is measured after the short prompt only.
+/// The short code prompt, then the story. The story is about 2,000 tokens
+/// for a dense target, whose 64 layers would outgrow these journeys' 30 GB
+/// direct prefill on the 10,000 tokens a mixture-of-experts target reads.
 fn labelled_prompts_the_target_reads(
-    pair: &JourneyPair,
+    _pair: &JourneyPair,
     journey_prompt: &'static str,
 ) -> Vec<(&'static str, &'static str)> {
-    let mut labelled_prompts = vec![("short prompt", ORACLE_CELLS[4].prompt)];
-    if pair.target.config.feed_forward_architecture()
-        != model_serving::Qwen3_5FeedForwardArchitecture::Dense
-    {
-        labelled_prompts.push(("journey prompt", journey_prompt));
-    }
-    labelled_prompts
+    vec![
+        ("short prompt", CODE_CELL.prompt),
+        ("story prompt", journey_prompt),
+    ]
 }
 
 fn report_row_drift(pair: &JourneyPair, cell: &Cell, row_count: usize, label: &str) {
@@ -315,7 +273,7 @@ fn split_rows(pair: &JourneyPair, logits: &MlxArray) -> Vec<Vec<f32>> {
         .collect()
 }
 
-fn highest_logit_token(row: &[f32]) -> u32 {
+pub(super) fn highest_logit_token(row: &[f32]) -> u32 {
     let mut best_index = 0;
     for (token_index, logit) in row.iter().enumerate() {
         if *logit > row[best_index] {

@@ -17,6 +17,8 @@ pub mod differentiable_gated_delta;
 #[cfg(feature = "direct-mlx")]
 pub mod feed_forward_weights;
 #[cfg(feature = "direct-mlx")]
+pub mod folded_ternary_weights;
+#[cfg(feature = "direct-mlx")]
 pub mod forward_contract;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_boundary_checkpoints;
@@ -37,6 +39,8 @@ mod gated_delta_tree_tests;
 #[cfg(feature = "direct-mlx")]
 pub mod gdn_decode_prework_kernel;
 #[cfg(feature = "direct-mlx")]
+pub mod hadamard_rotation;
+#[cfg(feature = "direct-mlx")]
 pub mod output_combination;
 #[cfg(feature = "direct-mlx")]
 pub mod routing;
@@ -44,6 +48,8 @@ pub mod routing;
 pub mod row_exact_tree_attention;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod row_exact_tree_attention_tests;
+#[cfg(feature = "direct-mlx")]
+pub mod signed_rotation_kernel;
 #[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_shared_combination;
 #[cfg(all(test, feature = "direct-mlx"))]

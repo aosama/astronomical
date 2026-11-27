@@ -733,27 +733,33 @@ measure-dflash2-round-cost = "run -p xtask -- test-run --package astronomical-ac
 # verify round by the DFlash2 drafter on the real pair: the installed 27B
 # package with its drafter inside (`dense_drafting` in
 # registry/e2e_test_model_names.json, resolved through Development's library;
-# `--configuration PATH` names another). Code at 0.7, chat at 1.0, greedy as a diagnostic;
-# floors sit about 10% under z-lab's reference (6.07 and 3.00). Needs about
+# `--configuration PATH` names another). The code cell (code completion at
+# 0.7, TensorFold's raw form) and the story at 1.0. Needs about
 # 22 GB of free memory; about one minute.
 measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_kept_per_round"
+# The DFlash2 journeys read a prompt once per loaded pair and seat every
+# later decode of it from the kept decoder state (kept_prompt_state.rs), as
+# the astro_ssd_prompt_cache spares a served request its prompt. This proves
+# the seating: greedy steps after the story prompt read into a state of its
+# own, then twice from kept copies, must choose the same tokens. Same pair
+# and memory as above; under a minute.
+measure-dflash2-kept-prompt-state = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter kept_prompt_state"
 # Gate 4's first measurement: kept per round if each round verified
 # TensorFold's draft tree (15 nodes, 4 children) instead of one path, on the
-# code-completion and chat cells, greedy and keyed-sampled (0.7 and 1.0).
-# Replays a recorded single-path reference, so it needs no tree forward. It
-# also forces TensorFold's own greedy code text (a fixture) through this
-# drafter and tree, the one count that is on the same text as its 5.95.
+# code cell (code completion at 0.7) and the story, greedy and at 1.0.
+# Replays a recorded single-path reference, so it needs no tree forward.
 # Same pair and memory as above; about a minute.
 measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_oracle"
 # Gate 4 end to end on the 27B pair: every round verifies TensorFold's draft
 # tree in one target pass and commits the kept chain; prints kept per round,
-# decode tok/s and ms a round for the code-completion and chat cells, greedy
-# and keyed-sampled, then where a round's time goes (each stage synced, after
+# decode tok/s and ms a round for the code cell (code completion at 0.7),
+# then where a round's time goes (each stage synced, after
 # a short and a long prompt, and by layer stage). Same pair and memory as
 # above; about three minutes, or one test with --filter NAME. With a
 # mixture-of-experts target (see the configuration note below) it also has:
-# the tree-size ladder against plain one-token steps; a story continued after a
-# 10,000-token prompt; synced rounds through the row-exact tree attention
+# the tree-size ladder against plain one-token steps; a story continued after
+# its prompt (about 2,000 tokens on a dense target, 10,000 on a
+# mixture-of-experts one, `story_cell`); synced rounds through the row-exact tree attention
 # kernel and MLX's attention from 14 to 11,292 context tokens (where the
 # kernel starts to pay); trees against chains three and four tokens deep;
 # and the kernel against MLX's bf16 and float32
@@ -761,10 +767,10 @@ measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-a
 # a round vary between sampled texts more than between attention paths.
 # Those are long: pass --exact --filter with the test's full path.
 # The same harness's sweeps for either drafter generation: tree and chain
-# sizes from 1 to 15 drafted tokens for code and chat at the publisher's
-# recommended 0.6 and chat at 1.0, and 3- to 6-node trees at 0.6 (each case
+# sizes from 1 to 15 drafted tokens for code and the story at the publisher's
+# recommended 0.6 and the story at 1.0, and 3- to 6-node trees at 0.6 (each case
 # prints kept tokens a round, milliseconds a round and decode tok/s). Pass
-# --exact --filter direct_mlx::qwen3_5::dflash_tree_size_sweeps::should_sweep_tree_sizes_and_chains_for_code_and_chat_at_real_temperatures
+# --exact --filter direct_mlx::qwen3_5::dflash_tree_size_sweeps::should_sweep_tree_sizes_and_chains_for_code_and_story_at_real_temperatures
 # (about 10 minutes) or dflash_tree_size_sweeps::should_compare_three_to_six_node_trees_at_the_recommended_temperature
 # (about 2 minutes), with --configuration naming a target whose drafter
 # folder holds a DFlash or DFlash2 drafter.
@@ -1169,6 +1175,15 @@ test-flux2-klein-rest = "run -p xtask -- test-run --package astronomical-accepta
 # --configuration PATH containing model_directory and, for parity,
 # reference_artifact_path.
 test-prism-hadamard-direct = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --ignored"
+# Where one reply token of a folded ternary pack goes on the shared core
+# (#2653): the MLX performance profiler's page and JSON for one token built as
+# one graph, after a 500-token prompt. Name the pack with --configuration.
+# About a minute.
+measure-prism-shared-core-reply-token = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --filter shared_core_reply_token --ignored"
+# Whether one 2-bit matmul over a folded pack's stacked gate and up
+# projections beats one matmul each, as profiler verdicts on layer 0's real
+# weights, with outputs checked equal (#2653). Under a minute.
+measure-prism-stacked-sibling-projections = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --filter stacked_sibling_projection --ignored"
 test-prism-hadamard-performance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --filter throughput --ignored"
 test-prism-hadamard-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter folded_ternary --ignored"
 test-prism-hadamard-serving = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --filter should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack --ignored"

@@ -81,7 +81,7 @@ pub fn discover_prism_hadamard_qwen35_model(
             context_window: family_metadata.context_window,
             max_input_tokens: family_metadata.max_input_tokens,
             max_output_tokens: family_metadata.max_output_tokens,
-            supports_vision: false,
+            supports_vision: prism_hadamard_qwen35::serves_vision(&config_value),
             supports_reasoning: family_metadata.supports_reasoning,
             supports_tool_calls: family_metadata.supports_tool_calls,
         }),

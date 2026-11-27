@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use mlx_bridge::{MlxArray, MlxCError, MlxCompiledElementwiseGraphs, MlxMetalKernel};
+use mlx_bridge::{MlxArray, MlxCError, MlxCompiledElementwiseGraphs, MlxDtype, MlxMetalKernel};
 use runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::qwen3_5_core::model_math::tensor_slicing;
@@ -23,7 +23,13 @@ use text_generation::execution_error::TextExecutionError;
 use super::super::artifacts::ValidatedFoldedPack;
 use super::PrismHadamardModelError;
 use super::fused_projection::FusedPackedProjection;
-use super::fwht::{HadamardRotation, RotatedActivations};
+use crate::qwen3_5_core::model_math::hadamard_rotation::{HadamardRotation, RotatedActivations};
+
+/// The activation dtype every packed module declares: the wire schema pins
+/// the folded modules to float16 (`FOLDED_MODULE_DTYPE`).
+pub fn folded_activation_dtype() -> MlxDtype {
+    MlxDtype::Float16
+}
 
 /// The ternary quantization constants of the family's packs.
 const QUANTIZATION_GROUP_SIZE: i32 = 128;
@@ -343,7 +349,7 @@ pub fn load_family_weights(
     let tensor_source = FamilyTensorSource {
         runtime,
         loaded_tensors,
-        activation_dtype: super::fwht::activation_dtype(),
+        activation_dtype: folded_activation_dtype(),
     };
 
     let embedding_stem = "language_model.model.embed_tokens";
@@ -571,7 +577,7 @@ pub fn build_gdn_normalization_scale_weights(
     head_dimension: u32,
 ) -> Result<(MlxArray, MlxArray), PrismHadamardModelError> {
     let head_dimension_i32 = head_dimension as i32;
-    let activation_dtype = super::fwht::activation_dtype();
+    let activation_dtype = folded_activation_dtype();
     let query_scale_value = 1.0 / head_dimension as f32;
     let key_scale_value = 1.0 / (head_dimension as f32).sqrt();
     let query_scale_weight = runtime

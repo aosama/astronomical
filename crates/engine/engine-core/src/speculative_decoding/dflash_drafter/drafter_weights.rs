@@ -1,14 +1,15 @@
 //! The DFlash2 drafter's tensors, bound by their checkpoint names with every
 //! shape checked against the configuration before any is used.
 
-use mlx_bridge::MlxArray;
+use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 use thiserror::Error;
 
+use super::drafter_checkpoint_format::AffinePacking;
 use super::drafter_configuration::{
     CandidateSelectorShape, DFlashDrafterConfiguration, GroupedConvolutionShape,
 };
-use super::drafter_linear::DrafterLinear;
+use super::drafter_linear::{DrafterLinear, QUANTIZATION_BITS, QUANTIZATION_GROUP_SIZE};
 
 /// Why a drafter checkpoint could not be bound.
 #[derive(Debug, Error)]
@@ -23,6 +24,15 @@ pub enum DFlashDrafterWeightsError {
         tensor_name: String,
         expected_shape: Vec<i32>,
         actual_shape: Vec<i32>,
+    },
+    #[error(
+        "drafter tensor `{tensor_name}` is packed at {bits} bits in groups of {group_size}; \
+         a drafter linear is served at 4 bits in groups of 64"
+    )]
+    Packing {
+        tensor_name: String,
+        bits: i32,
+        group_size: i32,
     },
     #[error(transparent)]
     Runtime(#[from] MlxRuntimeError),
@@ -125,9 +135,9 @@ fn bind_candidate_selector(
             &[selector_shape.rank, configuration.hidden_size],
         )?,
         predecessor_codebook: binder
-            .tensor("candidate_selector.predecessor_codebook", &codebook_shape)?,
+            .codebook("candidate_selector.predecessor_codebook", &codebook_shape)?,
         successor_codebook: binder
-            .tensor("candidate_selector.successor_codebook", &codebook_shape)?,
+            .codebook("candidate_selector.successor_codebook", &codebook_shape)?,
     })
 }
 
@@ -254,7 +264,35 @@ impl TensorBinder<'_> {
         Ok(tensor)
     }
 
+    /// A linear as the checkpoint stores it: bf16 `[output, input]`, or MLX's
+    /// 4-bit, group-64 packing beside its `scales` and `biases`, as a
+    /// drafter published already quantized ships it. A linear packed any
+    /// other way is refused: the served linear multiplies at 4 bits, group 64.
     fn linear(
+        &self,
+        tensor_name: &str,
+        expected_shape: &[i32],
+    ) -> Result<DrafterLinear, DFlashDrafterWeightsError> {
+        let packed_affine = self.packed_affine(tensor_name, expected_shape)?;
+        self.linear_as_stored(tensor_name, expected_shape, packed_affine)
+    }
+
+    /// The linear served as stored: packed when the checkpoint packed it,
+    /// otherwise bf16.
+    fn linear_as_stored(
+        &self,
+        tensor_name: &str,
+        expected_shape: &[i32],
+        packed_affine: Option<PackedAffineTensors>,
+    ) -> Result<DrafterLinear, DFlashDrafterWeightsError> {
+        match packed_affine {
+            Some(packed_affine) => served_packed_linear(tensor_name, packed_affine),
+            None => self.full_precision_linear(tensor_name, expected_shape),
+        }
+    }
+
+    /// A linear the checkpoint stores in bf16, `[output, input]`.
+    fn full_precision_linear(
         &self,
         tensor_name: &str,
         expected_shape: &[i32],
@@ -262,22 +300,113 @@ impl TensorBinder<'_> {
         let weight = self.tensor(tensor_name, expected_shape)?;
         Ok(DrafterLinear::full_precision(self.runtime, &weight)?)
     }
+
+    /// A selector codebook `[vocabulary, rank]` in bf16. A checkpoint
+    /// published already quantized stores it as `<name>.weight` in MLX's
+    /// affine packing (8 bits in the one published so far); it is
+    /// dequantized once here, because the selector gathers a few rows of it
+    /// a round and reads them as bf16. Dequantizing yields the scales'
+    /// dtype, so a pack with float16 scales is cast to bf16 after.
+    fn codebook(
+        &self,
+        tensor_name: &str,
+        expected_shape: &[i32],
+    ) -> Result<MlxArray, DFlashDrafterWeightsError> {
+        let packed_tensor_name = format!("{tensor_name}.weight");
+        match self.packed_affine(&packed_tensor_name, expected_shape)? {
+            Some(packed_affine) => {
+                let dequantized = self
+                    .runtime
+                    .dequantize_affine(
+                        &packed_affine.packed_weight,
+                        &packed_affine.scales,
+                        &packed_affine.biases,
+                        packed_affine.group_size,
+                        packed_affine.bits,
+                    )
+                    .map_err(MlxRuntimeError::from)?;
+                Ok(in_bfloat16(self.runtime, dequantized)?)
+            }
+            None => self.tensor(tensor_name, expected_shape),
+        }
+    }
+
+    /// The affine packing of the module whose weight is `tensor_name`, when
+    /// the checkpoint holds the module's `scales`; `None` when it holds the
+    /// module unquantized. `logical_shape` is the unpacked `[output, input]`;
+    /// the bits and group size are read from the packed tensors' widths.
+    fn packed_affine(
+        &self,
+        tensor_name: &str,
+        logical_shape: &[i32],
+    ) -> Result<Option<PackedAffineTensors>, DFlashDrafterWeightsError> {
+        let module_name = tensor_name.strip_suffix(".weight").unwrap_or(tensor_name);
+        let scales_name = format!("{module_name}.scales");
+        let Ok(scales) = self.checkpoint.tensor(&scales_name) else {
+            return Ok(None);
+        };
+        let packed_weight = self.checkpoint.tensor(tensor_name).map_err(|source| {
+            DFlashDrafterWeightsError::MissingTensor {
+                tensor_name: tensor_name.to_owned(),
+                source,
+            }
+        })?;
+        let packing = AffinePacking::read(logical_shape, &packed_weight.shape(), &scales.shape())
+            .ok_or_else(|| DFlashDrafterWeightsError::Shape {
+            tensor_name: tensor_name.to_owned(),
+            expected_shape: logical_shape.to_vec(),
+            actual_shape: packed_weight.shape(),
+        })?;
+        Ok(Some(PackedAffineTensors {
+            packed_weight,
+            biases: self.tensor(&format!("{module_name}.biases"), &scales.shape())?,
+            scales,
+            bits: packing.bits,
+            group_size: packing.group_size,
+        }))
+    }
 }
 
-/// The most a drafter's load holds at once, as a share of its checkpoint
-/// file, when the checkpoint is let go right after binding so each linear's
-/// full-precision copy is freed once it is requantized: the 4-bit linears
-/// (9/32 of their bf16 bytes with group-64 scales and biases), the tensors
-/// that stay bf16, and one linear still in bf16. Measured at 0.32 of the
-/// checkpoint on both shipped drafters (`dflash_drafter_load_memory`); 3/8
-/// leaves room for a drafter whose largest linear is a larger share.
-const LOAD_PEAK_EIGHTHS_OF_CHECKPOINT: u64 = 3;
+/// A linear stored packed, served as stored when it is packed the one way a
+/// drafter linear multiplies.
+fn served_packed_linear(
+    tensor_name: &str,
+    packed_affine: PackedAffineTensors,
+) -> Result<DrafterLinear, DFlashDrafterWeightsError> {
+    if packed_affine.bits != QUANTIZATION_BITS
+        || packed_affine.group_size != QUANTIZATION_GROUP_SIZE
+    {
+        return Err(DFlashDrafterWeightsError::Packing {
+            tensor_name: tensor_name.to_owned(),
+            bits: packed_affine.bits,
+            group_size: packed_affine.group_size,
+        });
+    }
+    Ok(DrafterLinear::Quantized {
+        packed_weight: packed_affine.packed_weight,
+        scales: packed_affine.scales,
+        biases: packed_affine.biases,
+    })
+}
 
-/// What loading a drafter whose checkpoint file is `checkpoint_bytes` holds at
-/// its peak, so a load check asks for that room and no more.
-#[must_use]
-pub fn drafter_load_peak_bytes(checkpoint_bytes: u64) -> u64 {
-    checkpoint_bytes.div_ceil(8) * LOAD_PEAK_EIGHTHS_OF_CHECKPOINT
+/// `tensor` in bf16, the dtype the drafter's weights are stored and run in.
+pub(super) fn in_bfloat16(
+    runtime: &MlxRuntime,
+    tensor: MlxArray,
+) -> Result<MlxArray, MlxRuntimeError> {
+    if tensor.dtype() == MlxDtype::BFloat16 {
+        return Ok(tensor);
+    }
+    Ok(runtime.astype(&tensor, MlxDtype::BFloat16)?)
+}
+
+/// One module in MLX's affine packing, as a checkpoint stores it.
+struct PackedAffineTensors {
+    packed_weight: MlxArray,
+    scales: MlxArray,
+    biases: MlxArray,
+    bits: i32,
+    group_size: i32,
 }
 
 impl DFlashDrafterWeights {
@@ -356,7 +485,3 @@ impl LayerConvolutionWeights {
             .quantize_in_place(runtime, use_register_order)
     }
 }
-
-#[cfg(test)]
-#[path = "drafter_weights_tests.rs"]
-mod drafter_weights_tests;

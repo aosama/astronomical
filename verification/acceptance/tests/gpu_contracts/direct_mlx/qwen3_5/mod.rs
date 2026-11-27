@@ -26,6 +26,7 @@ mod gated_delta_checkpoints;
 mod gated_delta_far_from_zero;
 mod gdn_decode_prework_numerics;
 mod interleaved_probe_support;
+mod kept_prompt_state;
 mod linear_attention_norm_scale;
 mod quantized_matmul_partition_parity;
 mod quantized_matmul_prefill_performance;
