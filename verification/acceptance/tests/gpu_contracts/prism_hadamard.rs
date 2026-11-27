@@ -16,6 +16,11 @@ mod stored_prompt_state;
 #[path = "../support/romeo_and_juliet.rs"]
 mod romeo_and_juliet;
 
+// This binary uses only the comparison of the shared sorted-expert fixtures.
+#[allow(dead_code)]
+#[path = "../support/sorted_expert_fixtures.rs"]
+mod sorted_expert_fixtures;
+
 #[path = "prism_hadamard/mod.rs"]
 mod prism_hadamard;
 

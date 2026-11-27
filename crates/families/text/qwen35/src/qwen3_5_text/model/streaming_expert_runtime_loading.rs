@@ -118,8 +118,8 @@ fn load_streaming_expert_runtime(
     ))
 }
 
-/// The two kernels that reduce a layer's routed experts, kept by the GPU's
-/// capability verdicts.
+/// The kernels a layer's routed experts run through beyond MLX's own, kept
+/// by the GPU's capability verdicts.
 #[derive(Default)]
 pub(super) struct ExpertCombinationKernels {
     /// The sorted router-weighted sum. A demoted kernel leaves `None` and
@@ -131,15 +131,21 @@ pub(super) struct ExpertCombinationKernels {
     /// were held or streamed, so this engine keeps it as the in-memory
     /// engine does (issue #2585).
     pub(super) sorted_shared_combination: Option<MlxMetalKernel>,
+    /// The sorted-expert matmul for a prompt chunk's gate and up projections.
+    /// It reads the sorted order, so it is kept only with the sorted sum.
+    pub(super) sorted_expert_matmul: Option<crate::sorted_expert_matmul::SortedExpertMatmulKernels>,
 }
 
-/// The model's optional accelerators with only the fused combination set.
+/// The model's optional accelerators with only the expert kernels and the
+/// signed rotation set.
 pub(super) fn accelerators_with(
     sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
+    sorted_expert_matmul_kernels: Option<crate::sorted_expert_matmul::SortedExpertMatmulKernels>,
     signed_hadamard_rotation_kernel: Option<MlxMetalKernel>,
 ) -> crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
     crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
         sorted_expert_shared_combination_kernel,
+        sorted_expert_matmul_kernels,
         signed_hadamard_rotation_kernel,
         ..Default::default()
     }
@@ -168,8 +174,38 @@ fn kept_expert_combination_kernels(
             worker_kernel_capabilities,
             sorted_weighted_sum.is_some(),
         )?;
+    let sorted_expert_matmul =
+        kept_sorted_expert_matmul(worker_kernel_capabilities, sorted_weighted_sum.is_some());
     Ok(ExpertCombinationKernels {
         sorted_weighted_sum,
         sorted_shared_combination,
+        sorted_expert_matmul,
     })
+}
+
+/// The sorted-expert matmul's kernels when this GPU reproduced MLX's bits
+/// with them and the sorted route they read is kept; `None` otherwise, and
+/// prompt chunks then keep MLX's gather_qmm for gate and up.
+fn kept_sorted_expert_matmul(
+    worker_kernel_capabilities: &crate::kernel_capability::WorkerKernelCapabilities,
+    sorted_route_kept: bool,
+) -> Option<crate::sorted_expert_matmul::SortedExpertMatmulKernels> {
+    if !sorted_route_kept
+        || !worker_kernel_capabilities
+            .is_custom_kernel_supported(crate::kernel_capability::SORTED_EXPERT_MATMUL)
+    {
+        tracing::info!(
+            "sorted-expert matmul not kept: prompt chunks use MLX's gather_qmm for gate and up"
+        );
+        return None;
+    }
+    match crate::sorted_expert_matmul::SortedExpertMatmulKernels::declare() {
+        Ok(kernels) => Some(kernels),
+        Err(declaration_error) => {
+            tracing::warn!(
+                "sorted-expert matmul kernels could not be declared: {declaration_error}"
+            );
+            None
+        }
+    }
 }

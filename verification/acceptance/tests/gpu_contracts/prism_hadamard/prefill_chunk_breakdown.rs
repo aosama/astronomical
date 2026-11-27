@@ -115,15 +115,28 @@ impl MeasuredProcedure for WholeChunkForward<'_> {
     }
 
     fn run(&mut self) -> Result<(), String> {
-        let decoder_state = self
-            .decoder_state
-            .as_mut()
-            .ok_or("the decoder state was not prepared")?;
-        self.shared_core
-            .forward_chunk(self.chunk_token_ids, 0, decoder_state)
-            .map(|_final_logits| ())
-            .map_err(|forward_error| forward_error.to_string())
+        forward_prepared_chunk(
+            self.shared_core,
+            self.chunk_token_ids,
+            &mut self.decoder_state,
+        )
+        .map(|_final_logits| ())
     }
+}
+
+/// One chunk through every layer from the decoder state a procedure's
+/// `prepare` left, returning the chunk's final logits.
+pub(super) fn forward_prepared_chunk(
+    shared_core: &Qwen3_5TextModel,
+    chunk_token_ids: &[u32],
+    decoder_state: &mut Option<RequestDecoderStateStack>,
+) -> Result<MlxArray, String> {
+    let decoder_state = decoder_state
+        .as_mut()
+        .ok_or("the decoder state was not prepared")?;
+    shared_core
+        .forward_chunk(chunk_token_ids, 0, decoder_state)
+        .map_err(|forward_error| forward_error.to_string())
 }
 
 #[test]
@@ -299,7 +312,7 @@ fn layer_count_of_kind(shared_core: &Qwen3_5TextModel, layer_kind: &str) -> usiz
     }
 }
 
-fn chunk_token_ids(token_count: usize) -> Vec<u32> {
+pub(super) fn chunk_token_ids(token_count: usize) -> Vec<u32> {
     romeo_and_juliet_prompt_token_ids(&pack_tokenizer(), token_count)
         .into_iter()
         .take(token_count)

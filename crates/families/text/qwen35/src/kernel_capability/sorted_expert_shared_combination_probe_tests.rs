@@ -1,9 +1,9 @@
 //! The probe's verdict rules, plus one real launch on this machine's GPU.
 
-use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::file_serial;
 
 use super::{SortedExpertSharedCombinationProbe, validate_bit_identical_probe_outputs};
+use crate::kernel_capability::probe_test_runtime::probe_test_runtime;
 use crate::kernel_capability::{CustomMetalKernelProbe, KernelCapabilityError};
 
 const ONE_POINT_FIVE_BITS: u32 = 0x3FC0_0000;
@@ -67,17 +67,9 @@ fn should_reject_an_empty_probe_output() {
 #[test]
 #[file_serial]
 fn should_pass_the_probe_on_this_machines_gpu() {
-    if test_harness::skip_without(
-        test_harness::PlatformRequirement::MetalGpu,
-        "should_pass_the_probe_on_this_machines_gpu",
-    ) {
+    let Some(runtime) = probe_test_runtime("should_pass_the_probe_on_this_machines_gpu") else {
         return;
-    }
-    let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
-            .expect("the probe test memory limits are valid"),
-    )
-    .expect("the direct MLX runtime initializes");
+    };
     assert_eq!(
         SortedExpertSharedCombinationProbe::new(&runtime).probe(),
         Ok(())

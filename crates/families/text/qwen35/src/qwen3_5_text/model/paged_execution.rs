@@ -199,9 +199,76 @@ impl Qwen3_5Model {
             self.sorted_assignments_when_worthwhile(&expanded_states, selected_expert_indices)?;
         let (expert_inputs, expert_indices, indices_are_sorted) = match sorted_assignments.as_ref()
         {
-            Some((sorted_states, sorted_indices, _)) => (sorted_states, sorted_indices, true),
+            Some((sorted_states, sorted_indices, _, _)) => (sorted_states, sorted_indices, true),
             None => (&expanded_states, selected_expert_indices, false),
         };
+        let (selected_gate, selected_up) = self.selected_gate_and_up(
+            (
+                hidden_states,
+                selected_expert_indices,
+                sorted_assignments.as_ref(),
+            ),
+            (expert_inputs, expert_indices, indices_are_sorted),
+            paged_expert_weights,
+            performance_attribution,
+        )?;
+        let selected_activated = self.runtime.apply_compiled_swiglu(
+            &self.compiled_swiglu,
+            &selected_gate,
+            &selected_up,
+        )?;
+        let selected_outputs = self.streamed_expert_linear(
+            &selected_activated,
+            &paged_expert_weights.down_projection,
+            paged_expert_weights.down_activation_rotation,
+            expert_indices,
+            indices_are_sorted,
+            performance_attribution,
+        )?;
+        self.routed_assignment_outputs_from(
+            selected_outputs,
+            sorted_assignments,
+            indices_are_sorted,
+        )
+    }
+
+    /// `(gate, up)` through the sorted-expert matmul from the token rows when
+    /// the chunk takes it, through MLX's gathered multiply otherwise.
+    fn selected_gate_and_up(
+        &self,
+        (hidden_states, selected_expert_indices, sorted_assignments): (
+            &MlxArray,
+            &MlxArray,
+            Option<&super::streamed_expert_assignment_steps::SortedAssignments>,
+        ),
+        gathered_inputs: (&MlxArray, &MlxArray, bool),
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
+        match self.token_row_gate_and_up(
+            hidden_states,
+            paged_expert_weights,
+            sorted_assignments,
+            selected_expert_indices,
+        )? {
+            Some(gate_and_up) => Ok(gate_and_up),
+            None => self.gathered_gate_and_up(
+                gathered_inputs,
+                paged_expert_weights,
+                performance_attribution,
+            ),
+        }
+    }
+
+    /// `(gate, up)` through MLX's gathered multiply, on the sorted copy of the
+    /// rows when the chunk was sorted, with the shared Hadamard-32 rotation
+    /// when both projections were quantized under it.
+    fn gathered_gate_and_up(
+        &self,
+        (expert_inputs, expert_indices, indices_are_sorted): (&MlxArray, &MlxArray, bool),
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(MlxArray, MlxArray), TextExecutionError> {
         let gate_activation_rotation = paged_expert_weights.gate_activation_rotation;
         let up_activation_rotation = paged_expert_weights.up_activation_rotation;
         let shared_gate_up_activations = self.shared_gate_up_activations(
@@ -232,24 +299,7 @@ impl Qwen3_5Model {
             indices_are_sorted,
             performance_attribution,
         )?;
-        let selected_activated = self.runtime.apply_compiled_swiglu(
-            &self.compiled_swiglu,
-            &selected_gate,
-            &selected_up,
-        )?;
-        let selected_outputs = self.streamed_expert_linear(
-            &selected_activated,
-            &paged_expert_weights.down_projection,
-            paged_expert_weights.down_activation_rotation,
-            expert_indices,
-            indices_are_sorted,
-            performance_attribution,
-        )?;
-        self.routed_assignment_outputs_from(
-            selected_outputs,
-            sorted_assignments,
-            indices_are_sorted,
-        )
+        Ok((selected_gate, selected_up))
     }
 
     fn streamed_expert_linear(

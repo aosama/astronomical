@@ -125,6 +125,7 @@ mod seat_planned_complete_layers;
 mod streamed_expert_assignment_steps;
 pub mod streaming_model;
 mod system_wired_governance;
+mod token_row_gate_up;
 mod whole_model_holding;
 
 pub use crate::qwen3_5_core::model::Qwen3_5ModelBase;
