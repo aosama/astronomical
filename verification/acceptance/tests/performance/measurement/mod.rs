@@ -27,6 +27,7 @@ mod row_exact_attention_verdict;
 #[cfg(feature = "performance-measurement")]
 mod sorted_expert_matmul_verdict;
 #[cfg(feature = "performance-measurement")]
+mod sorted_expert_tiled_layer_verdict;
 mod sorted_expert_token_rows_verdict;
 #[cfg(feature = "performance-measurement")]
 mod ternary_prompt_projection_verdict;

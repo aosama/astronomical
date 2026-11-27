@@ -125,6 +125,7 @@ mod seat_planned_complete_layers;
 mod streamed_expert_assignment_steps;
 pub mod streaming_model;
 mod system_wired_governance;
+mod tiled_routed_experts;
 mod token_row_gate_up;
 mod whole_model_holding;
 

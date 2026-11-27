@@ -94,6 +94,11 @@ pub struct Qwen3_5OptionalAccelerators {
     /// with MLX's bits and without the sorted copy of the rows. The model
     /// keeps it when the GPU's capability probe reproduced MLX's bits.
     pub sorted_expert_matmul_kernels: Option<crate::sorted_expert_matmul::SortedExpertMatmulKernels>,
+    /// The tiled sorted-expert kernels: a prompt chunk's routed gate, up and
+    /// their SwiGLU in one kernel from the token rows, then a tiled down, with
+    /// MLX's bits. Kept when the GPU's capability probe reproduced them; they
+    /// take precedence over the sorted-expert matmul above.
+    pub sorted_expert_tiled_kernels: Option<crate::sorted_expert_matmul::TiledExpertKernels>,
     /// When set, prompt chunks take MLX's gate and up route although the
     /// kernels above are kept, so one loaded model can time both routes in
     /// interleaved rounds. For measurements only; serving leaves it unset.

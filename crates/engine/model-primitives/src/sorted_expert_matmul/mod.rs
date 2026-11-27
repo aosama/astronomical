@@ -7,6 +7,8 @@
 pub mod dispatch_plan;
 #[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_quantized_matmul;
+#[cfg(feature = "direct-mlx")]
+pub mod tiled_expert_projection;
 
 #[cfg(test)]
 mod dispatch_plan_tests;
@@ -19,4 +21,9 @@ pub use sorted_expert_quantized_matmul::{
     ExpertStack, SORTED_EXPERT_LAYOUT, SortedExpertMatmulKernels, SortedExpertProjectionError,
     sorted_expert_quantized_matmul, sorted_expert_quantized_matmul_from_token_rows,
     sorted_expert_quantized_matmul_with_layout,
+};
+#[cfg(feature = "direct-mlx")]
+pub use tiled_expert_projection::{
+    DOWN_SCHEDULE, GATE_UP_SCHEDULE, TiledExpertKernels, TiledExpertSchedule,
+    sorted_expert_swiglu_from_token_rows, tiled_sorted_expert_matmul,
 };

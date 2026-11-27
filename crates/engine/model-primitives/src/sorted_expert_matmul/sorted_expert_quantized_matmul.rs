@@ -64,14 +64,26 @@ impl SortedExpertMatmulKernels {
         runtime: &MlxRuntime,
         row_count: i32,
     ) -> Result<MlxArray, MlxRuntimeError> {
-        let mut uploaded = self.row_count_arrays.borrow_mut();
-        if let Some(row_count_array) = uploaded.get(&row_count) {
-            return Ok(row_count_array.retain()?);
-        }
-        let row_count_array = runtime.array_from_i32(&[row_count], &[1])?;
-        uploaded.insert(row_count, row_count_array.retain()?);
-        Ok(row_count_array)
+        uploaded_i32_array(&self.row_count_arrays, runtime, row_count, &[row_count])
     }
+}
+
+/// `values` as an int32 array, uploaded once per `key` and kept in `uploads`:
+/// a prompt chunk launches the same small arrays every layer, and each upload
+/// is a host round the GPU waits on.
+pub(super) fn uploaded_i32_array<Key: Eq + std::hash::Hash + Copy>(
+    uploads: &std::cell::RefCell<std::collections::HashMap<Key, MlxArray>>,
+    runtime: &MlxRuntime,
+    key: Key,
+    values: &[i32],
+) -> Result<MlxArray, MlxRuntimeError> {
+    let mut uploaded = uploads.borrow_mut();
+    if let Some(uploaded_array) = uploaded.get(&key) {
+        return Ok(uploaded_array.retain()?);
+    }
+    let uploaded_array = runtime.array_from_i32(values, &[values.len() as i32])?;
+    uploaded.insert(key, uploaded_array.retain()?);
+    Ok(uploaded_array)
 }
 
 /// MLX's packed expert stack: `packed_weight` [experts, output, input / 8]
@@ -271,9 +283,7 @@ impl MatmulLaunch {
             self.plan.threadgroup,
             &template_arguments,
         )?;
-        outputs
-            .pop()
-            .ok_or(SortedExpertProjectionError::MissingOutput)
+        last_output(&mut outputs)
     }
 }
 
@@ -297,6 +307,13 @@ fn expert_first_rows(
         plan.first_row_threadgroup,
         &[integer("E", expert_count)],
     )?;
+    last_output(&mut outputs)
+}
+
+/// The last of a kernel launch's outputs, which every launch here has.
+pub(super) fn last_output(
+    outputs: &mut Vec<MlxArray>,
+) -> Result<MlxArray, SortedExpertProjectionError> {
     outputs
         .pop()
         .ok_or(SortedExpertProjectionError::MissingOutput)
@@ -304,7 +321,7 @@ fn expert_first_rows(
 
 /// The shape of `rows` and how many rows it holds, when they are bf16 rows
 /// `input_width` wide; the kernel refuses anything else rather than misread it.
-fn bf16_row_count(
+pub(super) fn bf16_row_count(
     rows: &MlxArray,
     input_width: i32,
     what_they_are: &str,
@@ -339,7 +356,7 @@ pub enum SortedExpertProjectionError {
     UnsupportedQuantization { description: String },
 }
 
-fn unsupported(description: String) -> SortedExpertProjectionError {
+pub(super) fn unsupported(description: String) -> SortedExpertProjectionError {
     SortedExpertProjectionError::UnsupportedQuantization { description }
 }
 
@@ -347,7 +364,7 @@ fn unsupported(description: String) -> SortedExpertProjectionError {
 /// with bf16 scales and biases. The word count alone cannot tell 4-bit
 /// group 64 from other packings, so the scales' shape and every dtype are
 /// checked and anything else is refused rather than misread.
-fn check_expert_stack(
+pub(super) fn check_expert_stack(
     experts: &ExpertStack<'_>,
 ) -> Result<(i32, i32, i32), SortedExpertProjectionError> {
     let weight_shape = experts.packed_weight.shape();

@@ -976,6 +976,16 @@ measure-sorted-expert-matmul-verdict = "run -p xtask -- test-run --package astro
 # any gate bit differs, then prints the profiler's verdict. No model; under a
 # minute.
 measure-sorted-expert-token-rows-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 120 --filter gate_and_up_from_token_rows_against_the_sorted_copy"
+# A 35B-A3B prompt chunk's routed experts (2,048 tokens, four layers) through
+# the tiled sorted-expert kernels (gate, up and their SwiGLU in one kernel
+# from the token rows, then a tiled down) against the route the engine took
+# before them (the token-row matmul for gate and for up, MLX's compiled
+# SwiGLU, MLX's sorted gather_qmm for down): fails if the down outputs differ
+# in any bit, then prints the profiler's verdict. No model; under a minute.
+measure-sorted-expert-tiled-layer-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 120 --filter tiled_routed_experts_against_todays_route"
+# The tiled sorted-expert kernels' exactness contract against MLX (gate, up
+# and SwiGLU; down), on uneven routing and at a 35B-A3B layer. Seconds.
+test-sorted-expert-tiled-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --case-budget-seconds 240 --filter sorted_expert_tiled_matmul"
 # A served 2,048-token prompt chunk on an installed 4-bit mixture-of-experts
 # pack (the 35B-A3B), its gate and up projections through the sorted-expert
 # matmul against MLX's route in one loaded model: fails if the chunk's final

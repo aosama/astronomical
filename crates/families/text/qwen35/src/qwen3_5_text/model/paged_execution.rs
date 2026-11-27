@@ -202,6 +202,18 @@ impl Qwen3_5Model {
             Some((sorted_states, sorted_indices, _, _)) => (sorted_states, sorted_indices, true),
             None => (&expanded_states, selected_expert_indices, false),
         };
+        if let Some(selected_outputs) = self.tiled_routed_expert_outputs(
+            hidden_states,
+            paged_expert_weights,
+            sorted_assignments.as_ref(),
+            selected_expert_indices,
+        )? {
+            return self.routed_assignment_outputs_from(
+                selected_outputs,
+                sorted_assignments,
+                indices_are_sorted,
+            );
+        }
         let (selected_gate, selected_up) = self.selected_gate_and_up(
             (
                 hidden_states,

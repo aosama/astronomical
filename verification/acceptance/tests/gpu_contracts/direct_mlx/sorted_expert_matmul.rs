@@ -10,7 +10,7 @@
 
 use mlx_bridge::{MlxArray, MlxDtype};
 use model_serving::sorted_expert_matmul::{
-    ExpertStack, SortedExpertLayout, SortedExpertMatmulKernels, SortedExpertProjectionError,
+    SortedExpertLayout, SortedExpertMatmulKernels, SortedExpertProjectionError,
     sorted_expert_quantized_matmul_from_token_rows, sorted_expert_quantized_matmul_with_layout,
 };
 use runtime_integration::MlxRuntime;
@@ -18,7 +18,7 @@ use serial_test::serial;
 
 use super::row_batched_matmul::initialize_runtime;
 use crate::sorted_expert_fixtures::{
-    QUANTIZATION_GROUP_SIZE, mismatched_values, quantized_expert_stack, stable_expert_sort,
+    mismatched_values, mlx_sorted_gather_qmm, quantized_expert_stack, stable_expert_sort, stack_of,
     tiled_layout,
 };
 
@@ -63,7 +63,7 @@ fn should_give_mlx_gather_qmm_bits_for_every_layout_and_uneven_routing() {
             &random_key,
         )
         .expect("rows are drawn");
-    let mlx_output = mlx_gather_qmm(&runtime, &sorted_rows, &experts, &sorted_expert_ids);
+    let mlx_output = mlx_sorted_gather_qmm(&runtime, &sorted_rows, &experts, &sorted_expert_ids);
     for layout in LAYOUTS {
         let astronomical_output = sorted_expert_quantized_matmul_with_layout(
             &runtime,
@@ -107,7 +107,7 @@ fn should_give_mlx_bits_reading_rows_straight_from_the_token_rows() {
     let sorted_rows = runtime
         .take_axis(&token_rows, &sorted_token_indices, 0)
         .expect("the sorted copy is taken");
-    let mlx_output = mlx_gather_qmm(&runtime, &sorted_rows, &experts, &sorted_expert_ids);
+    let mlx_output = mlx_sorted_gather_qmm(&runtime, &sorted_rows, &experts, &sorted_expert_ids);
     let astronomical_output = sorted_expert_quantized_matmul_from_token_rows(
         &runtime,
         &kernels,
@@ -197,38 +197,6 @@ fn should_refuse_rows_of_the_wrong_width() {
         )
         .is_err()
     );
-}
-
-type QuantizedStack = (MlxArray, MlxArray, MlxArray);
-
-fn stack_of(experts: &QuantizedStack) -> ExpertStack<'_> {
-    ExpertStack {
-        packed_weight: &experts.0,
-        scales: &experts.1,
-        biases: &experts.2,
-    }
-}
-
-fn mlx_gather_qmm(
-    runtime: &MlxRuntime,
-    sorted_rows: &MlxArray,
-    experts: &QuantizedStack,
-    sorted_expert_ids: &MlxArray,
-) -> MlxArray {
-    runtime
-        .gather_quantized_matmul_affine(
-            sorted_rows,
-            &experts.0,
-            &experts.1,
-            &experts.2,
-            None,
-            Some(sorted_expert_ids),
-            true,
-            QUANTIZATION_GROUP_SIZE,
-            4,
-            true,
-        )
-        .expect("MLX projects")
 }
 
 fn sorted_ids_from_counts(runtime: &MlxRuntime) -> MlxArray {
