@@ -26,6 +26,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AttentionWeights, Qwen3_5DecoderLayerWeights, Qwen3_5FullAttentionWeights,
     Qwen3_5LinearAttentionWeights,
 };
+use crate::qwen3_5_core::model_math::gated_delta_inputs::GatedDeltaInputs;
 use crate::qwen3_5_core::model_math::gated_delta_tree::{
     UploadedTreeRowChains, qwen3_5_gated_delta_replay, qwen3_5_gated_delta_tree,
 };
@@ -210,12 +211,14 @@ impl Qwen3_5ModelBase {
         let recurrent_output = qwen3_5_gated_delta_tree(
             &self.runtime,
             self.tree_kernel()?,
-            &queries,
-            &keys,
-            &values,
-            &decays,
-            &update_rates,
-            &recurrent_state.current_or_zero(&self.runtime)?,
+            &GatedDeltaInputs {
+                queries: &queries,
+                keys: &keys,
+                values: &values,
+                decays: &decays,
+                update_rates: &update_rates,
+                recurrent_state: &recurrent_state.current_or_zero(&self.runtime)?,
+            },
             &tree.row_chains,
         )?;
         let projected_output = self.gated_linear_attention_output(
@@ -496,12 +499,14 @@ fn commit_linear_attention(
     recurrent_state.set_next(qwen3_5_gated_delta_replay(
         runtime,
         replay_kernel,
-        &queries,
-        &keys,
-        &values,
-        &decays,
-        &update_rates,
-        &starting_state,
+        &GatedDeltaInputs {
+            queries: &queries,
+            keys: &keys,
+            values: &values,
+            decays: &decays,
+            update_rates: &update_rates,
+            recurrent_state: &starting_state,
+        },
         kept_rows,
     )?);
     Ok(())

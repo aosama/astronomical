@@ -6,6 +6,7 @@ use mlx_bridge::{MlxArray, MlxDtype};
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::file_serial;
 
+use super::gated_delta_inputs::GatedDeltaInputs;
 use super::gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
 use super::gated_delta_tree::{
     TreeRowChains, qwen3_5_gated_delta_replay, qwen3_5_gated_delta_replay_kernel,
@@ -34,6 +35,19 @@ struct RecurrenceInputs {
     decays: MlxArray,
     update_rates: MlxArray,
     recurrent_state: MlxArray,
+}
+
+impl RecurrenceInputs {
+    fn as_gated_delta_inputs(&self) -> GatedDeltaInputs<'_> {
+        GatedDeltaInputs {
+            queries: &self.queries,
+            keys: &self.keys,
+            values: &self.values,
+            decays: &self.decays,
+            update_rates: &self.update_rates,
+            recurrent_state: &self.recurrent_state,
+        }
+    }
 }
 
 fn recurrence_inputs(runtime: &MlxRuntime, row_count: i32, seed: u64) -> RecurrenceInputs {
@@ -124,12 +138,7 @@ fn tree_outputs(
     qwen3_5_gated_delta_tree(
         runtime,
         &tree_kernel,
-        &inputs.queries,
-        &inputs.keys,
-        &inputs.values,
-        &inputs.decays,
-        &inputs.update_rates,
-        &inputs.recurrent_state,
+        &inputs.as_gated_delta_inputs(),
         &TreeRowChains::from_parent_rows(parents)
             .upload(runtime)
             .expect("the chains upload"),
@@ -142,12 +151,7 @@ fn sequence_outputs(runtime: &MlxRuntime, inputs: &RecurrenceInputs) -> MlxArray
     qwen3_5_gated_delta_sequence(
         runtime,
         Some(&sequence_kernel),
-        &inputs.queries,
-        &inputs.keys,
-        &inputs.values,
-        &inputs.decays,
-        &inputs.update_rates,
-        &inputs.recurrent_state,
+        &inputs.as_gated_delta_inputs(),
     )
     .expect("the sequence recurrence runs")
     .0
@@ -302,12 +306,7 @@ fn should_replay_kept_rows_to_the_sequence_kernels_final_state_bit_for_bit() {
         let replayed = qwen3_5_gated_delta_replay(
             &runtime,
             &replay_kernel,
-            &inputs.queries,
-            &inputs.keys,
-            &inputs.values,
-            &inputs.decays,
-            &inputs.update_rates,
-            &inputs.recurrent_state,
+            &inputs.as_gated_delta_inputs(),
             &kept_rows,
         )
         .expect("the replay runs");
@@ -315,12 +314,7 @@ fn should_replay_kept_rows_to_the_sequence_kernels_final_state_bit_for_bit() {
         let (_outputs, expected_state) = qwen3_5_gated_delta_sequence(
             &runtime,
             Some(&sequence_kernel),
-            &alone.queries,
-            &alone.keys,
-            &alone.values,
-            &alone.decays,
-            &alone.update_rates,
-            &alone.recurrent_state,
+            &alone.as_gated_delta_inputs(),
         )
         .expect("the sequence recurrence runs");
         assert_eq!(

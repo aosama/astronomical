@@ -1,6 +1,7 @@
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 use model_serving::{
-    qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_step,
+    GatedDeltaInputs, qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence,
+    qwen3_5_gated_delta_step,
 };
 use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
@@ -72,12 +73,14 @@ async fn should_match_ops_loop_when_dispatching_one_complete_prefill_sequence() 
     let (fused_outputs, fused_recurrent_state) = qwen3_5_gated_delta_sequence(
         &runtime,
         Some(&gated_delta_kernel),
-        &inputs.queries,
-        &inputs.keys,
-        &inputs.values,
-        &inputs.decays,
-        &inputs.update_rates,
-        &inputs.fused_initial_recurrent_state,
+        &GatedDeltaInputs {
+            queries: &inputs.queries,
+            keys: &inputs.keys,
+            values: &inputs.values,
+            decays: &inputs.decays,
+            update_rates: &inputs.update_rates,
+            recurrent_state: &inputs.fused_initial_recurrent_state,
+        },
     )
     .expect("the fused gated-delta kernel should build a valid graph");
     let (loop_outputs, loop_recurrent_state) = apply_ops_loop(
@@ -480,12 +483,14 @@ fn apply_fused_gated_delta_chunk(
     qwen3_5_gated_delta_sequence(
         runtime,
         Some(gated_delta_kernel),
-        &queries,
-        &keys,
-        &values,
-        &decays,
-        &update_rates,
-        recurrent_state,
+        &GatedDeltaInputs {
+            queries: &queries,
+            keys: &keys,
+            values: &values,
+            decays: &decays,
+            update_rates: &update_rates,
+            recurrent_state: recurrent_state,
+        },
     )
     .expect("the fused gated-delta chunk should accept the compiled decay shape")
 }
