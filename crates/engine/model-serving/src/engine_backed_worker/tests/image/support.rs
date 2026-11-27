@@ -1,5 +1,6 @@
 //! Scripted image runtime and protocol harness shared by worker image journeys.
 
+use crate::FactoryEngines;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -299,13 +300,18 @@ pub(super) async fn start_idle_worker(
     .await
 }
 
-pub(super) async fn start_worker(
-    worker: EngineBackedWorker<
+/// A worker whose model swaps hand out the scripted chat and image runtimes.
+pub(super) type ScriptedImageWorker = EngineBackedWorker<
+    FactoryEngines<
         ScriptedChatProcessor,
         ScriptedChatEngine,
         ScriptedRuntimeFactory,
         ScriptedImageEngine,
     >,
+>;
+
+pub(super) async fn start_worker(
+    worker: ScriptedImageWorker,
 ) -> (
     ProtocolReader<tokio::io::ReadHalf<tokio::io::DuplexStream>>,
     ProtocolWriter<tokio::io::WriteHalf<tokio::io::DuplexStream>>,

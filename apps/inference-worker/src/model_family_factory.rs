@@ -11,7 +11,7 @@ use ipc_protocol::{
     WorkerEmbeddingModelConfiguration, WorkerImageGenerationModelConfiguration,
     WorkerModelConfiguration,
 };
-use model_serving::{ChatFamilyConstruction, ChatFamilySettings, ChatRuntimeParts};
+use model_serving::{ChatFamilyConstruction, ChatFamilySettings, ChatRuntimeParts, FactoryEngines};
 use model_serving::{
     DecisionEngine, EmbeddingEngine, EmbeddingFamilyConstruction, EngineBackedWorker,
     FamilyEngineSettings, ImageArtifactRefusal, ImageFamilyConstruction, ImageGenerationEngine,
@@ -61,13 +61,15 @@ type ModelFamilyRuntime = ModelFactoryRuntime<
 >;
 
 pub(crate) type InferenceWorker = EngineBackedWorker<
-    Qwen3_5GenerationProcessor,
-    ModelFamilyInferenceEngine,
-    ModelFamilyFactory,
-    Box<dyn ImageGenerationEngine>,
-    Box<dyn EmbeddingEngine>,
-    Box<dyn DecisionEngine>,
-    Box<dyn SpeechEngine>,
+    FactoryEngines<
+        Qwen3_5GenerationProcessor,
+        ModelFamilyInferenceEngine,
+        ModelFamilyFactory,
+        Box<dyn ImageGenerationEngine>,
+        Box<dyn EmbeddingEngine>,
+        Box<dyn DecisionEngine>,
+        Box<dyn SpeechEngine>,
+    >,
 >;
 
 impl ModelFamilyFactory {

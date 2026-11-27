@@ -2,65 +2,22 @@
 //! must report the identity the policy selected, and is announced with the
 //! voices it offers.
 
+use super::worker_engines::{LoadedReplacementOf, ModelFactoryRuntimeOf, WorkerEngines};
+use crate::SpeechEngine as _;
 use ipc_protocol::{WorkerEvent, WorkerModelConfiguration};
 
 use super::model_swap::LoadedReplacement;
-use super::support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};
+use super::support::{ModelFactoryRuntime, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedRuntime};
-use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{ImageGenerationEngine, InferenceEngine};
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     /// Loads a speech replacement; `load_replacement_runtime` loads every
     /// kind other than the forward-pass ones itself.
     pub(super) fn load_speech_replacement(
         &self,
-        factory_runtime: ModelFactoryRuntime<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
+        factory_runtime: ModelFactoryRuntimeOf<Engines>,
         model_configuration: &WorkerModelConfiguration,
-    ) -> Result<
-        LoadedReplacement<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
-        WorkerRuntimeError,
-    > {
+    ) -> Result<LoadedReplacementOf<Engines>, WorkerRuntimeError> {
         let ModelFactoryRuntime::Speech(mut speech_engine) = factory_runtime else {
             return Err(WorkerRuntimeError::ModelSwapFailed {
                 model_load_failure_reason: "the selected model is not a forward-pass model"

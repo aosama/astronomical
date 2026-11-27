@@ -6,6 +6,7 @@
 //! first run wires memory beside it. A few programs already started finish during a
 //! generation, and the rest wait for it to end.
 
+use super::worker_engines::WorkerEngines;
 use std::time::Duration;
 
 use ipc_protocol::{
@@ -13,43 +14,16 @@ use ipc_protocol::{
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use super::support::{ModelFactory, WorkerRuntimeError};
+use super::support::WorkerRuntimeError;
 use super::{EngineBackedWorker, LoadedRuntime};
-use crate::model_generation_processor::ModelGenerationProcessor;
-use crate::{ImageGenerationEngine, InferenceEngine};
+use crate::InferenceEngine;
 
 /// Often enough that a reused program, which takes about a tenth of a second, waits
 /// about as long again for the next one, and rare enough to cost an idle worker
 /// nothing it would notice.
 const PREPARATION_STEP_INTERVAL: Duration = Duration::from_millis(100);
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     /// The next command, stepping any preparation along until one arrives. Without
     /// a preparation running this is a plain wait, so an idle worker never wakes.
     pub(super) async fn next_idle_command_preparing_neural_engine<ReadTransport, WriteTransport>(

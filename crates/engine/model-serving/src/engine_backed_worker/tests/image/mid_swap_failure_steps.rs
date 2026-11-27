@@ -8,8 +8,8 @@ use ipc_protocol::{
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::support::{
-    ScriptedImageEngine, ScriptedRuntime, ScriptedRuntimeFactory, completed_step,
-    image_configuration, next_event, swap_image_command,
+    ScriptedImageEngine, ScriptedImageWorker, ScriptedRuntime, ScriptedRuntimeFactory,
+    completed_step, image_configuration, next_event, swap_image_command,
 };
 use crate::engine_backed_worker::tests::chat::scripted_chat_test_doubles::{
     ScriptedChatEngine, ScriptedChatProcessor,
@@ -19,12 +19,7 @@ use crate::{EngineBackedWorker, EnginePlacement};
 
 /// The factory hands out a chat runtime, an image runtime, a load failure and a
 /// second chat runtime, in the order the journey swaps models.
-pub(super) fn idle_worker_scripted_to_fail_its_third_model_load() -> EngineBackedWorker<
-    ScriptedChatProcessor,
-    ScriptedChatEngine,
-    ScriptedRuntimeFactory,
-    ScriptedImageEngine,
-> {
+pub(super) fn idle_worker_scripted_to_fail_its_third_model_load() -> ScriptedImageWorker {
     let factory = ScriptedRuntimeFactory::new(vec![
         Ok(ScriptedRuntime::autoregressive(
             ScriptedChatProcessor::new(),

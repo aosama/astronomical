@@ -1,25 +1,6 @@
-use crate::{EmbeddingUnavailableEngine, ImageGenerationUnavailableEngine};
-
-pub struct EngineBackedWorker<
-    Processor,
-    Engine,
-    Factory = (),
-    ImageEngine = ImageGenerationUnavailableEngine,
-    EmbeddingEngine = EmbeddingUnavailableEngine,
-    DecisionsEngine = crate::DecisionUnavailableEngine,
-    TextToSpeechEngine = crate::SpeechUnavailableEngine,
-> {
-    pub(crate) loaded_runtime: Option<
-        LoadedRuntime<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        >,
-    >,
-    pub(crate) model_factory: Option<Factory>,
+pub struct EngineBackedWorker<Engines: worker_engines::WorkerEngines> {
+    pub(crate) loaded_runtime: Option<worker_engines::LoadedRuntimeOf<Engines>>,
+    pub(crate) model_factory: Option<Engines::Factory>,
     pub(crate) machine_mlx_memory_ceiling_bytes: u64,
     pub(crate) effective_mlx_memory_ceiling_bytes: u64,
     pub(crate) minimum_mlx_memory_ceiling_bytes: u64,
@@ -60,8 +41,8 @@ pub(crate) enum LoadedRuntime<
     Image(ImageEngine),
     Embeddings(EmbeddingEngine),
     Decisions(DecisionsEngine),
-    /// Held boxed rather than as another type parameter: every family is
-    /// one trait object, and the worker's generic list stays as it is.
+    /// Every speech family is one trait object, so the worker's bundle of
+    /// engine types (`WorkerEngines`) names a single speech engine.
     Speech(TextToSpeechEngine),
 }
 
@@ -94,8 +75,10 @@ mod stepped_request;
 mod support;
 mod token_count;
 mod trained_tensors_handover_writing;
+mod worker_engines;
 
 pub use support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};
+pub use worker_engines::{DirectEngines, FactoryEngines, WorkerEngines};
 
 #[cfg(test)]
 mod tests;

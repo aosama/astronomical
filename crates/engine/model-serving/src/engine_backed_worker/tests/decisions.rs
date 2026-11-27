@@ -2,6 +2,7 @@
 //! is swapped in, answers requests, reports failures as request outcomes,
 //! and finalizes every request with its memory observation.
 
+use crate::FactoryEngines;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
@@ -39,12 +40,14 @@ type ScriptedDecisionRuntime = ModelFactoryRuntime<
 >;
 
 type DecisionsWorker = EngineBackedWorker<
-    ScriptedChatProcessor,
-    ScriptedChatEngine,
-    ScriptedDecisionFactory,
-    ImageGenerationUnavailableEngine,
-    EmbeddingUnavailableEngine,
-    ScriptedDecisionEngine,
+    FactoryEngines<
+        ScriptedChatProcessor,
+        ScriptedChatEngine,
+        ScriptedDecisionFactory,
+        ImageGenerationUnavailableEngine,
+        EmbeddingUnavailableEngine,
+        ScriptedDecisionEngine,
+    >,
 >;
 
 type DaemonReader = ProtocolReader<tokio::io::ReadHalf<tokio::io::DuplexStream>>;

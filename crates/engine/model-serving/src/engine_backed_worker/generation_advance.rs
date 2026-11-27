@@ -1,3 +1,4 @@
+use super::worker_engines::{RequestOutputOf, WorkerEngines};
 use std::time::Instant;
 
 use ipc_protocol::{
@@ -6,12 +7,10 @@ use ipc_protocol::{
 use tokio::io::AsyncWrite;
 
 use super::fatal;
-use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
+use super::support::{ActiveEngineGeneration, WorkerRuntimeError};
 use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::model_generation_processor::{ModelGenerationOutputError, ModelGenerationProcessor};
-use crate::{
-    ExpertMemoryMode, GeneratedToken, ImageGenerationEngine, InferenceEngine, InferenceEngineError,
-};
+use crate::{ExpertMemoryMode, GeneratedToken, InferenceEngine, InferenceEngineError};
 
 use super::{EngineBackedWorker, LoadedRuntime};
 
@@ -54,38 +53,12 @@ fn increment_decode_token_counters<RequestOutput>(
     Ok(())
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
-    EngineBackedWorker<
-        Processor,
-        Engine,
-        Factory,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-        TextToSpeechEngine,
-    >
-where
-    Processor: ModelGenerationProcessor + Send + 'static,
-    Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<
-            Processor,
-            Engine,
-            ImageEngine,
-            EmbeddingsEngine,
-            DecisionsEngine,
-            TextToSpeechEngine,
-        > + Send
-        + 'static,
-    ImageEngine: ImageGenerationEngine,
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-    TextToSpeechEngine: crate::SpeechEngine,
-{
+impl<Engines: WorkerEngines> EngineBackedWorker<Engines> {
     pub(crate) async fn advance_generation<WriteTransport>(
         &mut self,
-        active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: ActiveEngineGeneration<RequestOutputOf<Engines>>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveEngineGeneration<RequestOutputOf<Engines>>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -146,11 +119,11 @@ where
     /// `match`.
     async fn advance_generated_token<WriteTransport>(
         &mut self,
-        active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: ActiveEngineGeneration<RequestOutputOf<Engines>>,
         generated_token: GeneratedToken,
         request_id: RequestId,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveEngineGeneration<RequestOutputOf<Engines>>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -204,10 +177,10 @@ where
     /// generation rather than guessed at.
     async fn advance_prompt_phase_token<WriteTransport>(
         &mut self,
-        active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: ActiveEngineGeneration<RequestOutputOf<Engines>>,
         prompt_phase_token: GeneratedToken,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveEngineGeneration<RequestOutputOf<Engines>>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -286,7 +259,7 @@ where
     #[allow(clippy::too_many_arguments)]
     async fn advance_decoded_token<WriteTransport>(
         &mut self,
-        mut active_generation: ActiveEngineGeneration<Processor::RequestOutput>,
+        mut active_generation: ActiveEngineGeneration<RequestOutputOf<Engines>>,
         generated_token_id: u32,
         is_reasoning_token: bool,
         expert_memory_mode: Option<ExpertMemoryMode>,
@@ -295,7 +268,7 @@ where
         generation_finalization: Option<Box<crate::GenerationFinalization>>,
         request_id: RequestId,
         event_writer: &mut ProtocolWriter<WriteTransport>,
-    ) -> Result<Option<ActiveEngineGeneration<Processor::RequestOutput>>, WorkerRuntimeError>
+    ) -> Result<Option<ActiveEngineGeneration<RequestOutputOf<Engines>>>, WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
@@ -373,7 +346,7 @@ where
     #[allow(clippy::too_many_arguments)]
     async fn note_decode_step_telemetry<WriteTransport>(
         &mut self,
-        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: &mut ActiveEngineGeneration<RequestOutputOf<Engines>>,
         first_decode_forward_elapsed_millis: Option<u64>,
         generation_finalization: Option<Box<crate::GenerationFinalization>>,
         expert_memory_mode: Option<ExpertMemoryMode>,
@@ -424,7 +397,7 @@ where
     /// Mirrors the translation block of the inlined `TokenId` arm.
     async fn translate_decoded_token<WriteTransport>(
         &mut self,
-        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: &mut ActiveEngineGeneration<RequestOutputOf<Engines>>,
         generated_token_id: u32,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<DecodedTokenTranslation, WorkerRuntimeError>
@@ -484,7 +457,7 @@ where
     /// `Ok(None)` means the generation is over (rejected or fatally reported).
     async fn inject_model_feedback_tokens<WriteTransport>(
         &mut self,
-        active_generation: &mut ActiveEngineGeneration<Processor::RequestOutput>,
+        active_generation: &mut ActiveEngineGeneration<RequestOutputOf<Engines>>,
         request_id: RequestId,
         model_feedback_token_ids: Vec<u32>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
