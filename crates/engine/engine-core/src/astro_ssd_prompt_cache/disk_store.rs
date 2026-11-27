@@ -21,6 +21,7 @@ use super::disk_store_global_quota::{
 use super::disk_store_index::AstroSsdPromptCacheDiskStoreIndex;
 use super::disk_store_scan;
 use super::model_contract::AstroSsdPromptCacheModelContract;
+use super::pending_publications::AstroSsdPromptCachePendingPublications;
 use super::startup_cleanup_evidence::AstroSsdPromptCacheStartupCleanupEvidence;
 use mlx_bridge::MlxArray;
 use runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
@@ -82,6 +83,10 @@ pub struct AstroSsdPromptCacheDiskStore {
     tracked_files: Mutex<AstroSsdPromptCacheDiskStoreIndex>,
     write_operations: Mutex<()>,
     pending_startup_cleanup_evidence: Mutex<Option<AstroSsdPromptCacheStartupCleanupEvidence>>,
+    /// Blocks the background writer (`publication_queue`) still holds. Every
+    /// reader below that answers "is this block stored" or loads one drains
+    /// it first; the writer's own publish path uses none of them.
+    pending_publications: Arc<AstroSsdPromptCachePendingPublications>,
 }
 
 impl AstroSsdPromptCacheDiskStore {
@@ -131,6 +136,7 @@ impl AstroSsdPromptCacheDiskStore {
             tracked_files: Mutex::new(tracked_files),
             write_operations: Mutex::new(()),
             pending_startup_cleanup_evidence: Mutex::new(startup_cleanup_evidence.into_non_empty()),
+            pending_publications: Arc::new(AstroSsdPromptCachePendingPublications::new()),
         };
         // Stale bytes must disappear before quota considers deleting useful
         // content. Retention reconciliation then protects the validated active
@@ -144,11 +150,24 @@ impl AstroSsdPromptCacheDiskStore {
         &self.model_contract
     }
 
+    /// The count the background writer and this store's readers share.
+    #[must_use]
+    pub fn pending_publications(&self) -> Arc<AstroSsdPromptCachePendingPublications> {
+        Arc::clone(&self.pending_publications)
+    }
+
+    /// Returns once every block queued for the background writer is on disk.
+    pub fn wait_for_queued_publications(&self) {
+        self.pending_publications.wait_until_drained();
+    }
+
     pub fn sequence_state_block_count(&self) -> usize {
+        self.wait_for_queued_publications();
         self.lock_tracked_files().sequence_state_block_count()
     }
 
     pub fn boundary_state_snapshot_count(&self) -> usize {
+        self.wait_for_queued_publications();
         self.lock_tracked_files().boundary_state_snapshot_count()
     }
 
@@ -159,6 +178,7 @@ impl AstroSsdPromptCacheDiskStore {
     /// Returns the tracked on-disk size of one sequence-state block file.
     #[must_use]
     pub fn sequence_state_block_file_size_bytes(&self, block_hash: &[u8; 32]) -> Option<u64> {
+        self.wait_for_queued_publications();
         self.lock_tracked_files()
             .file(AstroSsdPromptCacheFileKind::SequenceStateBlock, block_hash)
             .map(|tracked_file| tracked_file.file_size_bytes)
@@ -167,6 +187,7 @@ impl AstroSsdPromptCacheDiskStore {
     /// Returns the tracked on-disk size of one recurrent-boundary snapshot file.
     #[must_use]
     pub fn recurrent_snapshot_file_size_bytes(&self, block_hash: &[u8; 32]) -> Option<u64> {
+        self.wait_for_queued_publications();
         self.lock_tracked_files()
             .file(
                 AstroSsdPromptCacheFileKind::BoundaryStateSnapshot,
@@ -176,10 +197,12 @@ impl AstroSsdPromptCacheDiskStore {
     }
 
     pub fn has_kv_block(&self, block_hash: &[u8; 32]) -> bool {
+        self.wait_for_queued_publications();
         self.tracked_file_still_exists(AstroSsdPromptCacheFileKind::SequenceStateBlock, block_hash)
     }
 
     pub fn has_recurrent_snapshot(&self, block_hash: &[u8; 32]) -> bool {
+        self.wait_for_queued_publications();
         self.tracked_file_still_exists(
             AstroSsdPromptCacheFileKind::BoundaryStateSnapshot,
             block_hash,
@@ -323,6 +346,8 @@ impl AstroSsdPromptCacheDiskStore {
         file_kind: AstroSsdPromptCacheFileKind,
         positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
     ) -> Result<Option<HashMap<String, MlxArray>>, AstroSsdPromptCacheDiskStoreError> {
+        // A block still queued for the background writer is not on disk yet.
+        self.wait_for_queued_publications();
         // Clone the path while holding the short index lock, then perform disk
         // and MLX work unlocked so unrelated astro SSD prompt cache lookups are not serialized.
         let block_file_path = {

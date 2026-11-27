@@ -51,14 +51,21 @@ mod disk_store_visual_embeddings;
 mod disk_store_write;
 #[cfg(test)]
 mod frozen_ornith_test_support;
+#[cfg(feature = "direct-mlx")]
+pub mod host_safetensors_writer;
+#[cfg(feature = "direct-mlx")]
+pub mod host_state_tensor;
 mod model_contract;
 mod model_contract_error;
 mod model_contract_storage_geometry;
 mod partial_tail_probe;
+pub mod pending_publications;
 pub mod persistent_safetensors_header;
 mod prefill_boundary;
 pub mod prefix_lookup;
 pub mod prefix_lookup_steps;
+#[cfg(feature = "direct-mlx")]
+pub mod publication_queue;
 #[cfg(feature = "direct-mlx")]
 pub mod quota_bounded_contract;
 #[cfg(feature = "direct-mlx")]
@@ -71,6 +78,8 @@ mod restore_support_tests_support;
 mod retention_policy;
 #[cfg(feature = "direct-mlx")]
 mod startup_cleanup_evidence;
+#[cfg(test)]
+mod synthetic_contract_test_support;
 // Pure planning like `capture_planning`, so its tests run in every build.
 #[cfg(any(test, feature = "direct-mlx"))]
 pub mod tail_capture_planning;
@@ -91,8 +100,15 @@ pub use disk_store_clear::{
 pub use disk_store_error::AstroSsdPromptCacheDiskStoreError;
 #[cfg(feature = "direct-mlx")]
 pub use disk_store_write::AstroSsdPromptCachePublicationOutcome;
+#[cfg(feature = "direct-mlx")]
+pub use host_state_tensor::{AstroSsdPromptCacheHostTensors, copy_state_tensors_to_host};
 pub use model_contract::AstroSsdPromptCacheModelContract;
 pub use model_contract_error::AstroSsdPromptCacheModelContractError;
+#[cfg(feature = "direct-mlx")]
+pub use publication_queue::{
+    AstroSsdPromptCachePublicationJob, AstroSsdPromptCachePublicationQueue,
+    MAXIMUM_QUEUED_PUBLICATION_PAYLOAD_BYTES,
+};
 // Only the direct-MLX engines consume the span type and resolver; a
 // default-features build has no consumer, and an ungated re-export there
 // is dead code the compiler must reject.

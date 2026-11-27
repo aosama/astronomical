@@ -9,6 +9,7 @@ mod astro_ssd_prompt_cache_disk_store_rollback;
 mod astro_ssd_prompt_cache_disk_store_scan;
 mod astro_ssd_prompt_cache_disk_store_support;
 mod astro_ssd_prompt_cache_global_quota_topology;
+mod astro_ssd_prompt_cache_host_written_restore;
 mod astro_ssd_prompt_cache_layout_topology;
 mod astro_ssd_prompt_cache_partial_tail_disk_store;
 mod astro_ssd_prompt_cache_publication_retry;

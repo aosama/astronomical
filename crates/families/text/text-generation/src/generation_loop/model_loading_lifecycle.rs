@@ -30,6 +30,9 @@ use super::model_loading_steps::{
 };
 use super::serving_artifact::TextServingArtifact;
 use crate::model::text_model::TextModel;
+use engine_core::astro_ssd_prompt_cache::{
+    AstroSsdPromptCachePublicationQueue, MAXIMUM_QUEUED_PUBLICATION_PAYLOAD_BYTES,
+};
 
 /// The points in a load where the engines differ. The Qwen3.5 text engine
 /// opens its memory governor as the model loads; the folded-ternary engine
@@ -199,6 +202,11 @@ fn install_loaded_model<Engine: TextModelLoadingHooks>(
     execution_core.astro_ssd_prompt_cache_model_contract = astro_ssd_prompt_cache_model_contract;
     execution_core.persistent_visual_embedding_model_contract =
         persistent_visual_embedding_model_contract;
+    // The old writer, if any, is dropped first so its queued blocks reach the
+    // old store before the new one takes over.
+    execution_core.astro_ssd_prompt_cache_publication_queue = None;
+    execution_core.astro_ssd_prompt_cache_publication_queue =
+        started_publication_queue(astro_ssd_prompt_cache.as_ref());
     execution_core.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
     let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
     let resident_model_payload_bytes = Some(model.resident_model_payload_byte_count());
@@ -226,6 +234,28 @@ struct ModelLoadingRecord {
     resident_model_payload_bytes: Option<u64>,
     mlx_memory_snapshot: Option<MlxMemorySnapshot>,
     failure_description: Option<String>,
+}
+
+/// The background writer for `astro_ssd_prompt_cache`, or `None` when no
+/// store is open or the operating system refuses the thread; blocks are then
+/// written on the engine thread, as before the writer existed.
+fn started_publication_queue(
+    astro_ssd_prompt_cache: Option<&Arc<AstroSsdPromptCacheDiskStore>>,
+) -> Option<AstroSsdPromptCachePublicationQueue> {
+    let astro_ssd_prompt_cache = astro_ssd_prompt_cache?;
+    match AstroSsdPromptCachePublicationQueue::start(
+        Arc::clone(astro_ssd_prompt_cache),
+        MAXIMUM_QUEUED_PUBLICATION_PAYLOAD_BYTES,
+    ) {
+        Ok(publication_queue) => Some(publication_queue),
+        Err(thread_start_error) => {
+            tracing::warn!(
+                %thread_start_error,
+                "astro_ssd_prompt_cache writer did not start; blocks are written while the prompt is read"
+            );
+            None
+        }
+    }
 }
 
 /// Finishes the loading attribution and appends it to the log. A write that
