@@ -18,18 +18,21 @@
 //! The library is native code compiled by this crate's build script against
 //! the patched MLX sources; `native_interface` is its safe owner. Everything
 //! here needs MLX, so the crate is empty without the `direct-mlx` feature.
+//! The library exists on macOS only: elsewhere the build script compiles
+//! nothing, and `native_unavailable` refuses every measurement with the
+//! reason, so callers compile unchanged on every platform (issue #2683).
 
 // The only module that needs unsafe code: it hands the native library a
 // pointer to the caller's job and receives it back while a pass builds its
 // graph. Every block carries its SAFETY argument.
-#[cfg(feature = "direct-mlx")]
+#[cfg(all(feature = "direct-mlx", target_os = "macos"))]
 #[allow(unsafe_code)]
 mod native_interface;
 
 #[cfg(feature = "direct-mlx")]
 mod measurement;
 
-#[cfg(feature = "direct-mlx")]
+#[cfg(all(feature = "direct-mlx", target_os = "macos"))]
 #[allow(unsafe_code)]
 mod native_procedures;
 
@@ -37,8 +40,14 @@ mod native_procedures;
 mod procedure_measurement;
 
 // Two synchronous calls into the library, each writing one local struct.
-#[cfg(feature = "direct-mlx")]
+#[cfg(all(feature = "direct-mlx", target_os = "macos"))]
 #[allow(unsafe_code)]
+mod native_wired_memory;
+
+#[cfg(all(feature = "direct-mlx", not(target_os = "macos")))]
+mod native_unavailable;
+
+#[cfg(feature = "direct-mlx")]
 mod wired_memory;
 
 #[cfg(feature = "direct-mlx")]
@@ -65,3 +74,6 @@ mod procedure_measurement_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod wired_memory_tests;
+
+#[cfg(all(test, feature = "direct-mlx", not(target_os = "macos")))]
+mod native_unavailable_tests;
