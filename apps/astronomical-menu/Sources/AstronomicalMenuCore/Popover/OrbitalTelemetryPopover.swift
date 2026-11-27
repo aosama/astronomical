@@ -64,7 +64,7 @@ struct OrbitalTelemetryPopover: View {
       Divider()
       activityRows(statusDocument)
       Divider()
-      SessionSpeedTiles(statusDocument: statusDocument)
+      SessionSpeedTiles(tilesPresentation: telemetryStore.sessionSpeedTiles)
       Divider()
       // Everyday rows answer "what is it doing and how much memory"; the technical rows answer
       // a developer's questions and appear only when the person asks for them in Settings.

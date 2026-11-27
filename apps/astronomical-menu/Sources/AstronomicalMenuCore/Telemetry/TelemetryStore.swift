@@ -31,6 +31,9 @@ enum ControlActionFeedback: Equatable {
 final class TelemetryStore: ObservableObject {
   @Published private(set) var statusDocument = DaemonStatusDocument.unavailable
   @Published private(set) var systemTelemetrySnapshot = SystemTelemetrySnapshot.unavailable
+  /// The popover's speed tiles, refreshed at most once a second (`SessionSpeedTilesHold`).
+  @Published private(set) var sessionSpeedTiles = SessionSpeedTilesPresentation(
+    statusDocument: .unavailable)
   @Published private(set) var controlActionFeedback: ControlActionFeedback?
   @Published private(set) var lastStatusRefreshErrorMessage: String?
   private var statusPollJournal = StatusPollJournal()
@@ -50,6 +53,7 @@ final class TelemetryStore: ObservableObject {
   private let workerPolicyConfirmationRetryDelay: Duration
   private let systemTelemetrySampler = SystemTelemetrySampler()
   private let systemTelemetryClock = ContinuousClock()
+  private var sessionSpeedTilesHold = SessionSpeedTilesHold()
   private var pollingTask: Task<Void, Never>?
   private var latestStatusRefreshTask: Task<DaemonStatusDocument, Never>?
   private var neuralEngineBannerPolicy = NeuralEngineBannerPolicy()
@@ -100,7 +104,11 @@ final class TelemetryStore: ObservableObject {
 
   func setPopoverVisible(_ popoverIsVisible: Bool) {
     self.popoverIsVisible = popoverIsVisible
-    if popoverIsVisible { updateSystemTelemetryIfDue(forceUpdate: true) }
+    if popoverIsVisible {
+      updateSystemTelemetryIfDue(forceUpdate: true)
+      // An opened popover shows the latest figures, never ones held from before it closed.
+      updateSessionSpeedTiles(for: statusDocument, showsAtOnce: true)
+    }
   }
 
   func reloadConfiguration() {
@@ -299,9 +307,19 @@ final class TelemetryStore: ObservableObject {
     lastSystemTelemetrySampleTime = currentSampleTime
   }
 
+  private func updateSessionSpeedTiles(
+    for latestStatusDocument: DaemonStatusDocument, showsAtOnce: Bool
+  ) {
+    let shownTiles = sessionSpeedTilesHold.presentation(
+      for: SessionSpeedTilesPresentation(statusDocument: latestStatusDocument),
+      at: systemTelemetryClock.now, showsAtOnce: showsAtOnce)
+    if shownTiles != sessionSpeedTiles { sessionSpeedTiles = shownTiles }
+  }
+
   private func apply(_ nextStatusDocument: DaemonStatusDocument) {
     let previouslyAppliedWholeGigabytes = appliedMaximumMlxMemoryWholeGigabytes(for: statusDocument)
     statusDocument = nextStatusDocument
+    updateSessionSpeedTiles(for: nextStatusDocument, showsAtOnce: false)
     editableMaximumMlxMemoryGigabytes = maximumModelMemoryThumbAfterStatusPoll(
       chosenWholeGigabytes: editableMaximumMlxMemoryGigabytes,
       previouslyAppliedWholeGigabytes: previouslyAppliedWholeGigabytes,

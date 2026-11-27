@@ -249,7 +249,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "37.25 GB")
     XCTAssertEqual(
       SessionSpeedTilesPresentation(statusDocument: statusDocument).caption,
-      "Average this session · 4 requests")
+      "Average this session · 4 requests, 1 running")
     XCTAssertEqual(statusDocument.modelDiskSizeTitle, "17.15 GB")
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.expertPayloadByteCount, 5_000_000_000)
     XCTAssertEqual(statusDocument.mlxMemoryBreakdown.runtimeWorkByteCount, 2_000_000_000)

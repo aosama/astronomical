@@ -2,21 +2,12 @@
 
 use std::sync::{Arc, RwLock};
 
-use ipc_protocol::{ModelLoadInFlight, WorkerModelCapabilities};
+use ipc_protocol::ModelLoadInFlight;
 
+use super::health_test_support::no_capabilities;
 use super::{
     WorkerHealthSnapshot, WorkerHealthStatus, publish_health, publish_model_load_in_flight,
 };
-
-fn no_capabilities() -> WorkerModelCapabilities {
-    WorkerModelCapabilities {
-        chat: None,
-        image_generation: None,
-        embeddings: None,
-        decisions: None,
-        speech: None,
-    }
-}
 
 fn opening_report() -> ModelLoadInFlight {
     ModelLoadInFlight::for_model("next-model")

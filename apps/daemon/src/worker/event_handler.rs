@@ -18,10 +18,11 @@ use crate::{
     worker::chat_event_handler::dispatch_chat_generation_event,
     worker::health::{
         clear_latest_mlx_memory_snapshot, publish_astro_ssd_prompt_cache_stats,
-        publish_draft_model, publish_expert_memory_mode, publish_expert_streaming_stats,
-        publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
-        publish_mlx_memory_limit_rejection, publish_model_load_in_flight,
-        publish_neural_engine_prefill, publish_worker_expert_residency,
+        publish_custom_metal_kernels, publish_draft_model, publish_expert_memory_mode,
+        publish_expert_streaming_stats, publish_latest_mlx_memory_snapshot,
+        publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
+        publish_model_load_in_flight, publish_neural_engine_prefill,
+        publish_worker_expert_residency,
     },
     worker::loop_types::ActiveWorkerRequest,
 };
@@ -46,6 +47,7 @@ pub(super) fn handle_worker_event(
         | WorkerEvent::ExpertMemoryModeChanged { .. }
         | WorkerEvent::NeuralEnginePrefillChanged { .. }
         | WorkerEvent::DraftModelChanged { .. }
+        | WorkerEvent::CustomMetalKernelsChanged { .. }
         | WorkerEvent::NeuralEngineChunkFinished { .. }
         | WorkerEvent::ModelLoadInFlight { .. }
         | WorkerEvent::MlxMemorySample { .. }
@@ -244,10 +246,12 @@ fn apply_model_state_event(
             // what it last said about them no longer describes anything.
             publish_neural_engine_prefill(health_snapshot, None);
             publish_draft_model(health_snapshot, None);
+            publish_custom_metal_kernels(health_snapshot, None);
             publish_model_load_in_flight(health_snapshot, Some(model_load_in_flight));
         }
         // `apply_health_publication_event` routes only the model-state events
-        // here, so what remains is the Neural Engine's report or the drafter's.
+        // here, so what remains is the Neural Engine's report, the drafter's or
+        // the custom kernels'.
         engine_status_event => {
             crate::worker::health::publish_engine_status_event(
                 health_snapshot,

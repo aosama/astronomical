@@ -346,6 +346,7 @@ fn observe_sweep_worker_event(
         | WorkerEvent::ExpertMemoryModeChanged { .. }
         | WorkerEvent::NeuralEnginePrefillChanged { .. }
         | WorkerEvent::DraftModelChanged { .. }
+        | WorkerEvent::CustomMetalKernelsChanged { .. }
         | WorkerEvent::DraftingReport { .. }
         | WorkerEvent::NeuralEngineChunkFinished { .. }
         | WorkerEvent::ModelLoadInFlight { .. }

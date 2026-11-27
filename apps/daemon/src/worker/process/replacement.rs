@@ -376,6 +376,7 @@ async fn read_candidate_acknowledgement(
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::NeuralEnginePrefillChanged { .. }
             | WorkerEvent::DraftModelChanged { .. }
+            | WorkerEvent::CustomMetalKernelsChanged { .. }
             | WorkerEvent::AstroSsdPromptCacheStats { .. }) => {
                 if deferred_process_events.len() >= MAXIMUM_DEFERRED_CANDIDATE_PROCESS_EVENTS {
                     return Err(WorkerControlError::CandidateProtocolViolation {

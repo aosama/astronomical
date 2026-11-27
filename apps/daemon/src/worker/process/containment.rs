@@ -198,6 +198,7 @@ async fn read_recovery_acknowledgement(
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::NeuralEnginePrefillChanged { .. }
             | WorkerEvent::DraftModelChanged { .. }
+            | WorkerEvent::CustomMetalKernelsChanged { .. }
             | WorkerEvent::AstroSsdPromptCacheStats { .. } => {}
             _ => {
                 return Err(WorkerControlError::WorkerProtocolViolation {
@@ -416,7 +417,8 @@ fn react_to_cancellation_event(
         // Sent while the worker was idle (after a load or an engine switch)
         // and still unread when this request started.
         engine_status_event @ (WorkerEvent::NeuralEnginePrefillChanged { .. }
-        | WorkerEvent::DraftModelChanged { .. }) => {
+        | WorkerEvent::DraftModelChanged { .. }
+        | WorkerEvent::CustomMetalKernelsChanged { .. }) => {
             crate::worker::health::publish_engine_status_event(
                 health_snapshot,
                 engine_status_event,

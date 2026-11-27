@@ -1,12 +1,12 @@
-// Draws the popover's two speed tiles; SessionSpeedTilesPresentation decides what they say.
+// Draws the popover's two speed tiles; SessionSpeedTilesPresentation decides what they say and
+// TelemetryStore refreshes them once a second.
 
 import SwiftUI
 
 struct SessionSpeedTiles: View {
-  let statusDocument: DaemonStatusDocument
+  let tilesPresentation: SessionSpeedTilesPresentation
 
   var body: some View {
-    let tilesPresentation = SessionSpeedTilesPresentation(statusDocument: statusDocument)
     VStack(alignment: .leading, spacing: 4) {
       HStack(alignment: .top, spacing: 16) {
         tileView(tilesPresentation.readingTile)
@@ -18,22 +18,14 @@ struct SessionSpeedTiles: View {
 
   private func tileView(_ speedTile: SessionSpeedTile) -> some View {
     VStack(alignment: .leading, spacing: 2) {
-      HStack(spacing: 4) {
-        Text(speedTile.title).font(.caption).foregroundStyle(.secondary)
-        if speedTile.isLive {
-          Text("now")
-            .font(.caption2)
-            .padding(.horizontal, 5)
-            .background(AstronomicalBrandPalette.accentColor.opacity(0.2), in: Capsule())
-        }
-      }
+      Text(speedTile.title).font(.caption).foregroundStyle(.secondary)
       Text(speedTile.speedTitle).font(PopoverTypography.monospacedBody).lineLimit(1)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .help(speedTile.explanation)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(
-      "\(speedTile.title)\(speedTile.isLive ? ", now" : ""): \(speedTile.speedTitle). \(speedTile.explanation)"
+      "\(speedTile.title): \(speedTile.speedTitle). \(speedTile.explanation)"
     )
   }
 }
