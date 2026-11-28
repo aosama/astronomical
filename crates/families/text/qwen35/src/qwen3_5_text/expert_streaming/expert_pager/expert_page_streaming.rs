@@ -61,7 +61,7 @@ impl Qwen3_5ExpertPager {
         require_streamed_page_admission(
             runtime,
             self,
-            &page_admission_label,
+            (&page_admission_label, serving_phase),
             pending_page_allocation_bytes,
             performance_attribution,
         )?;
@@ -109,6 +109,33 @@ impl Qwen3_5ExpertPager {
             page_manifest.payload_byte_count,
         );
         Ok((streamed_weights, page_manifest))
+    }
+
+    /// Refuses this page once when a test armed the refusal and a reply is
+    /// being written. Worded as admission words a page one byte short, so
+    /// the engine treats it as it treats the real refusal.
+    fn refuse_armed_reply_page_once(
+        &self,
+        serving_phase: SessionStreamingPhase,
+        page_admission_label: &str,
+        pending_page_allocation_bytes: u64,
+    ) -> Result<(), ExpertPagingError> {
+        if !matches!(serving_phase, SessionStreamingPhase::Decode)
+            || !self.reply_page_refusal_armed_for_tests.replace(false)
+        {
+            return Ok(());
+        }
+        let active_memory_ceiling_bytes = self.memory_budget.active_memory_ceiling_bytes();
+        Err(ExpertPagingError::MemoryBudget(
+            crate::MlxAllocationAdmissionError::Rejected {
+                stage: format!("{page_admission_label} refused by a test"),
+                boundary: engine_core::memory::MemoryBoundary::AllocationProjection,
+                shortfall_bytes: 1,
+                active_memory_bytes: active_memory_ceiling_bytes,
+                pending_allocation_bytes: pending_page_allocation_bytes,
+                active_memory_ceiling_bytes,
+            },
+        ))
     }
 
     /// Records one loaded page in both ledgers and in the phase-scoped
@@ -233,11 +260,34 @@ pub(crate) fn streamed_page_admission_label(
     )
 }
 
+/// Admits one streamed page, after the refusal a test may have armed for
+/// the next page of a reply.
+fn require_streamed_page_admission(
+    runtime: &runtime_integration::MlxRuntime,
+    expert_pager: &Qwen3_5ExpertPager,
+    (page_admission_label, serving_phase): (&str, SessionStreamingPhase),
+    pending_page_allocation_bytes: u64,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<(), ExpertPagingError> {
+    expert_pager.refuse_armed_reply_page_once(
+        serving_phase,
+        page_admission_label,
+        pending_page_allocation_bytes,
+    )?;
+    require_page_fits_live_memory(
+        runtime,
+        expert_pager,
+        page_admission_label,
+        pending_page_allocation_bytes,
+        performance_attribution,
+    )
+}
+
 /// Admission must happen before opening/loading source ranges. It checks the
 /// exact payload against current active memory and the shared ceiling; forward
 /// admission has already reclaimed experts for persistent and transient
 /// growth. Loading first would spend I/O on an unusable page.
-fn require_streamed_page_admission(
+fn require_page_fits_live_memory(
     runtime: &runtime_integration::MlxRuntime,
     expert_pager: &Qwen3_5ExpertPager,
     page_admission_label: &str,

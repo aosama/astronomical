@@ -1235,6 +1235,10 @@ test-hosted-drafter-reply = "run -p xtask -- test-run --package astronomical-acc
 # whole-model recording test in a child process (MLX fixes its memory limit
 # once per process) and reads the answers from its standard output.
 test-paging-answer-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --filter should_give_the_whole_model_answer --ignored"
+# One reply page refused for room on purpose, with the drafter silent and
+# with it writing: the forward must run again, the reply must be written to
+# its end, and the silent-drafter answer must not change (issue #2749). About fifteen seconds a case.
+test-refused-reply-page-redo = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --filter reply_page_is_refused_room --ignored"
 # How fast the text engine reads one 10,000-token prompt under the
 # paging_experiment limit, 16 tokens written after the prompt. Run it twice
 # and compare within a sitting. request_elapsed_seconds less

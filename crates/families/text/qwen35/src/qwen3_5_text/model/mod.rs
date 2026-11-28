@@ -63,6 +63,7 @@ mod model_memory_shape;
 pub mod mtp_drafting;
 pub mod mtp_head;
 mod neural_engine_host;
+mod reply_forward_memory_redo;
 mod tree_verification_forward;
 // Holds one streamed layer for every span of a layer-at-a-time prompt.
 pub mod held_prompt_expert_layer;

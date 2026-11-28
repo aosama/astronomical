@@ -474,7 +474,7 @@ impl Qwen3_5Model {
 
     /// The phase the governor is in, when it matches what the engine says
     /// it was doing.
-    fn current_ledger_phase(&self, memory_phase: MemoryPhase) -> Option<LedgerPhase> {
+    pub(super) fn current_ledger_phase(&self, memory_phase: MemoryPhase) -> Option<LedgerPhase> {
         let memory_governor = self.governed_memory.governor.borrow();
         let ledger_phase = memory_governor.as_ref()?.phase();
         match (memory_phase, ledger_phase) {

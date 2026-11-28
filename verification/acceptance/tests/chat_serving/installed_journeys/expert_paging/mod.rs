@@ -18,5 +18,6 @@ mod paged_prefill_chunk_attribution;
 mod paging_answer_parity;
 mod prefill_chunk;
 pub(crate) mod prompt;
+mod refused_reply_page_redo;
 mod reply_speed_cases;
 mod unattributed_cold_prefill;
