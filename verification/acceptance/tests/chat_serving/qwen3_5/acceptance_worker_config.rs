@@ -35,7 +35,7 @@ pub(super) fn write_acceptance_config(
         },
         "diagnostics": {"performance_attribution_enabled": true},
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": FIXED_PREFILL_CHUNK_SIZE_TOKENS
+            "prompt_processing_chunk_size_tokens": FIXED_PREFILL_CHUNK_SIZE_TOKENS
         },
         "models": {
             (model_id): {

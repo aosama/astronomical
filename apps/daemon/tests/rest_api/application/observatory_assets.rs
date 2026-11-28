@@ -308,6 +308,11 @@ async fn should_serve_the_embedded_experts_and_overview_assets() {
             "application/javascript",
             "copyMemoryPageImage",
         ),
+        (
+            "/overview-right-now.js",
+            "application/javascript",
+            "renderOverviewRightNow",
+        ),
         ("/memory-page.css", "text/css", "memory-page-wire-limit"),
         ("/overview.css", "text/css", "overview-now-state"),
     ] {

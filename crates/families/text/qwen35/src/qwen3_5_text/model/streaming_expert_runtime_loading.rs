@@ -134,18 +134,26 @@ pub(super) struct ExpertCombinationKernels {
     /// The sorted-expert matmul for a prompt chunk's gate and up projections.
     /// It reads the sorted order, so it is kept only with the sorted sum.
     pub(super) sorted_expert_matmul: Option<crate::sorted_expert_matmul::SortedExpertMatmulKernels>,
+    /// The tiled sorted-expert kernels for a prompt chunk's gate, up, their
+    /// SwiGLU and down. They read the sorted order too, so they are kept only
+    /// with the sorted sum.
+    pub(super) sorted_expert_tiled: Option<crate::sorted_expert_matmul::TiledExpertKernels>,
 }
 
 /// The model's optional accelerators with only the expert kernels and the
 /// signed rotation set.
 pub(super) fn accelerators_with(
     sorted_expert_shared_combination_kernel: Option<MlxMetalKernel>,
-    sorted_expert_matmul_kernels: Option<crate::sorted_expert_matmul::SortedExpertMatmulKernels>,
+    (sorted_expert_matmul_kernels, sorted_expert_tiled_kernels): (
+        Option<crate::sorted_expert_matmul::SortedExpertMatmulKernels>,
+        Option<crate::sorted_expert_matmul::TiledExpertKernels>,
+    ),
     signed_hadamard_rotation_kernel: Option<MlxMetalKernel>,
 ) -> crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
     crate::qwen3_5_core::model::base::Qwen3_5OptionalAccelerators {
         sorted_expert_shared_combination_kernel,
         sorted_expert_matmul_kernels,
+        sorted_expert_tiled_kernels,
         signed_hadamard_rotation_kernel,
         ..Default::default()
     }
@@ -176,11 +184,52 @@ fn kept_expert_combination_kernels(
         )?;
     let sorted_expert_matmul =
         kept_sorted_expert_matmul(worker_kernel_capabilities, sorted_weighted_sum.is_some());
+    let sorted_expert_tiled =
+        kept_sorted_expert_tiled(worker_kernel_capabilities, sorted_weighted_sum.is_some());
     Ok(ExpertCombinationKernels {
         sorted_weighted_sum,
         sorted_shared_combination,
         sorted_expert_matmul,
+        sorted_expert_tiled,
     })
+}
+
+#[cfg(test)]
+#[path = "streaming_expert_runtime_loading_tests.rs"]
+mod streaming_expert_runtime_loading_tests;
+
+/// The tiled sorted-expert kernels of every weight width whose probe
+/// reproduced MLX's bits on this GPU, when the sorted route they read is
+/// kept; `None` when no width passed or that route is not kept, and prompt
+/// chunks keep the routes before them. A stack of a width not kept is
+/// refused chunk by chunk and keeps those routes too.
+fn kept_sorted_expert_tiled(
+    worker_kernel_capabilities: &crate::kernel_capability::WorkerKernelCapabilities,
+    sorted_route_kept: bool,
+) -> Option<crate::sorted_expert_matmul::TiledExpertKernels> {
+    let mut proven_weight_bits = Vec::new();
+    for (family, weight_bits) in crate::kernel_capability::SORTED_EXPERT_TILED_MATMUL_FAMILIES {
+        if worker_kernel_capabilities.is_custom_kernel_supported(family) {
+            proven_weight_bits.push(weight_bits);
+        }
+    }
+    if !sorted_route_kept || proven_weight_bits.is_empty() {
+        tracing::info!(
+            "tiled sorted-expert kernels not kept: prompt chunks keep the sorted-expert matmul and MLX's down"
+        );
+        return None;
+    }
+    match crate::sorted_expert_matmul::TiledExpertKernels::declare_for_weight_bits(
+        &proven_weight_bits,
+    ) {
+        Ok(kernels) => Some(kernels),
+        Err(declaration_error) => {
+            tracing::warn!(
+                "tiled sorted-expert kernels could not be declared: {declaration_error}"
+            );
+            None
+        }
+    }
 }
 
 /// The sorted-expert matmul's kernels when this GPU reproduced MLX's bits

@@ -10,7 +10,6 @@ mod catalog_builds;
 mod catalog_capabilities;
 mod catalog_classification;
 mod catalog_presentation;
-mod catalog_speed;
 mod download_catalog;
 mod entry_identity;
 mod model_suggestion_wording;
@@ -32,8 +31,7 @@ pub use canonical_path::is_canonical_ascii_path;
 pub use download_catalog::{
     DownloadCatalog, DownloadCatalogBuild, DownloadCatalogBuildDifference,
     DownloadCatalogCapabilities, DownloadCatalogEntry, DownloadCatalogError, DownloadCatalogFamily,
-    DownloadCatalogMeasuredSpeed, DownloadCatalogRole, DownloadCatalogTaskSpeeds,
-    is_valid_huggingface_id, is_valid_immutable_revision,
+    DownloadCatalogRole, is_valid_huggingface_id, is_valid_immutable_revision,
 };
 pub use model_suggestions::{
     ModelSuggestion, ModelSuggestionKind, SuggestionInputs, suggest_models,

@@ -100,7 +100,7 @@ async fn should_match_the_composed_decay_chain_bit_for_bit_at_one_token() {
         .expect("the one-token decay numerics test must finish within 115 seconds");
 }
 
-async fn compare_fused_prework_with_composed_path(token_count: i32, dtype: MlxDtype) {
+pub(super) async fn compare_fused_prework_with_composed_path(token_count: i32, dtype: MlxDtype) {
     let (runtime, graphs, kernel) = prepare_runtime_and_kernel().await;
     let mixed_queries_keys_values = patterned_array(
         &runtime,

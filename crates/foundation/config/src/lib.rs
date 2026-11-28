@@ -15,6 +15,7 @@ mod configuration_generation;
 mod default_model;
 mod duplicate_key_json;
 mod exhaustive_table;
+mod in_memory_chunk_setting_move;
 mod legacy_config_migration;
 mod logging_config;
 mod maximum_mlx_memory;
@@ -36,13 +37,11 @@ pub use chunking_config::{
     ChunkingConfig, ConfiguredChunkingFields,
     DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
-    DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
     DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-    LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-    should_materialize_resident_chunk_default, should_materialize_ssd_streaming_chunk_default,
+    should_materialize_ssd_streaming_chunk_default,
 };
 pub use config_document_edit::{
     ConfigDocumentSnapshot, config_schema_bytes, read_config_document, reset_config_document,

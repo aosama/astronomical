@@ -1,5 +1,6 @@
-// Memory page picture tests: where the legend entries go, and that every
-// bar part is drawn even when the legend leaves it out.
+// Copy as image picture tests: the sentence at the top and its article, the
+// three figures, the footer, and that the picture is drawn with every text
+// the bar of where the model's experts are, in place.
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -7,80 +8,114 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
+const memoryPageScriptPath = path.join(__dirname, "memory-page.js");
 const memoryPageImageScriptPath = path.join(__dirname, "memory-page-image.js");
-const memoryPageImageScript = fs.readFileSync(memoryPageImageScriptPath, "utf8");
+const GIGABYTE = 1073741824;
 
+// The picture reads memory-page.js's helpers, so both scripts load into one
+// context the way the page loads them.
 function createMemoryPageImageContext() {
-    const scriptContext = vm.createContext({});
-    vm.runInContext(memoryPageImageScript, scriptContext, { filename: memoryPageImageScriptPath });
+    const scriptContext = vm.createContext({ document: { getElementById() { return null; } } });
+    vm.runInContext(fs.readFileSync(memoryPageScriptPath, "utf8"), scriptContext, { filename: memoryPageScriptPath });
+    vm.runInContext(fs.readFileSync(memoryPageImageScriptPath, "utf8"), scriptContext, { filename: memoryPageImageScriptPath });
     return scriptContext;
 }
 
-function legendPlacementsFor(legendTextWidths) {
+function evaluate(expression, bindings) {
     const scriptContext = createMemoryPageImageContext();
-    scriptContext.legendTextWidths = legendTextWidths;
-    return JSON.parse(vm.runInContext(
-        "JSON.stringify(memoryPageImageLegendPlacements(legendTextWidths, 300))", scriptContext));
+    Object.assign(scriptContext, bindings);
+    return JSON.parse(vm.runInContext("JSON.stringify(" + expression + ")", scriptContext));
 }
 
-// Records every rectangle drawn so a test can count the bar's parts.
+function streamingStatusDocument() {
+    return {
+        ready_model_id: "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
+        ready_model_size_bytes: 22.9 * GIGABYTE,
+        mlx_memory_ceiling_bytes: 8 * GIGABYTE,
+        serving_session: { average_generation_tok_per_second: 37.2 },
+        application: { version: "0.2.138" }
+    };
+}
+
+function streamingExpertStatsDocument() {
+    return {
+        residency: { resident_expert_payload_bytes: 4.6 * GIGABYTE, complete_expert_payload_byte_count: 18.4 * GIGABYTE },
+        last_reply: { storage_read_expert_counts_by_token: [64, 66], routed_expert_count_per_token: 320 }
+    };
+}
+
+// Records every text and rectangle drawn.
 function recordingDrawingContext() {
     return {
+        drawnTexts: [],
         filledRectangles: [],
         fillRect(rectangleLeft, rectangleTop, rectangleWidth, rectangleHeight) {
-            this.filledRectangles.push({ rectangleTop, rectangleWidth, fillStyle: this.fillStyle });
+            this.filledRectangles.push({ rectangleTop, rectangleHeight, fillStyle: this.fillStyle });
         },
-        fillText() {},
+        fillText(drawnText) { this.drawnTexts.push(drawnText); },
         measureText(measuredText) { return { width: measuredText.length * 10 }; }
     };
 }
 
-test("should_place_legend_entries_on_one_line_when_they_fit", () => {
-    const legendPlacements = legendPlacementsFor([200, 200, 200]);
+test("should_say_an_before_limits_spoken_with_a_vowel_and_a_before_the_rest", () => {
+    const limitPhrases = evaluate("[8, 11, 16, 18, 24, 80, 128].map(memoryPageImageLimitPhrase)", {});
 
-    assert.deepEqual(legendPlacements, [{ left: 64, top: 300 }, { left: 316, top: 300 }, { left: 568, top: 300 }]);
+    assert.deepEqual(limitPhrases, [
+        "an 8 GB limit", "an 11 GB limit", "a 16 GB limit", "an 18 GB limit",
+        "a 24 GB limit", "an 80 GB limit", "a 128 GB limit"
+    ]);
 });
 
-test("should_start_a_new_line_when_the_next_entry_would_cross_the_margin", () => {
-    const legendPlacements = legendPlacementsFor([300, 300, 300, 300]);
+test("should_state_the_model_size_inside_the_limit_at_the_top", () => {
+    const headline = evaluate("memoryPageImageHeadline(statusDocument, 'page headline')", { statusDocument: streamingStatusDocument() });
 
-    assert.deepEqual(legendPlacements.map((legendPlacement) => legendPlacement.top), [300, 300, 300, 330]);
-    assert.equal(legendPlacements[3].left, 64);
+    assert.equal(headline, "A 22.9 GB model in an 8 GB limit");
 });
 
-test("should_keep_an_entry_wider_than_the_picture_on_its_own_line_start", () => {
-    const legendPlacements = legendPlacementsFor([2000, 100]);
+test("should_fall_back_to_the_page_headline_without_a_size_or_a_limit", () => {
+    const statusWithoutLimit = streamingStatusDocument();
+    delete statusWithoutLimit.mlx_memory_ceiling_bytes;
 
-    assert.deepEqual(legendPlacements, [{ left: 64, top: 300 }, { left: 64, top: 330 }]);
+    assert.equal(evaluate("memoryPageImageHeadline(statusDocument, 'page headline')", { statusDocument: statusWithoutLimit }), "page headline");
+    assert.equal(evaluate("memoryPageImageHeadline(null, 'page headline')", {}), "page headline");
 });
 
-test("should_place_nothing_for_an_empty_legend", () => {
-    assert.deepEqual(legendPlacementsFor([]), []);
+test("should_show_the_speed_the_share_in_memory_and_no_cloud_accounts", () => {
+    const figures = evaluate("memoryPageImageFigures(statusDocument, expertStatsDocument)",
+        { statusDocument: streamingStatusDocument(), expertStatsDocument: streamingExpertStatsDocument() });
+
+    assert.deepEqual(figures.map((figure) => figure.value), ["37", "80%", "0"]);
+    assert.deepEqual(figures.map((figure) => figure.isAccent), [true, false, false]);
 });
 
-test("should_draw_every_bar_part_on_one_row_even_when_the_legend_wraps_or_skips_it", () => {
+test("should_show_a_dash_for_a_figure_not_known_yet", () => {
+    const figures = evaluate("memoryPageImageFigures({}, null)", {});
+
+    assert.deepEqual(figures.map((figure) => figure.value), ["—", "—", "0"]);
+});
+
+test("should_name_the_model_and_the_app_version_in_the_footer", () => {
+    assert.equal(evaluate("memoryPageImageFooter(statusDocument)", { statusDocument: streamingStatusDocument() }),
+        "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2 · Astronomical 0.2.138");
+    assert.equal(evaluate("memoryPageImageFooter(null)", {}), "No model loaded · Astronomical");
+});
+
+test("should_draw_the_headline_the_figures_the_expert_split_and_the_footer", () => {
     const scriptContext = createMemoryPageImageContext();
     const drawingContext = recordingDrawingContext();
-    scriptContext.drawingContext = drawingContext;
-    scriptContext.barPresentation = {
-        parts: ["other", "fixed", "experts", "conversation", "working"].map((partKey) => ({
-            key: partKey,
-            label: "A long legend label for " + partKey,
-            text: partKey === "conversation" ? "0.0 GB" : "9.9 GB",
-            isEmpty: partKey === "conversation",
-            widthPercent: 10
-        }))
-    };
-    scriptContext.palette = {
-        track: "track", inkDim: "ink",
-        parts: { other: "other", fixed: "fixed", experts: "experts", conversation: "conversation", working: "working" }
-    };
+    scriptContext.imageCanvas = { getContext: () => drawingContext };
+    scriptContext.statusDocument = streamingStatusDocument();
+    scriptContext.expertStatsDocument = streamingExpertStatsDocument();
+    vm.runInContext("drawMemoryPageImage(imageCanvas, statusDocument, expertStatsDocument, "
+        + "{ background: 'bg', ink: 'ink', inkDim: 'dim', accent: 'violet', memoryServed: 'blue', onStorage: 'grey' })", scriptContext);
 
-    vm.runInContext("drawMemoryPageImageBar(drawingContext, barPresentation, palette, 228)", scriptContext);
-
-    const barRectangles = drawingContext.filledRectangles.filter((filledRectangle) => filledRectangle.rectangleTop === 228);
-    assert.deepEqual(barRectangles.map((barRectangle) => barRectangle.fillStyle),
-        ["track", "other", "fixed", "experts", "conversation", "working"]);
-    const legendSwatchCount = drawingContext.filledRectangles.length - barRectangles.length;
-    assert.equal(legendSwatchCount, 4);
+    assert.deepEqual(drawingContext.drawnTexts, [
+        "Astronomical", "A 22.9 GB model in an 8 GB limit",
+        "37", "tokens a second", "80%", "of each token's experts already in memory", "0", "cloud accounts",
+        "4.6 GB of its experts in memory · 13.8 GB on the SSD",
+        "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2 · Astronomical 0.2.138", "getastronomical.com"
+    ]);
+    const splitRectangles = drawingContext.filledRectangles.filter((rectangle) => rectangle.rectangleTop === 390);
+    assert.deepEqual(splitRectangles.map((rectangle) => rectangle.fillStyle), ["grey", "blue"],
+        "the whole library on the SSD first, then the part in memory over it");
 });

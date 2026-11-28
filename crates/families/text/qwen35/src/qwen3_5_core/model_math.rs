@@ -48,6 +48,8 @@ pub mod gdn_decode_prework_kernel;
 #[cfg(feature = "direct-mlx")]
 pub mod hadamard_rotation;
 #[cfg(feature = "direct-mlx")]
+pub mod mtp_head_kind;
+#[cfg(feature = "direct-mlx")]
 pub mod output_combination;
 #[cfg(feature = "direct-mlx")]
 pub mod routing;

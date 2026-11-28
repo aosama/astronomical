@@ -154,6 +154,7 @@ pub(super) fn validate_pack_inventory(
     }
 
     validate_manifest_module_agreement(config, hadamard_contract)?;
+    validate_tied_output_agreement(config, hadamard_contract)?;
 
     let is_unrecognized_language_tensor = |tensor_name: &str| -> bool {
         tensor_name.starts_with(LANGUAGE_TENSOR_PREFIX)
@@ -168,7 +169,15 @@ pub(super) fn validate_pack_inventory(
             tensor_name: first_unrecognized.to_owned(),
         });
     }
+    validate_vision_tower_presence(config, &tensor_declarations)
+}
 
+/// The vision tower ships exactly when the pack declares the vision
+/// component.
+fn validate_vision_tower_presence(
+    config: &FoldedPackConfig,
+    tensor_declarations: &BTreeMap<&str, (Dtype, &[usize])>,
+) -> Result<(), FoldedPackValidationError> {
     let vision_tensor_count = tensor_declarations
         .keys()
         .filter(|tensor_name| tensor_name.starts_with(VISION_TENSOR_PREFIX))
@@ -190,7 +199,25 @@ pub(super) fn validate_pack_inventory(
 fn validate_complete_packed_module_inventory(
     config: &FoldedPackConfig,
 ) -> Result<(), FoldedPackValidationError> {
-    let mut expected_module_paths = embedding_and_head_module_paths(config);
+    let expected_module_paths = expected_packed_module_paths(config);
+    let declared_module_paths = config
+        .packed_modules()
+        .iter()
+        .map(|packed_module| packed_module.path().to_owned())
+        .collect::<BTreeSet<_>>();
+    if expected_module_paths == declared_module_paths {
+        return Ok(());
+    }
+    module_inventory_disagreement(&expected_module_paths, &declared_module_paths)
+}
+
+/// Every packed module a pack of this configuration must declare.
+fn expected_packed_module_paths(config: &FoldedPackConfig) -> BTreeSet<String> {
+    let mut expected_module_paths = BTreeSet::from(["model.embed_tokens".to_owned()]);
+    // A tied pack's head is the embedding table, so it ships no `lm_head`.
+    if !config.has_tied_output() {
+        expected_module_paths.insert("lm_head".to_owned());
+    }
     for (layer_index, layer_type) in config.text().layer_types.iter().enumerate() {
         let layer_prefix = format!("model.layers.{layer_index}");
         match layer_type.as_str() {
@@ -215,21 +242,20 @@ fn validate_complete_packed_module_inventory(
             expected_module_paths.insert(format!("{layer_prefix}.mlp.{projection_name}"));
         }
     }
-    let declared_module_paths = config
-        .packed_modules()
-        .iter()
-        .map(|packed_module| packed_module.path().to_owned())
-        .collect::<BTreeSet<_>>();
-    if expected_module_paths == declared_module_paths {
-        return Ok(());
-    }
+    expected_module_paths
+}
 
+/// The refusal naming up to three missing and three unexpected modules.
+fn module_inventory_disagreement(
+    expected_module_paths: &BTreeSet<String>,
+    declared_module_paths: &BTreeSet<String>,
+) -> Result<(), FoldedPackValidationError> {
     let missing_module_paths = expected_module_paths
-        .difference(&declared_module_paths)
+        .difference(declared_module_paths)
         .take(3)
         .collect::<Vec<_>>();
     let unexpected_module_paths = declared_module_paths
-        .difference(&expected_module_paths)
+        .difference(expected_module_paths)
         .take(3)
         .collect::<Vec<_>>();
     Err(FoldedPackValidationError::ContractModuleDisagreement {
@@ -451,6 +477,24 @@ fn dtype_label(dtype: Dtype) -> &'static str {
     }
 }
 
+/// The configuration and the sign table must agree on a tied head: the
+/// rotation of the head is read from one and the module list from the other.
+fn validate_tied_output_agreement(
+    config: &FoldedPackConfig,
+    hadamard_contract: &HadamardContract,
+) -> Result<(), FoldedPackValidationError> {
+    if config.has_tied_output() == hadamard_contract.has_tied_output() {
+        return Ok(());
+    }
+    Err(FoldedPackValidationError::ContractModuleDisagreement {
+        detail: format!(
+            "config.json says tied_output {} but hadamard.json says {}",
+            config.has_tied_output(),
+            hadamard_contract.has_tied_output()
+        ),
+    })
+}
+
 fn validate_manifest_module_agreement(
     config: &FoldedPackConfig,
     hadamard_contract: &HadamardContract,
@@ -477,34 +521,5 @@ fn validate_manifest_module_agreement(
             ),
         });
     }
-    validate_output_tying_agreement(config, hadamard_contract)
-}
-
-/// The embedding module, and the head module unless the head is tied: a tied
-/// head is the embedding table, so a tied pack ships no head module.
-fn embedding_and_head_module_paths(config: &FoldedPackConfig) -> BTreeSet<String> {
-    let mut module_paths = BTreeSet::from(["model.embed_tokens".to_owned()]);
-    if !config.has_tied_output() {
-        module_paths.insert("lm_head".to_owned());
-    }
-    module_paths
-}
-
-/// `config.json` and `hadamard.json` must agree on whether the head is tied;
-/// the core rotates a tied head by the manifest's word and checks the
-/// tensors by the config's.
-fn validate_output_tying_agreement(
-    config: &FoldedPackConfig,
-    hadamard_contract: &HadamardContract,
-) -> Result<(), FoldedPackValidationError> {
-    if config.has_tied_output() == hadamard_contract.has_tied_output() {
-        return Ok(());
-    }
-    Err(FoldedPackValidationError::ContractModuleDisagreement {
-        detail: format!(
-            "config.json says the output head is tied ({}) but hadamard.json says {}",
-            config.has_tied_output(),
-            hadamard_contract.has_tied_output()
-        ),
-    })
+    Ok(())
 }

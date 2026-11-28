@@ -54,7 +54,7 @@ pub(super) fn write_interaction_config(
         "performance_attribution_enabled": true,
         "logging": {"level": "info", "retained_files": 2},
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": PREFILL_CHUNK_TOKEN_COUNT,
+            "prompt_processing_chunk_size_tokens": PREFILL_CHUNK_TOKEN_COUNT,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": PREFILL_CHUNK_TOKEN_COUNT,
             "prefill_graph_submission_layer_interval": 0,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,

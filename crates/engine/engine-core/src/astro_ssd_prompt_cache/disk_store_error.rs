@@ -80,6 +80,20 @@ pub enum AstroSsdPromptCacheDiskStoreError {
         #[source]
         source: std::io::Error,
     },
+    #[error(
+        "decoder-state tensor {tensor_name} has dtype {dtype_description}, which no state file stores"
+    )]
+    UnsupportedHostTensorDtype {
+        tensor_name: String,
+        dtype_description: String,
+    },
+    #[error("failed to serialize the safetensors header of a decoder-state file")]
+    SerializeSafetensorsHeader {
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("the background astro_ssd_prompt_cache writer has stopped")]
+    PublicationWriterStopped,
     #[error("failed to read MLX memory for persistent model-state admission")]
     ReadMlxMemorySnapshot {
         #[source]

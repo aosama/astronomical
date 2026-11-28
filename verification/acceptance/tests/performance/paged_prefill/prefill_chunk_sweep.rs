@@ -178,7 +178,7 @@ async fn load_benchmark_model(
         .autoregressive_mut()
         .expect("the model SSD streaming benchmark requires an autoregressive model")
         .chunking
-        .fixed_prompt_processing_chunk_size_tokens = prefill_chunk_tokens;
+        .prompt_processing_chunk_size_tokens = Some(prefill_chunk_tokens);
     initialize_worker(
         protocol_writer,
         protocol_reader,
@@ -347,6 +347,7 @@ fn observe_sweep_worker_event(
         | WorkerEvent::NeuralEnginePrefillChanged { .. }
         | WorkerEvent::DraftModelChanged { .. }
         | WorkerEvent::CustomMetalKernelsChanged { .. }
+        | WorkerEvent::PromptProcessingChunkChanged { .. }
         | WorkerEvent::DraftingReport { .. }
         | WorkerEvent::NeuralEngineChunkFinished { .. }
         | WorkerEvent::ModelLoadInFlight { .. }

@@ -307,7 +307,7 @@ test("maps every observatory destination to a stable URL path", () => {
     assert.equal(pathMap["download-models"], "/download-models");
     assert.equal(pathMap.library, undefined, "the Library page was renamed Download Models");
     assert.equal(pathMap.connect, "/connect");
-    assert.equal(pathMap.memory, "/memory");
+    assert.equal(pathMap.memory, undefined, "the Memory page was merged into Under the hood");
     assert.equal(pathMap.cache, undefined);
     assert.equal(pathMap.model, undefined, "the Model page was folded into Overview");
     assert.equal(pathMap.settings, "/settings");
@@ -325,12 +325,21 @@ test("maps every observatory URL path back to its destination", () => {
     assert.equal(reverseMap["/download-models"], "download-models");
     assert.equal(reverseMap["/library"], undefined, "the retired path is resolved separately");
     assert.equal(reverseMap["/connect"], "connect");
-    assert.equal(reverseMap["/memory"], "memory");
+    assert.equal(reverseMap["/memory"], undefined, "the retired path is resolved separately");
     assert.equal(reverseMap["/cache"], undefined);
     assert.equal(reverseMap["/model"], undefined, "the retired path is resolved separately");
     assert.equal(reverseMap["/settings"], "settings");
     assert.equal(reverseMap["/tuning"], "tuning");
     assert.equal(reverseMap["/configuration"], undefined, "the retired path is resolved separately");
+});
+
+test("should_open_under_the_hood_from_the_retired_memory_address", () => {
+    const scriptContext = createConsoleContext();
+
+    const retiredDestinations = vm.runInContext("OBSERVATORY_RETIRED_PATH_DESTINATIONS", scriptContext);
+
+    assert.equal(retiredDestinations["/memory"], "experts");
+    assert.equal(retiredDestinations["/experts"], undefined, "Under the hood keeps its own address");
 });
 
 test("defaults observatory to the overview destination path", () => {
@@ -427,32 +436,37 @@ function activateWithSections(requestedView) {
     const navigationButtons = [
         createNavigationButton("overview"),
         createSectionButton("settings", "settings tuning"),
-        createSectionButton("experts", "experts memory"),
+        createNavigationButton("experts"),
         createSubnavigationButton("settings", "settings"),
-        createSubnavigationButton("tuning", "settings"),
-        createSubnavigationButton("experts", "experts"),
-        createSubnavigationButton("memory", "experts")
+        createSubnavigationButton("tuning", "settings")
     ];
     scriptContext.navigationButtons = navigationButtons;
-    scriptContext.observatoryViews = ["overview", "settings", "tuning", "experts", "memory"].map(createObservatoryView);
+    scriptContext.observatoryViews = ["overview", "settings", "tuning", "experts"].map(createObservatoryView);
     vm.runInContext(`activateObservatoryView(${JSON.stringify(requestedView)}, navigationButtons, observatoryViews)`, scriptContext);
     return { navigationButtons, subnavigation };
 }
 
 test("should_keep_a_section_current_on_each_of_its_pages_and_show_only_its_tabs", () => {
-    const { navigationButtons, subnavigation } = activateWithSections("memory");
+    const { navigationButtons, subnavigation } = activateWithSections("tuning");
 
     assert.equal(subnavigation.hidden, false);
     assert.deepEqual(
         navigationButtons.map((navigationButton) => navigationButton.attributes["aria-current"] || ""),
-        ["", "", "page", "", "", "", "page"],
-        "Under the hood and its Memory tab are current"
+        ["", "page", "", "", "page"],
+        "Settings and its Tuning tab are current"
     );
     assert.deepEqual(
         navigationButtons.slice(3).map((subnavigationButton) => subnavigationButton.hidden),
-        [true, true, false, false],
-        "only Experts and Memory tabs show"
+        [false, false],
+        "the Settings and Tuning tabs show"
     );
+});
+
+test("should_show_under_the_hood_as_one_page_without_a_second_row_of_tabs", () => {
+    const { navigationButtons, subnavigation } = activateWithSections("experts");
+
+    assert.equal(subnavigation.hidden, true);
+    assert.equal(navigationButtons[2].attributes["aria-current"], "page");
 });
 
 test("should_hide_the_second_row_of_tabs_on_a_page_without_a_section", () => {

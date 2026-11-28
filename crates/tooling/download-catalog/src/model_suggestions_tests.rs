@@ -21,17 +21,6 @@ fn gigabytes(gigabyte_count: f64) -> u64 {
     (gigabyte_count * GIGABYTE).round() as u64
 }
 
-fn measured_speed(essay_rate: u16, code_rate: u16) -> Value {
-    json!({
-        "measured_on": "Mac with an M5 Pro and 48 GB",
-        "astronomical_version": "0.2.129",
-        "tokens_per_second": {
-            "essay_short_prompt": essay_rate, "essay_long_prompt": essay_rate,
-            "code_short_prompt": code_rate, "code_long_prompt": code_rate
-        }
-    })
-}
-
 fn catalog_entry(model_name: &str, entry_fields: &Value) -> Value {
     let mut entry_value = json!({
         "huggingface_id": format!("astronomical-test/{model_name}"),
@@ -243,121 +232,32 @@ fn should_offer_more_detail_only_when_it_leaves_a_tenth_of_the_memory_free() {
 }
 
 #[test]
-fn should_make_a_draft_build_quicker_at_everything_the_best_fit_itself() {
+fn should_not_offer_a_draft_build_for_speed() {
     let catalog = ladder_catalog(&json!({
-        "Large": {"measured_speed": measured_speed(71, 68)},
-        "Large-draft": {"measured_speed": measured_speed(81, 97)}
+        "Large-draft": {"approximate_memory_bytes": gigabytes(21.0)}
     }));
-    let suggestions = suggestions_for(&catalog, &["Painter"], Some(gigabytes(36.5)));
-
-    assert_eq!(
-        tags_and_models(&suggestions)[0],
-        ("Best fit for this Mac", "Large-draft")
-    );
-    assert_eq!(
-        suggestions
-            .iter()
-            .filter(|suggestion| suggestion.model_id == "Large-draft")
-            .count(),
-        1,
-        "one card, not two"
-    );
-    assert!(suggestions[0].reason.ends_with(
-        "Its draft model makes replies about 14% quicker when writing and 43% quicker with code."
-    ));
-}
-
-#[test]
-fn should_offer_a_quicker_build_beside_the_one_here_and_disclose_slower_writing() {
-    let quicker_at_everything = ladder_catalog(&json!({
-        "Large": {"measured_speed": measured_speed(71, 68)},
-        "Large-draft": {"measured_speed": measured_speed(81, 97)}
-    }));
-    let quicker_for_code = ladder_catalog(&json!({
-        "Large": {"measured_speed": measured_speed(96, 96)},
-        "Large-draft": {"measured_speed": measured_speed(89, 125)}
-    }));
-    let everything = suggestions_for(
-        &quicker_at_everything,
-        &["Large", "Painter"],
-        Some(gigabytes(36.5)),
-    );
-    let code_only = suggestions_for(
-        &quicker_for_code,
-        &["Large", "Painter"],
-        Some(gigabytes(36.5)),
-    );
-
-    assert_eq!(tags_and_models(&everything)[0], ("Quicker", "Large-draft"));
-    assert!(
-        everything[0]
-            .reason
-            .contains("quicker with code than Large, because a draft model is built in.")
-    );
-    assert_eq!(
-        tags_and_models(&code_only)[0],
-        ("Quicker for code", "Large-draft")
-    );
-    assert!(code_only[0].reason.contains("about 30% quicker than Large"));
-    assert!(
-        code_only[0]
-            .reason
-            .ends_with("Writing an essay is about 7% slower.")
-    );
-}
-
-#[test]
-fn should_not_offer_a_draft_build_inside_the_spread_without_figures_or_keeping_less_detail() {
-    let inside_spread = ladder_catalog(&json!({
-        "Large": {"measured_speed": measured_speed(96, 100)},
-        "Large-draft": {"measured_speed": measured_speed(96, 109)}
-    }));
-    let unmeasured_reference =
-        ladder_catalog(&json!({"Large-draft": {"measured_speed": measured_speed(89, 125)}}));
-    let keeps_less = ladder_catalog(&json!({
-        "Large": {"measured_speed": measured_speed(71, 68)},
-        "Large-draft": {"measured_speed": measured_speed(95, 111), "approximate_memory_bytes": gigabytes(21.0)}
-    }));
-
-    for catalog in [inside_spread, unmeasured_reference, keeps_less] {
-        let suggestions = suggestions_for(&catalog, &["Large", "Painter"], Some(gigabytes(36.5)));
-        assert!(
-            suggestions
-                .iter()
-                .all(|suggestion| suggestion.model_id != "Large-draft"),
-            "{suggestions:?}"
-        );
-    }
-}
-
-#[test]
-fn should_never_offer_a_draft_build_for_speed_when_it_would_not_fit_with_room() {
-    let catalog = ladder_catalog(&json!({
-        "Large": {"measured_speed": measured_speed(96, 96)},
-        "Large-draft": {"measured_speed": measured_speed(89, 125), "approximate_memory_bytes": gigabytes(26.0)}
-    }));
-    let suggestions = suggestions_for(&catalog, &["Large", "Painter"], Some(gigabytes(26.0)));
+    let suggestions = suggestions_for(&catalog, &["Large", "Painter"], Some(gigabytes(36.5)));
 
     assert!(
         suggestions
             .iter()
-            .all(|suggestion| suggestion.model_id != "Large-draft"),
-        "a streaming draft build drafts nothing yet"
+            .all(|suggestion| suggestion.model_id != "Large-draft" && suggestion.tag != "Quicker"),
+        "the catalog no longer carries rates a quicker build would be chosen by: {suggestions:?}"
     );
 }
 
 #[test]
-fn should_say_how_much_slower_a_build_with_more_detail_replies_when_both_are_measured() {
-    let catalog = ladder_catalog(&json!({
-        "Small": {"measured_speed": measured_speed(50, 50)},
-        "Small-6bit": {"measured_speed": measured_speed(36, 36)}
-    }));
-    let suggestions = suggestions_for(&catalog, &["Small"], Some(gigabytes(11.3)));
+fn should_say_how_much_more_memory_a_more_detailed_build_needs() {
+    let suggestions = suggestions_for(
+        &ladder_catalog(&json!({})),
+        &["Small"],
+        Some(gigabytes(11.3)),
+    );
 
     assert!(
         suggestions[0]
             .reason
-            .ends_with("It needs 2.1 GB more memory, and replies about 28% slower.")
+            .ends_with("It needs 2.1 GB more memory.")
     );
 }
 

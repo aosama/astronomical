@@ -55,8 +55,7 @@ pub(crate) fn worker_chunking_configuration(
     chunking: &config::ChunkingConfig,
 ) -> WorkerChunkingConfiguration {
     WorkerChunkingConfiguration {
-        fixed_prompt_processing_chunk_size_tokens: chunking
-            .fixed_prompt_processing_chunk_size_tokens(),
+        prompt_processing_chunk_size_tokens: chunking.prompt_processing_chunk_size_tokens(),
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: chunking
             .fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
         full_attention_key_value_growth_tokens: chunking.full_attention_key_value_growth_tokens(),

@@ -122,11 +122,7 @@ impl FoldedPackConfig {
         if !document.components.text {
             return Err(FoldedPackConfigError::TextComponentMissing);
         }
-        let has_tied_output = validated_output_tying(
-            document.tie_word_embeddings,
-            document.text_config.tie_word_embeddings,
-            document.tied_output,
-        )?;
+        let has_tied_output = validated_tied_output(&document)?;
         if document.quantization.bits != FOLDED_QUANTIZATION_BITS
             || document.quantization.group_size != FOLDED_QUANTIZATION_GROUP_SIZE
             || document.quantization.mode != FOLDED_QUANTIZATION_MODE
@@ -170,37 +166,16 @@ impl FoldedPackConfig {
     }
 
     /// Whether the pack declares a vision component. The tower is validated
-    /// with the pack inventory and served by the shared core.
+    /// with the pack inventory, and the shared core reads images with it.
     pub const fn vision_declared(&self) -> bool {
         self.vision_declared
     }
 
-    /// Whether the output head is the embedding table itself (the 2B pack),
-    /// so the pack ships no `lm_head` module.
+    /// Whether the output head is the embedding table: the pack then ships
+    /// no `lm_head` module, and the table's codes serve both directions.
     pub const fn has_tied_output(&self) -> bool {
         self.has_tied_output
     }
-}
-
-/// The pack says three times whether its head is tied: the top-level and text
-/// `tie_word_embeddings` a generic loader reads, and Prism's `tied_output`.
-/// They must agree, because serving one reading while the weights follow
-/// another would compute logits from the wrong table.
-fn validated_output_tying(
-    pack_ties_word_embeddings: bool,
-    text_ties_word_embeddings: bool,
-    pack_declares_tied_output: bool,
-) -> Result<bool, FoldedPackConfigError> {
-    if pack_ties_word_embeddings != text_ties_word_embeddings
-        || pack_ties_word_embeddings != pack_declares_tied_output
-    {
-        return Err(FoldedPackConfigError::OutputTyingDisagreement {
-            pack_ties_word_embeddings,
-            text_ties_word_embeddings,
-            pack_declares_tied_output,
-        });
-    }
-    Ok(pack_declares_tied_output)
 }
 
 /// One packed-module record: a projection whose weights live in the rotated
@@ -321,6 +296,22 @@ impl FoldedTextDimensions {
 }
 
 const FOLDED_BASE_TEXT_MODEL_TYPE: &str = "qwen3_5_text";
+
+/// Whether the head is tied, when the pack's three statements of it agree.
+/// A pack that says so in one place and not another is refused, because a
+/// wrong guess either reads a head that is not there or ignores one that is.
+fn validated_tied_output(document: &FoldedPackDocument) -> Result<bool, FoldedPackConfigError> {
+    if document.tie_word_embeddings == document.tied_output
+        && document.text_config.tie_word_embeddings == document.tied_output
+    {
+        return Ok(document.tied_output);
+    }
+    Err(FoldedPackConfigError::TiedOutputDisagreement {
+        tie_word_embeddings: document.tie_word_embeddings,
+        text_tie_word_embeddings: document.text_config.tie_word_embeddings,
+        tied_output: document.tied_output,
+    })
+}
 
 fn validated_dimensionality(text: &FoldedTextConfigDocument) -> Result<(), FoldedPackConfigError> {
     if text.hidden_size == 0
@@ -485,12 +476,12 @@ pub enum FoldedPackConfigError {
     #[error("folded pack omits the text component")]
     TextComponentMissing,
     #[error(
-        "folded pack disagrees with itself about a tied output head: tie_word_embeddings {pack_ties_word_embeddings}, text_config.tie_word_embeddings {text_ties_word_embeddings}, tied_output {pack_declares_tied_output}"
+        "folded pack disagrees about whether its output head is the embedding table (tie_word_embeddings {tie_word_embeddings}, text_config.tie_word_embeddings {text_tie_word_embeddings}, tied_output {tied_output})"
     )]
-    OutputTyingDisagreement {
-        pack_ties_word_embeddings: bool,
-        text_ties_word_embeddings: bool,
-        pack_declares_tied_output: bool,
+    TiedOutputDisagreement {
+        tie_word_embeddings: bool,
+        text_tie_word_embeddings: bool,
+        tied_output: bool,
     },
     #[error("folded pack declares unsupported hidden activation {actual_hidden_act:?}")]
     UnsupportedHiddenActivation { actual_hidden_act: String },

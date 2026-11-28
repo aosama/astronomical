@@ -280,7 +280,7 @@ fn write_configuration(
     configuration_document["runtime"]["maximum_mlx_memory_gb"] = json!(ceiling_gibibytes);
     // Only the SSD-streaming chunk varies; the resident chunk stays at its
     // default so a result cannot be a resident-chunk effect.
-    configuration_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"] =
+    configuration_document["chunking"]["prompt_processing_chunk_size_tokens"] =
         json!(RESIDENT_CHUNK_TOKENS);
     configuration_document["chunking"]["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"] =
         json!(chunk_tokens);

@@ -3,7 +3,7 @@
 //! and a bit-for-bit comparison of two outputs.
 
 use mlx_bridge::{MlxArray, MlxDtype};
-use model_serving::sorted_expert_matmul::SortedExpertLayout;
+use model_serving::sorted_expert_matmul::{ExpertStack, SortedExpertLayout};
 use runtime_integration::MlxRuntime;
 
 /// MLX's quantization group, the only one the kernel reads.
@@ -87,4 +87,77 @@ pub fn mismatched_values(runtime: &MlxRuntime, expected: &MlxArray, actual: &Mlx
         .iter()
         .filter(|flag| **flag == 0.0)
         .count()
+}
+
+/// A quantized expert stack: packed weights, scales and biases.
+pub type QuantizedStack = (MlxArray, MlxArray, MlxArray);
+
+/// The kernels' view of a quantized stack.
+pub fn stack_of(experts: &QuantizedStack) -> ExpertStack<'_> {
+    ExpertStack {
+        packed_weight: &experts.0,
+        scales: &experts.1,
+        biases: &experts.2,
+    }
+}
+
+/// MLX's own sorted `gather_qmm` of `sorted_rows` by each row's expert, on
+/// a stack quantized at `bits`.
+pub fn mlx_sorted_gather_qmm(
+    runtime: &MlxRuntime,
+    sorted_rows: &MlxArray,
+    experts: &QuantizedStack,
+    (sorted_expert_ids, bits): (&MlxArray, i32),
+) -> MlxArray {
+    runtime
+        .gather_quantized_matmul_affine(
+            sorted_rows,
+            &experts.0,
+            &experts.1,
+            &experts.2,
+            None,
+            Some(sorted_expert_ids),
+            true,
+            QUANTIZATION_GROUP_SIZE,
+            bits,
+            true,
+        )
+        .expect("MLX projects")
+}
+
+/// `row_count` standard-normal bf16 rows `[rows, 1, width]`, the shape the
+/// expert kernels read.
+pub fn standard_normal_rows(
+    runtime: &MlxRuntime,
+    random_key: &MlxArray,
+    (row_count, width): (i32, i32),
+) -> MlxArray {
+    let rows_shape = [row_count, 1, width];
+    runtime
+        .random_normal(&rows_shape, MlxDtype::BFloat16, 0.0, 1.0, random_key)
+        .expect("rows are drawn")
+}
+
+/// The engine's stable sort of `flat_expert_ids`, uploaded as int32
+/// arrays: (sorted order, each sorted assignment's token, its expert).
+pub fn uploaded_stable_routing(
+    runtime: &MlxRuntime,
+    flat_expert_ids: &[i32],
+    experts_per_token: i32,
+) -> (MlxArray, MlxArray, MlxArray) {
+    let (sorted_order, sorted_tokens, sorted_experts) =
+        stable_expert_sort(flat_expert_ids, experts_per_token);
+    let routing_shape = [sorted_order.len() as i32];
+    let mut uploaded = Vec::with_capacity(3);
+    for routing_values in [&sorted_order, &sorted_tokens, &sorted_experts] {
+        uploaded.push(
+            runtime
+                .array_from_i32(routing_values, &routing_shape)
+                .expect("the routing uploads"),
+        );
+    }
+    let sorted_experts = uploaded.pop().expect("three arrays were uploaded");
+    let sorted_tokens = uploaded.pop().expect("three arrays were uploaded");
+    let sorted_order = uploaded.pop().expect("three arrays were uploaded");
+    (sorted_order, sorted_tokens, sorted_experts)
 }

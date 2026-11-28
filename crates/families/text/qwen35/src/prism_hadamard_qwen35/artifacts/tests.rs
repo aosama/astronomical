@@ -8,4 +8,3 @@
 pub mod acceptance_tests;
 pub mod pack_fixture;
 mod refusal_tests;
-mod tied_output_tests;

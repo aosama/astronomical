@@ -54,28 +54,36 @@ impl CustomMetalKernelProbe for SortedExpertMatmulProbe<'_> {
                     description: error.to_string(),
                 }
             })?;
-        // The registry's check allows a relative 1e-5; this kernel promises
-        // MLX's exact bits, so anything short of equality is a mismatch.
-        if let Some(value_index) = kernel_values
-            .iter()
-            .zip(&mlx_values)
-            .position(|(kernel_value, mlx_value)| kernel_value.to_bits() != mlx_value.to_bits())
-        {
-            return Err(KernelCapabilityError::OutputMismatch {
-                description: format!(
-                    "probe output value {value_index} read {} but MLX gave {}",
-                    kernel_values[value_index], mlx_values[value_index]
-                ),
-            });
-        }
-        validate_probe_outputs(&kernel_values, &mlx_values)
+        exact_bits_verdict(&kernel_values, &mlx_values)
     }
+}
+
+/// The verdict on a kernel that promises MLX's exact bits: the registry's
+/// check allows a relative 1e-5, so equality to the bit is asked first and
+/// anything short of it is a mismatch.
+pub(super) fn exact_bits_verdict(
+    kernel_values: &[f32],
+    mlx_values: &[f32],
+) -> Result<(), KernelCapabilityError> {
+    if let Some(value_index) = kernel_values
+        .iter()
+        .zip(mlx_values)
+        .position(|(kernel_value, mlx_value)| kernel_value.to_bits() != mlx_value.to_bits())
+    {
+        return Err(KernelCapabilityError::OutputMismatch {
+            description: format!(
+                "probe output value {value_index} read {} but MLX gave {}",
+                kernel_values[value_index], mlx_values[value_index]
+            ),
+        });
+    }
+    validate_probe_outputs(kernel_values, mlx_values)
 }
 
 /// A fixed, non-trivial value at `index`: small integers over 16, so every
 /// weight and row value is exact in bf16 and varied enough to catch a
 /// misplaced row, column or expert.
-fn probe_value(index: usize, stride: usize) -> f32 {
+pub(super) fn probe_value(index: usize, stride: usize) -> f32 {
     ((index * stride) % 31) as f32 / 16.0 - 0.9
 }
 
@@ -147,7 +155,9 @@ fn run_probe_projections(
 
 /// Every token's two experts, uneven over the four, sorted stably as the
 /// engine's assignment sort does: (sorted order, tokens, experts).
-fn probe_routing(runtime: &MlxRuntime) -> Result<(MlxArray, MlxArray, MlxArray), MlxRuntimeError> {
+pub(super) fn probe_routing(
+    runtime: &MlxRuntime,
+) -> Result<(MlxArray, MlxArray, MlxArray), MlxRuntimeError> {
     let mut flat_experts = Vec::with_capacity(PROBE_TOKEN_COUNT * PROBE_EXPERTS_A_TOKEN);
     for token in 0..PROBE_TOKEN_COUNT {
         let first_expert = (token * token + 1) % PROBE_EXPERT_COUNT;
@@ -172,7 +182,10 @@ fn probe_routing(runtime: &MlxRuntime) -> Result<(MlxArray, MlxArray, MlxArray),
     ))
 }
 
-fn float_values(runtime: &MlxRuntime, projected: &MlxArray) -> Result<Vec<f32>, MlxRuntimeError> {
+pub(super) fn float_values(
+    runtime: &MlxRuntime,
+    projected: &MlxArray,
+) -> Result<Vec<f32>, MlxRuntimeError> {
     Ok(runtime.array_to_vec_f32(&runtime.astype(projected, MlxDtype::Float32)?)?)
 }
 

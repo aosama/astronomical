@@ -8,8 +8,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerChunkingConfiguration {
-    /// Fixed prompt work while sparse experts are fully resident.
-    pub fixed_prompt_processing_chunk_size_tokens: u32,
+    /// Prompt work while the whole model is held in memory: the size the
+    /// person set, or `None` for Automatic. A model's startup settles
+    /// Automatic into a number (`Some`) before any engine reads it.
+    #[serde(default)]
+    pub prompt_processing_chunk_size_tokens: Option<u32>,
     /// Fixed prompt work while sparse experts stream from storage.
     pub fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
     /// Capacity added when append-only attention state outgrows its current slab.
@@ -38,8 +41,9 @@ pub struct WorkerChunkingConfiguration {
     #[serde(default)]
     pub experimental_neural_engine_prefill_enabled: bool,
     /// How many tokens a model with a multi-token-prediction head drafts
-    /// after each reply token while its experts stream from storage: zero
-    /// drafts none, and `None` leaves the count to the engine.
+    /// after each reply token: zero drafts none, and `None` leaves the count
+    /// to the kind of head the model ships (one for Flash-Next, none for a
+    /// dense pack, whose head was measured slower than plain decoding).
     #[serde(default)]
     pub multi_token_prediction_draft_tokens: Option<u32>,
 }

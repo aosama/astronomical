@@ -73,13 +73,7 @@ impl Qwen3_5Model {
         ) else {
             return Ok(None);
         };
-        let experts_per_token =
-            *selected_expert_indices
-                .shape()
-                .last()
-                .ok_or(TextExecutionError::InvalidInput {
-                    description: "routed expert indices have no top-k axis",
-                })?;
+        let experts_per_token = experts_per_token(selected_expert_indices)?;
         let routing = TokenRowRouting {
             token_rows: hidden_states,
             sorted_order,
@@ -126,7 +120,7 @@ impl TokenRowRouting<'_> {
 
 /// The 4-bit stack a quantized projection holds, the only packing the kernel
 /// reads; `None` for every other weight kind.
-fn expert_stack_of(affine_weights: &Qwen3_5AffineWeights) -> Option<ExpertStack<'_>> {
+pub(super) fn expert_stack_of(affine_weights: &Qwen3_5AffineWeights) -> Option<ExpertStack<'_>> {
     match affine_weights {
         Qwen3_5AffineWeights::Quantized {
             packed_weight,
@@ -144,7 +138,20 @@ fn expert_stack_of(affine_weights: &Qwen3_5AffineWeights) -> Option<ExpertStack<
 }
 
 /// A shape or packing the kernel does not take: the chunk keeps MLX's route.
-fn is_refusal(projection_error: &SortedExpertProjectionError) -> bool {
+/// The experts each token picked: the routed indices' last axis.
+pub(super) fn experts_per_token(
+    selected_expert_indices: &MlxArray,
+) -> Result<i32, TextExecutionError> {
+    selected_expert_indices
+        .shape()
+        .last()
+        .copied()
+        .ok_or(TextExecutionError::InvalidInput {
+            description: "routed expert indices have no top-k axis",
+        })
+}
+
+pub(super) fn is_refusal(projection_error: &SortedExpertProjectionError) -> bool {
     matches!(
         projection_error,
         SortedExpertProjectionError::Refused(_)

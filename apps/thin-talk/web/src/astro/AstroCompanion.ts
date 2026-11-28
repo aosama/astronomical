@@ -47,6 +47,8 @@ export class AstroCompanion {
     getStartedOverlay: HTMLElement;
     settingsOverlay: HTMLElement;
     emptyState: HTMLElement;
+    /** Home's ideas, follow-up area and privacy line, below the message field. */
+    homeBelowComposer: HTMLElement;
     composerField: HTMLTextAreaElement;
     skillLaunchers: HTMLElement;
     /** Shows the window classic or with Astro; see applyAstroPresentation. */
@@ -81,6 +83,7 @@ export class AstroCompanion {
     });
     this.home = new AstroHomeView({
       emptyState: init.emptyState,
+      belowComposer: init.homeBelowComposer,
       library: init.library,
       onStarterPrompt: (prompt) => this.prepareMessage(prompt),
     });

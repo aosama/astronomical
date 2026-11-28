@@ -14,8 +14,9 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 
 mod attention_binding;
 mod connection_binding;
+mod dense_mtp_head_binding;
+mod flash_next_mtp_head_binding;
 mod language_tensor_binding;
-mod mtp_head_binding;
 #[cfg(test)]
 mod tests;
 
@@ -24,11 +25,12 @@ use connection_binding::{
     LayerNormsAndAdditions, append_final_lane_mixer_arrays, apply_centered_norm_storage_convention,
     take_layer_norms_and_additions,
 };
+pub use dense_mtp_head_binding::bind_dense_mtp_head_weights;
+pub use flash_next_mtp_head_binding::bind_flash_next_mtp_head_weights;
 use language_tensor_binding::{
     BoundLanguageTensors, TypedLanguageWeights, bind_language_tensors,
     raw_hugging_face_norm_offsets_in_shards, take_typed_language_weights,
 };
-pub use mtp_head_binding::bind_mtp_head_weights;
 
 use super::weights_validation;
 use super::{

@@ -48,15 +48,16 @@ const DOWNLOAD_MODELS_CSS: &str = include_str!("../../console/download-models.cs
 const EXPERTS_CSS: &str = include_str!("../../console/experts.css");
 const MEMORY_PAGE_JS: &str = include_str!("../../console/memory-page.js");
 const MEMORY_PAGE_IMAGE_JS: &str = include_str!("../../console/memory-page-image.js");
+const OVERVIEW_RIGHT_NOW_JS: &str = include_str!("../../console/overview-right-now.js");
 const MEMORY_PAGE_CSS: &str = include_str!("../../console/memory-page.css");
 
 const HTML_CONTENT_TYPE: &str = "text/html; charset=utf-8";
 const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
 const CSS_CONTENT_TYPE: &str = "text/css; charset=utf-8";
 
-/// Returns the Observatory console routes, ready to merge into any daemon
-/// `Router` without repeating asset routes across every builder variant.
-pub(crate) fn console_routes<S>() -> Router<S>
+/// Every address that serves the Observatory shell: each page's own, and the
+/// retired ones, which console.js sends on to the page that replaced them.
+fn console_page_routes<S>() -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
 {
@@ -68,6 +69,8 @@ where
         // the shell, and console.js opens Overview from it.
         .route("/model", get(console_index))
         .route("/experts", get(console_index))
+        // The Memory page was merged into Under the hood; its old address still
+        // serves the shell, and console.js opens Under the hood from it.
         .route("/memory", get(console_index))
         .route("/download-models", get(console_index))
         // The page was renamed Download Models; its old address still serves
@@ -79,6 +82,15 @@ where
         // The Configuration page was split into Settings and Tuning; its old address
         // still serves the shell, and console.js opens Settings from it.
         .route("/configuration", get(console_index))
+}
+
+/// Returns the Observatory console routes, ready to merge into any daemon
+/// `Router` without repeating asset routes across every builder variant.
+pub(crate) fn console_routes<S>() -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    console_page_routes()
         .route("/configuration-model.js", get(configuration_model_script))
         .route("/configuration-layout.js", get(configuration_layout_script))
         .route("/configuration.js", get(configuration_script))
@@ -145,6 +157,7 @@ where
         .route("/experts.css", get(experts_stylesheet))
         .route("/memory-page.js", get(memory_page_script))
         .route("/memory-page-image.js", get(memory_page_image_script))
+        .route("/overview-right-now.js", get(overview_right_now_script))
         .route("/memory-page.css", get(memory_page_stylesheet))
 }
 
@@ -292,18 +305,27 @@ pub(crate) async fn experts_stylesheet() -> Response {
     embedded_text_response(EXPERTS_CSS, CSS_CONTENT_TYPE)
 }
 
-/// `GET /memory-page.js` — the Memory view: the Mac's memory bar with the
-/// kernel wire limit, the reply facts and the per-token strip.
+/// `GET /memory-page.js` — Under the hood's reply summary: the headline,
+/// the plain facts and the per-token strip, with the Mac's memory bar and the
+/// kernel wire limit in its developer details.
 pub(crate) async fn memory_page_script() -> Response {
     embedded_text_response(MEMORY_PAGE_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
-/// `GET /memory-page-image.js` — draws the Memory view as one picture for
-/// Copy as image.
+/// `GET /memory-page-image.js` — draws the picture Copy as image makes on
+/// Under the hood and on Home.
 pub(crate) async fn memory_page_image_script() -> Response {
     embedded_text_response(MEMORY_PAGE_IMAGE_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
+/// `GET /overview-right-now.js` — Home's "Right now" card: the model, the
+/// memory limit and the speed in one plain sentence.
+pub(crate) async fn overview_right_now_script() -> Response {
+    embedded_text_response(OVERVIEW_RIGHT_NOW_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /memory-page.css` — Under the hood's reply summary and developer
+/// details; the file keeps the name of the Memory page it began as.
 pub(crate) async fn memory_page_stylesheet() -> Response {
     embedded_text_response(MEMORY_PAGE_CSS, CSS_CONTENT_TYPE)
 }

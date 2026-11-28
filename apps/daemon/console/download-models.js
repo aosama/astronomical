@@ -282,7 +282,6 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
             : null,
         buildOf: downloadModelsOptionalText(catalogEntry.build_of),
         buildDifference: downloadModelsOptionalText(catalogEntry.build_difference),
-        measuredSpeed: downloadModelsMeasuredSpeedFromEntry(catalogEntry.measured_speed),
         bundledDrafter: catalogEntry.bundled_drafter === "dflash" || catalogEntry.bundled_drafter === "dflash2"
             ? catalogEntry.bundled_drafter
             : null,
@@ -299,26 +298,6 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
         maxOutputTokens: typeof capabilities.max_output_tokens === "number"
             ? capabilities.max_output_tokens
             : null
-    };
-}
-
-// Measured reply speeds in tokens a second, or null when the entry was not
-// measured or any figure is malformed: a partial speed is never shown.
-function downloadModelsMeasuredSpeedFromEntry(measuredSpeed) {
-    const rates = measuredSpeed?.tokens_per_second;
-    if (!rates || typeof measuredSpeed.measured_on !== "string"
-        || typeof measuredSpeed.astronomical_version !== "string") {
-        return null;
-    }
-    const rateNames = ["essay_short_prompt", "essay_long_prompt", "code_short_prompt", "code_long_prompt"];
-    if (!rateNames.every((rateName) => Number.isInteger(rates[rateName]) && rates[rateName] > 0)) return null;
-    return {
-        measuredOn: measuredSpeed.measured_on,
-        astronomicalVersion: measuredSpeed.astronomical_version,
-        essayShortPrompt: rates.essay_short_prompt,
-        essayLongPrompt: rates.essay_long_prompt,
-        codeShortPrompt: rates.code_short_prompt,
-        codeLongPrompt: rates.code_long_prompt
     };
 }
 

@@ -251,6 +251,9 @@ impl AstroSsdPromptCacheDiskStore {
         &self,
         model_id: Option<&str>,
     ) -> Result<AstroSsdPromptCacheClearOutcome, AstroSsdPromptCacheDiskStoreError> {
+        // A block still queued would otherwise land after the clear and
+        // bring cleared state back.
+        self.wait_for_queued_publications();
         let _write_operation_guard = self.lock_write_operations();
         let clear_target_directory = model_id.map(|model_id| {
             self.global_astro_ssd_prompt_cache_root_directory

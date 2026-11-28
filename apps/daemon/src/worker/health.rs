@@ -23,6 +23,9 @@ mod model_load_in_flight_tests;
 #[cfg(test)]
 mod neural_engine_prefill_tests;
 #[cfg(test)]
+#[path = "health/prompt_processing_chunk_tests.rs"]
+mod prompt_processing_chunk_tests;
+#[cfg(test)]
 mod reply_drafting_tests;
 #[cfg(test)]
 #[path = "health/reply_peak_memory_tests.rs"]
@@ -41,9 +44,9 @@ pub(crate) use publisher::{
     publish_health, publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
     publish_mlx_memory_limit_rejection, publish_model_load_in_flight,
     publish_neural_engine_prefill, publish_pending_astro_ssd_prompt_cache_clear,
-    publish_worker_expert_residency, record_neural_engine_chunk, record_prompt_work_reuse,
-    record_reply_drafting, record_reply_peak_mlx_memory, record_running_generation,
-    record_running_prefill, record_serving_session,
+    publish_prompt_processing_chunk, publish_worker_expert_residency, record_neural_engine_chunk,
+    record_prompt_work_reuse, record_reply_drafting, record_reply_peak_mlx_memory,
+    record_running_generation, record_running_prefill, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the daemon readiness endpoint.
@@ -302,6 +305,9 @@ pub struct WorkerHealthSnapshot {
     /// kernels and which of them the loaded model holds; `None` when no model
     /// is loaded or its engine has no custom kernels.
     pub custom_metal_kernels: Option<ipc_protocol::CustomMetalKernelReport>,
+    /// The prompt chunk the loaded model reads prompts in and what decided
+    /// it; `None` when no model is loaded or its engine settles no chunk.
+    pub prompt_processing_chunk: Option<ipc_protocol::PromptProcessingChunkReport>,
     /// What drafting did for the last finished reply; `None` when it did not draft.
     pub last_reply_drafting: Option<ipc_protocol::RequestDraftingStatistics>,
     /// Drafting summed over every reply since this model loaded.
@@ -367,6 +373,7 @@ impl WorkerHealthSnapshot {
             neural_engine_prefill: None,
             draft_model: None,
             custom_metal_kernels: None,
+            prompt_processing_chunk: None,
             last_reply_drafting: None,
             session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
             last_reply_peak_mlx_memory_bytes: None,
@@ -448,6 +455,7 @@ impl WorkerHealthSnapshot {
             neural_engine_prefill: None,
             draft_model: None,
             custom_metal_kernels: None,
+            prompt_processing_chunk: None,
             last_reply_drafting: None,
             session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
             last_reply_peak_mlx_memory_bytes: None,
@@ -482,6 +490,7 @@ impl WorkerHealthSnapshot {
             neural_engine_prefill: None,
             draft_model: None,
             custom_metal_kernels: None,
+            prompt_processing_chunk: None,
             last_reply_drafting: None,
             session_drafting: ipc_protocol::RequestDraftingStatistics::NONE,
             last_reply_peak_mlx_memory_bytes: None,

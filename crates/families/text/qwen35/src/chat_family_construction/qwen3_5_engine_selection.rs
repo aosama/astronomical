@@ -1,12 +1,9 @@
-//! Which engine a Qwen3.5 text model starts on, and the prompt chunk it
-//! reads in (issue #2585).
+//! Which engine a Qwen3.5 text model starts on (issue #2585).
 //!
 //! Every text model starts on the engine. The artifact's memory
 //! geometry is still worked out, because it says whether the whole model
 //! fits, which the placement reported to the worker and the prompt chunk
-//! size depend on.
-
-use ipc_protocol::WorkerChunkingConfiguration;
+//! size depend on (`qwen3_5_prompt_chunk_settlement`).
 
 use crate::{
     CompleteResidencyRequirements, EnginePlacement, Qwen3_5MemoryGeometryError,
@@ -22,6 +19,9 @@ pub(super) struct EngineStart {
     /// The startup arithmetic found room for the whole model, so prompts
     /// are read in the in-memory chunk size.
     pub(super) holds_whole_model: bool,
+    /// The model routes each token through a few of many experts, which is
+    /// what makes a wider in-memory prompt chunk pay on an M5 or newer.
+    pub(super) has_routed_experts: bool,
 }
 
 /// Every text model is served by the engine, which keeps in
@@ -38,12 +38,12 @@ pub(super) fn select_qwen3_5_engine_from_artifact(
         model_directory_path,
         active_memory_limit_bytes,
     )?;
+    let model_config = validated_artifact.config();
     Ok(engine_start_choice(
         geometry_placement,
-        validated_artifact
-            .config()
-            .qwen4_exp_architecture()
-            .is_some(),
+        model_config.qwen4_exp_architecture().is_some(),
+        model_config.feed_forward_architecture()
+            == crate::Qwen3_5FeedForwardArchitecture::MixtureOfExperts,
     ))
 }
 
@@ -55,29 +55,16 @@ pub(super) fn select_qwen3_5_engine_from_artifact(
 fn engine_start_choice(
     geometry_placement: EnginePlacement,
     keeps_the_streaming_chunk_size: bool,
+    has_routed_experts: bool,
 ) -> (EngineStart, EnginePlacement) {
     (
         EngineStart {
             holds_whole_model: geometry_placement.holds_whole_model()
                 && !keeps_the_streaming_chunk_size,
+            has_routed_experts,
         },
         geometry_placement,
     )
-}
-
-/// The prompt chunk the text engine reads in: the in-memory size when it
-/// holds the whole model, which is the size the Neural Engine programs are
-/// compiled for and the one every in-memory comparison was measured at;
-/// otherwise the streaming size, which bounds a streamed layer's reads.
-pub(super) const fn prompt_chunk_tokens_for(
-    chunking: &WorkerChunkingConfiguration,
-    holds_whole_model: bool,
-) -> u32 {
-    if holds_whole_model {
-        chunking.fixed_prompt_processing_chunk_size_tokens
-    } else {
-        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-    }
 }
 
 fn select_qwen3_5_engine_from_artifact_geometry(

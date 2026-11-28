@@ -106,7 +106,7 @@ struct AnswerPair {
 }
 
 #[derive(Clone, Copy)]
-enum PagingDepth {
+pub(super) enum PagingDepth {
     /// Every expert fits but the activation headroom does not.
     Boundary,
     /// Half the expert payload is out of RAM at any moment.
@@ -133,6 +133,17 @@ fn paging_ceiling_bytes(model_directory: &Path, paging_depth: PagingDepth) -> u6
             .checked_sub(model_geometry.complete_expert_payload_bytes / 2)
             .expect("half the expert payload should fit under the boundary ceiling"),
     }
+}
+
+/// The MLX limits that hold a run at `paging_depth`.
+pub(super) fn paging_ceiling_limits(
+    model_directory: &Path,
+    paging_depth: PagingDepth,
+) -> MlxMemoryLimits {
+    let ceiling_limit_bytes = usize::try_from(paging_ceiling_bytes(model_directory, paging_depth))
+        .expect("the ceiling fits usize");
+    MlxMemoryLimits::new(ceiling_limit_bytes, ceiling_limit_bytes)
+        .expect("the ceiling should be a valid MLX limit")
 }
 
 async fn ask_twice(
@@ -290,7 +301,7 @@ fn parity_prompt_token_ids(model_directory: &Path, question: ParityQuestion) -> 
     )
 }
 
-fn parity_model_directory() -> std::path::PathBuf {
+pub(super) fn parity_model_directory() -> std::path::PathBuf {
     crate::common::configured_installed_model_directory_by_id(
         crate::common::resident_sparse_moe_model_id(),
     )
@@ -406,10 +417,7 @@ async fn prove_paging_keeps_the_answer(paging_depth: PagingDepth, depth_name: &s
     let whole_model_answer_pairs = whole_model_answers_from_child_process().await;
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = parity_model_directory();
-    let ceiling_limit_bytes = usize::try_from(paging_ceiling_bytes(&model_directory, paging_depth))
-        .expect("the ceiling fits usize");
-    let ceiling_limits = MlxMemoryLimits::new(ceiling_limit_bytes, ceiling_limit_bytes)
-        .expect("the ceiling should be a valid MLX limit");
+    let ceiling_limits = paging_ceiling_limits(&model_directory, paging_depth);
     let paged_run = ask_every_question(&model_directory, &ceiling_limits, true).await;
     assert_ne!(
         paged_run.expert_memory_mode,

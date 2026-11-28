@@ -10,9 +10,6 @@ fn arguments(argument_texts: &[&str]) -> Vec<String> {
 #[test]
 fn should_read_every_option_and_keep_models_in_order() {
     let parsed_options = MeasureSpeedOptions::parse(&arguments(&[
-        "--measured-on",
-        "Mac with an M4 Max and 128 GB",
-        "--write-catalog",
         "--temperature",
         "0.7",
         "--base-url",
@@ -27,8 +24,6 @@ fn should_read_every_option_and_keep_models_in_order() {
         MeasureSpeedOptions {
             base_url: "http://127.0.0.1:9999".to_owned(),
             temperature_override: Some(0.7),
-            measured_on: Some("Mac with an M4 Max and 128 GB".to_owned()),
-            should_write_catalog: true,
             should_use_reference_set: false,
             should_write_ledger: false,
             model_ids: vec!["Model-B".to_owned(), "Model-A".to_owned()],
@@ -37,7 +32,7 @@ fn should_read_every_option_and_keep_models_in_order() {
 }
 
 #[test]
-fn should_default_to_development_and_no_catalog_write() {
+fn should_default_to_development_and_no_ledger_write() {
     let parsed_options = MeasureSpeedOptions::parse(&arguments(&["Model-A"])).expect("valid");
 
     assert_eq!(
@@ -48,12 +43,7 @@ fn should_default_to_development_and_no_catalog_write() {
         parsed_options.temperature_override, None,
         "each task's own temperature"
     );
-    assert!(!parsed_options.should_write_catalog);
     assert!(!parsed_options.should_write_ledger);
-    assert_eq!(
-        parsed_options.measured_on, None,
-        "parsing leaves the Mac's description to the run"
-    );
 }
 
 #[test]

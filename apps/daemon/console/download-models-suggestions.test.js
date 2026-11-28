@@ -118,31 +118,15 @@ test("should_list_matching_builds_without_a_toggle_while_searching", () => {
     assert.equal(renderedTexts(catalogContainer).includes("Draft model built in · 1.0 GB more memory"), true);
 });
 
-function measuredSpeed(essayRate, codeRate) {
-    return {
-        measured_on: "Mac with an M5 Pro and 48 GB",
-        astronomical_version: "0.2.129",
-        tokens_per_second: {
-            essay_short_prompt: essayRate, essay_long_prompt: essayRate,
-            code_short_prompt: codeRate, code_long_prompt: codeRate
-        }
-    };
-}
-
-test("should_list_measured_speeds_with_where_they_were_measured_in_the_details", () => {
+test("should_list_a_models_size_and_memory_without_a_speed", () => {
     const catalogContainer = renderModelsPage(
-        [entryNamed("Measured", { measured_speed: measuredSpeed(96, 125) })],
+        [entryNamed("Measured", {})],
         'downloadModelsExpandedModelId = "Measured";'
     );
-    const detailTexts = renderedTexts(catalogContainer);
+    const detailTexts = renderedTexts(catalogContainer).join("\n");
 
-    for (const expectedText of [
-        "96 tokens a second, 96 after a 10,000-token prompt",
-        "125 tokens a second, 125 after a 10,000-token prompt",
-        "Mac with an M5 Pro and 48 GB, Astronomical 0.2.129"
-    ]) {
-        assert.equal(detailTexts.includes(expectedText), true, expectedText);
-    }
+    assert.equal(detailTexts.includes("tokens a second"), false);
+    assert.equal(detailTexts.includes("Memory while running"), true);
 });
 
 

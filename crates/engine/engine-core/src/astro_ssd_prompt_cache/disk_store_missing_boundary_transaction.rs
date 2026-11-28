@@ -6,12 +6,9 @@
 //! synchronize, admit under the global quota, rename, then synchronize and
 //! expose the file through the in-memory index.
 
-use std::collections::HashMap;
 use std::path::Path;
 
-use mlx_bridge::MlxArray;
 use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use runtime_integration::MlxRuntime;
 
 use super::block_key::AstroSsdPromptCacheBlockKey;
 use super::block_manifest::BOUNDARY_STATE_FILE_NAME;
@@ -27,6 +24,7 @@ use super::disk_store_file::{
     save_direct_safetensors_file_with_name, synchronize_directory,
 };
 use super::disk_store_index::TrackedAstroSsdPromptCacheFile;
+use super::host_state_tensor::AstroSsdPromptCacheHostTensors;
 
 #[cfg(test)]
 #[path = "disk_store_missing_boundary_transaction_tests.rs"]
@@ -35,9 +33,8 @@ mod disk_store_missing_boundary_transaction_tests;
 impl AstroSsdPromptCacheDiskStore {
     pub(super) fn publish_missing_boundary_state_transaction(
         &self,
-        runtime: &MlxRuntime,
         block_key: &AstroSsdPromptCacheBlockKey,
-        boundary_state_tensors: &HashMap<String, MlxArray>,
+        boundary_state_tensors: &AstroSsdPromptCacheHostTensors,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
         // Startup compaction may legally leave sequence state on a non-checkpoint
@@ -58,7 +55,6 @@ impl AstroSsdPromptCacheDiskStore {
         );
         create_staging_directory(&staging_directory)?;
         let staged_boundary_state = self.stage_missing_boundary_state(
-            runtime,
             block_key,
             boundary_state_tensors,
             &staging_directory,
@@ -106,14 +102,12 @@ impl AstroSsdPromptCacheDiskStore {
     /// propagates.
     fn stage_missing_boundary_state(
         &self,
-        runtime: &MlxRuntime,
         block_key: &AstroSsdPromptCacheBlockKey,
-        boundary_state_tensors: &HashMap<String, MlxArray>,
+        boundary_state_tensors: &AstroSsdPromptCacheHostTensors,
         staging_directory: &Path,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<StagedAstroSsdPromptCacheStateFile, AstroSsdPromptCacheDiskStoreError> {
         let staged_boundary_state = save_direct_safetensors_file_with_name(
-            runtime,
             staging_directory,
             BOUNDARY_STATE_FILE_NAME,
             boundary_state_tensors,

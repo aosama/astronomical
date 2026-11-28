@@ -4,31 +4,40 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.137</title>
-            <pubDate>Fri, 27 Nov 2026 08:54:45 -0500</pubDate>
-            <sparkle:version>2640</sparkle:version>
-            <sparkle:shortVersionString>0.2.137</sparkle:shortVersionString>
+            <title>0.2.138</title>
+            <pubDate>Sat, 28 Nov 2026 00:20:26 -0500</pubDate>
+            <sparkle:version>2658</sparkle:version>
+            <sparkle:shortVersionString>0.2.138</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## Speed
 
-How fast each measured model runs, against the previous release, is in the table on the [release page](https://github.com/aosama/astronomical/releases/tag/v0.2.137).
+How fast each measured model runs, against the previous release, is in the table on the [release page](https://github.com/aosama/astronomical/releases/tag/v0.2.138).
 
-## Fixes
+## What's new
 
-- **Ternary Bonsai 2.5 answers long prompts again.** In 0.2.136, a prompt long enough to be saved for reuse stopped with "astro SSD prompt cache failed during required persistent prompt-state capture". The saved state is now kept in the precision the model really uses (#2693).
-- **A prompt that cannot be saved for reuse no longer stops the reply.** Saving stops for that request and the reply goes on. Whatever was already saved still makes later requests faster.
+- **Faster prompt reading for models with experts held in memory.**
+  - Saved prompt blocks are written in the background, so the first token no longer waits for the SSD.
+  - On M5 and newer Macs, the routed experts of 4-bit and 6-bit models run through new kernels with the same results as before, read more of a prompt at a time, and skip a copy of every token row.
+  - Prompt blocks line up with prompt chunks, and a fused kernel prepares whole prompt spans.
+- **Automatic prompt chunk.** The prompt chunk size is Automatic by default: 4,096 tokens for models with experts on an M5 or newer, 2,048 elsewhere. Observatory shows the size in use and why, and status reports it as `prompt_processing_chunk`.
+- **Kev** installs from the download catalog as its published MLX build.
+- **Status:** the custom kernel probe results and the kernels in use appear in status. Session speed averages include the running request and stay live while a prompt is read layer by layer.
 
 ## Compatibility
 
-Your settings, models and conversations carry over unchanged. Astronomical needs macOS 14.0 or later on Apple silicon.
+- The prompt chunk setting moves to `chunking.prompt_processing_chunk_size_tokens` the first time this version loads your settings. A 2,048 or 4,096 that an earlier version wrote there by default becomes Automatic. A size you chose yourself, and every per-model size, is kept.
+- Conversations, models and other settings are kept.
+- macOS 14.0 or later on Apple silicon.
 
-The app is signed with a Developer ID, notarized by Apple, and delivered through a signed Sparkle update.
+## Distribution
+
+The app is signed with a Developer ID certificate and Hardened Runtime, notarized by Apple and stapled. The Sparkle update feed is signed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.137/Astronomical-0.2.137-macOS-arm64.dmg" length="27353384" type="application/octet-stream" sparkle:edSignature="JKn1KgnST8lLCNpruNxIQ3ysIJCGwldhIHz9bHQmWECzC2rbc5J6Z2n8Bf6/DFPeWI8aNmYxa1Sijctk/MM9Bw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.138/Astronomical-0.2.138-macOS-arm64.dmg" length="27508606" type="application/octet-stream" sparkle:edSignature="aCRU3ovS2l9T0sYM588TemshBrtsM7GwjeVond+mE4ZBWXzmxvSwtCunF1BZ5Fb/oSul0SjbRqNCcCuy4zAbCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: bJQu8lBioK5dXss5RLE3SLTycZ9cuum3ZBGtVZrIZ0RqRdxASL9/vdUKB6C207Ti3gTi826O8v2idDyxMfiODw==
-length: 2130
+edSignature: j/UJURm4GYPV8PKOp67G6dNYqbD7jD+6fLAmYn3j5TpvBcxTFMFtM4aLDWFAgTViB+SISKLvKWbozilmYpahDw==
+length: 2941
 -->

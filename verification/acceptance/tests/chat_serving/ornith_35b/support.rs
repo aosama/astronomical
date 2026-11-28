@@ -119,7 +119,7 @@ fn isolated_home(
             serde_json::json!(prefix_adoption_enabled);
     }
     if let Some(prompt_processing_chunk_tokens) = run_configuration.prompt_processing_chunk_tokens {
-        config_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"] =
+        config_document["chunking"]["prompt_processing_chunk_size_tokens"] =
             serde_json::json!(prompt_processing_chunk_tokens);
     }
     std::fs::write(

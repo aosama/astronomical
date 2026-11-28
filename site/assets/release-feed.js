@@ -50,7 +50,8 @@
         version: firstByLocalName(itemNodes[i], 'shortVersionString'),
         date: firstByLocalName(itemNodes[i], 'pubDate'),
         notes: firstByLocalName(itemNodes[i], 'description'),
-        diskImageUrl: enclosureUrl(itemNodes[i]),
+        diskImageUrl: enclosureAttribute(itemNodes[i], 'url'),
+        diskImageByteCount: Number(enclosureAttribute(itemNodes[i], 'length')),
       });
     }
     return releases;
@@ -66,14 +67,14 @@
     return found ? (found.textContent || '').trim() : '';
   }
 
-  function enclosureUrl(itemNode) {
+  function enclosureAttribute(itemNode, attributeName) {
     var enclosureNode = Array.prototype.filter.call(
       itemNode.children,
       function (child) {
         return child.localName === 'enclosure';
       }
     )[0];
-    return enclosureNode ? enclosureNode.getAttribute('url') || '' : '';
+    return enclosureNode ? enclosureNode.getAttribute(attributeName) || '' : '';
   }
 
   function latestDiskImageUrl(releases) {
@@ -168,7 +169,7 @@
     }
   }
 
-  // Homepage (index.html) version chip + #use note. Guarded by element
+  // Homepage (index.html) version chip and download-size note. Guarded by element
   // existence, so this is a no-op on support.html and leaves that page alone.
   function renderHomepageStable(releases) {
     var versionNode = document.getElementById('home-stable-version');
@@ -179,26 +180,28 @@
       versionNode.href =
         'https://github.com/aosama/astronomical/releases/tag/' + versionLabel;
     }
-    if (versionLabel && noteNode) {
-      noteNode.innerHTML =
-        'Stable is now <strong>' + escapeHtml(versionLabel) +
-        '</strong> — open it and the local runner goes live on this Mac; ' +
-        'Observatory is the local console for the Library, status, and interim chat.';
+    var downloadSizeLabel = diskImageSizeLabel(releases);
+    if (downloadSizeLabel && noteNode) {
+      noteNode.textContent = downloadSizeLabel + ' download · updates itself';
     }
+  }
+
+  // The size a visitor waits for, in the megabytes macOS itself shows
+  // (1,048,576 bytes). Empty when the feed gives no length, so the page keeps
+  // the sentence it shipped with rather than showing "0 MB".
+  function diskImageSizeLabel(releases) {
+    var byteCount = releases[0] ? releases[0].diskImageByteCount : 0;
+    if (!byteCount || !latestDiskImageUrl(releases)) {
+      return '';
+    }
+    return 'A ' + Math.round(byteCount / 1048576) + ' MB';
   }
 
   function renderHomepageFailure() {
     var versionNode = document.getElementById('home-stable-version');
-    var noteNode = document.getElementById('home-stable-note');
     if (versionNode) {
       versionNode.textContent = 'on GitHub Releases';
       versionNode.href = 'https://github.com/aosama/astronomical/releases/latest';
-    }
-    if (noteNode) {
-      noteNode.innerHTML =
-        'Stable is on <strong>GitHub Releases</strong> (signed + notarized Mac disk image; Sparkle updates). ' +
-        'After you open it, you can tell the local runner is live on this Mac and see one next step. ' +
-        'Observatory remains the local console for the Library, status, and interim chat.';
     }
   }
 

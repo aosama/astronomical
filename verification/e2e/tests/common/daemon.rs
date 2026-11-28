@@ -39,7 +39,7 @@ pub(crate) async fn spawn_daemon_with_worker_ready_model(
     // they intend to exercise.
     write_v1_config(
         temp_home.path(),
-        r#"{"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048}}"#,
+        r#"{"chunking":{"prompt_processing_chunk_size_tokens":2048}}"#,
     );
     let mut daemon_command = Command::new(daemon_executable_path);
     daemon_command
@@ -280,7 +280,7 @@ pub(crate) fn write_instance_config(state_directory: &Path) {
     // assertions inside their exit budgets on every machine.
     std::fs::write(
         state_directory.join("config.json"),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"maximum_mlx_memory_gb":2},"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"maximum_mlx_memory_gb":2},"chunking":{"prompt_processing_chunk_size_tokens":2048}}"#,
     )
     .expect("instance config should be written");
 }

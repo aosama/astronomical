@@ -1,6 +1,6 @@
-//! `cargo xtask app thin-talk`: its argument rule, the plist that points the
-//! standalone chat app at the Development engine, and the canvas check that
-//! refuses a build whose conversation would open blank.
+//! `cargo xtask app thin-talk`: its argument rule, its build order, the plist
+//! that points the standalone chat app at the Development engine, and the
+//! canvas check that refuses a build whose conversation would open blank.
 
 use std::fs;
 use std::path::Path;
@@ -8,8 +8,9 @@ use std::path::Path;
 use super::channel_profile::{Channel, ChannelProfile};
 use super::command::{AppCommand, DevOpenPlacement, parse_app_command};
 use super::thin_talk_pipeline::{
-    check_canvas_resources, missing_canvas_client_assets, render_thin_talk_info_plist,
-    thin_talk_bundle_path, thin_talk_open_arguments, thin_talk_process_pattern,
+    THIN_TALK_STEP_NAMES, check_canvas_resources, missing_canvas_client_assets,
+    render_thin_talk_info_plist, thin_talk_bundle_path, thin_talk_open_arguments,
+    thin_talk_process_pattern,
 };
 
 fn development_plist() -> String {
@@ -87,6 +88,36 @@ fn should_name_the_standalone_executable_identifier_and_icon_in_the_plist() {
     }
     assert!(plist_text.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"));
     assert!(plist_text.ends_with("</dict>\n</plist>\n"));
+}
+
+fn thin_talk_step_position(step_name: &str) -> usize {
+    let Some(position) = THIN_TALK_STEP_NAMES
+        .iter()
+        .position(|listed_step| *listed_step == step_name)
+    else {
+        panic!("app thin-talk has no {step_name} step");
+    };
+    position
+}
+
+#[test]
+fn should_rebuild_the_web_client_before_the_swift_build_copies_it() {
+    assert_eq!(
+        thin_talk_step_position("thin-talk-web"),
+        0,
+        "the web client is built first"
+    );
+    assert!(thin_talk_step_position("thin-talk-web") < thin_talk_step_position("swift-build"));
+}
+
+#[test]
+fn should_not_list_a_step_twice() {
+    for (step_index, step_name) in THIN_TALK_STEP_NAMES.iter().enumerate() {
+        assert!(
+            !THIN_TALK_STEP_NAMES[step_index + 1..].contains(step_name),
+            "{step_name} is listed twice"
+        );
+    }
 }
 
 #[test]

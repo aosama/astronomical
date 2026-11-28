@@ -4,7 +4,7 @@
 //! The Models page and the chat app's first run show the same suggestions, so
 //! the rules live here once. A suggestion answers "what would be better on this
 //! Mac?": the strongest model on the ladder that runs entirely in memory, a
-//! quicker draft build of it, a build that keeps more detail, the strongest
+//! build that keeps more detail, the strongest
 //! model that still runs by streaming from the SSD, and a picture model when
 //! there is none. The ladder is the catalog's Get started picks for chat and
 //! coding, the models the release authors chose to steer people to, ordered by
@@ -24,9 +24,6 @@ use crate::model_suggestion_wording::word_suggestion;
 // conversation, and the page would be suggesting a slowdown.
 const ROOMY_FIT_NUMERATOR: u64 = 9;
 const ROOMY_FIT_DENOMINATOR: u64 = 10;
-// A draft build counts as quicker only when it measured at least this much
-// quicker; smaller gaps sit inside the spread between measurement rounds.
-pub(crate) const QUICKER_SPEED_RATIO: f64 = 1.1;
 const MAXIMUM_SUGGESTION_COUNT: usize = 3;
 
 /// How a model runs within this Mac's memory for models.
@@ -45,8 +42,6 @@ pub(crate) enum MemoryFit {
 pub enum ModelSuggestionKind {
     BestFit,
     Stronger,
-    Quicker,
-    QuickerForCode,
     MoreDetail,
     Streams,
     Pictures,
@@ -58,8 +53,6 @@ impl ModelSuggestionKind {
         config::exhaustive_table!(self, {
             Self::BestFit => "best_fit",
             Self::Stronger => "stronger",
-            Self::Quicker => "quicker",
-            Self::QuickerForCode => "quicker_for_code",
             Self::MoreDetail => "more_detail",
             Self::Streams => "streams",
             Self::Pictures => "pictures",
@@ -75,8 +68,7 @@ pub(crate) struct DecidedSuggestion<'catalog> {
     /// The smaller ladder model the person has, which the offered one is
     /// stronger than.
     pub(crate) stronger_than_entry: Option<&'catalog DownloadCatalogEntry>,
-    /// The build the reason compares speed and memory with: the build a draft
-    /// build is quicker than, or the best fit a build with more detail extends.
+    /// The best fit a build with more detail extends.
     pub(crate) reference_entry: Option<&'catalog DownloadCatalogEntry>,
     /// How the offered entry runs on this Mac, which the best-fit reason says.
     pub(crate) offered_entry_fit: MemoryFit,
@@ -148,7 +140,7 @@ impl<'catalog> SuggestionRules<'catalog> {
 
     fn decided_suggestions(&self) -> Vec<DecidedSuggestion<'catalog>> {
         let best_fit_entry = self.best_fit_entry();
-        let mut decided_suggestions = self.best_fit_and_quicker(best_fit_entry);
+        let mut decided_suggestions = self.best_fit_suggestions(best_fit_entry);
         decided_suggestions.extend(self.more_detail_suggestion(best_fit_entry));
         decided_suggestions.extend(self.streaming_suggestion(best_fit_entry));
         decided_suggestions.extend(self.pictures_suggestion());
@@ -220,13 +212,14 @@ impl<'catalog> SuggestionRules<'catalog> {
             .copied()
     }
 
-    fn best_fit_and_quicker(
+    fn best_fit_suggestions(
         &self,
         best_fit_entry: Option<&'catalog DownloadCatalogEntry>,
     ) -> Vec<DecidedSuggestion<'catalog>> {
-        let best_fit_suggestion = best_fit_entry.and_then(|entry| self.best_fit_suggestion(entry));
-        let quicker_suggestion = best_fit_entry.and_then(|entry| self.quicker_suggestion(entry));
-        merge_quicker_into_best_fit(best_fit_suggestion, quicker_suggestion)
+        best_fit_entry
+            .and_then(|entry| self.best_fit_suggestion(entry))
+            .into_iter()
+            .collect()
     }
 
     fn best_fit_suggestion(
@@ -326,33 +319,7 @@ pub(crate) fn lead_model_id(entry: &DownloadCatalogEntry) -> &str {
         .map_or_else(|| entry.model_id(), |build| build.lead_model_id())
 }
 
-/// When a draft build is quicker at everything and the person has not got the
-/// best fit yet, the draft build becomes the best fit itself: one card, the
-/// quicker build, instead of two that differ only in speed.
-fn merge_quicker_into_best_fit<'catalog>(
-    best_fit_suggestion: Option<DecidedSuggestion<'catalog>>,
-    quicker_suggestion: Option<DecidedSuggestion<'catalog>>,
-) -> Vec<DecidedSuggestion<'catalog>> {
-    match (best_fit_suggestion, quicker_suggestion) {
-        (Some(best_fit), Some(quicker))
-            if quicker.kind == ModelSuggestionKind::Quicker
-                && quicker
-                    .reference_entry
-                    .is_some_and(|reference| std::ptr::eq(reference, best_fit.offered_entry)) =>
-        {
-            vec![DecidedSuggestion {
-                kind: best_fit.kind,
-                offered_entry: quicker.offered_entry,
-                stronger_than_entry: best_fit.stronger_than_entry,
-                reference_entry: Some(best_fit.offered_entry),
-                offered_entry_fit: MemoryFit::InMemory,
-            }]
-        }
-        (best_fit, quicker) => best_fit.into_iter().chain(quicker).collect(),
-    }
-}
-
-// The speed and detail rules compare builds of one model; they live beside the
+// The detail rule compares builds of one model; it lives beside the
 // others as a child module so they share the rules' private state.
 #[path = "model_suggestion_builds.rs"]
 pub(crate) mod model_suggestion_builds;

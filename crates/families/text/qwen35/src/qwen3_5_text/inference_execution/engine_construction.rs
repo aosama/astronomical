@@ -19,6 +19,9 @@ pub struct TextEngineSettings {
     pub decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     /// The `astro_neural_engine_program_cache` folder of this model revision.
     pub astro_neural_engine_program_cache_directory: Option<std::path::PathBuf>,
+    /// The prompt chunk the model's startup settled on, and why; reported
+    /// once the load settles.
+    pub prompt_processing_chunk_report: Option<ipc_protocol::PromptProcessingChunkReport>,
 }
 
 impl TextEngineConstruction for Qwen3_5InferenceExecution {
@@ -35,6 +38,7 @@ impl TextEngineConstruction for Qwen3_5InferenceExecution {
                 engine_settings.astro_neural_engine_program_cache_directory,
             ),
             prompt_span_to_fail_once_for_tests: None,
+            prompt_processing_chunk_report: engine_settings.prompt_processing_chunk_report,
         }
     }
 }

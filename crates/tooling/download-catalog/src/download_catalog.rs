@@ -11,8 +11,6 @@ pub use crate::catalog_capabilities::DownloadCatalogCapabilities;
 use crate::catalog_capabilities::{DownloadCatalogCapabilitiesDocument, parse_entry_capabilities};
 pub use crate::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRole};
 use crate::catalog_presentation::{CatalogEntryPresentation, parse_entry_presentation};
-use crate::catalog_speed::validate_measured_speed;
-pub use crate::catalog_speed::{DownloadCatalogMeasuredSpeed, DownloadCatalogTaskSpeeds};
 use crate::entry_identity::{SeenEntryIdentities, claim_former_identities};
 pub use crate::entry_identity::{is_valid_huggingface_id, is_valid_immutable_revision};
 use crate::path_selection::DownloadPathSelection;
@@ -23,8 +21,7 @@ use crate::path_selection::DownloadPathSelection;
 // Hugging Face identity, the same name discovery gives the downloaded folder.
 // Version 5 later gained two optional additions without a version bump: the
 // build_of and build_difference pair, which links a build to its lead without
-// giving it a second name, and measured_speed, the tokens per second a release
-// measured. It later also gained former_huggingface_ids, the names a
+// giving it a second name. It later also gained former_huggingface_ids, the names a
 // repository had before a rename on Hugging Face, so a copy downloaded under
 // an old name stays this entry's copy instead of showing as a second model.
 // The catalog is bundled with the binary that reads it, so no reader meets a
@@ -71,7 +68,6 @@ pub struct DownloadCatalogEntry {
     upstream_license: Option<String>,
     presentation: CatalogEntryPresentation,
     build: Option<DownloadCatalogBuild>,
-    measured_speed: Option<DownloadCatalogMeasuredSpeed>,
     download_path_selection: DownloadPathSelection,
 }
 
@@ -142,10 +138,6 @@ pub enum DownloadCatalogError {
         "download catalog entry {entry_index} names a build_of lead that is itself a build, experimental, or listed in another section"
     )]
     InvalidBuildLead { entry_index: usize },
-    #[error(
-        "download catalog entry {entry_index} has a measured_speed with a rate outside 1 to 1000 tokens a second, an empty or long measured_on, or a version that is not numeric"
-    )]
-    InvalidMeasuredSpeed { entry_index: usize },
 }
 
 #[derive(Debug, Deserialize)]
@@ -183,7 +175,6 @@ struct DownloadCatalogEntryDocument {
     /// The model ID of the lead entry this is another build of.
     build_of: Option<String>,
     build_difference: Option<DownloadCatalogBuildDifference>,
-    measured_speed: Option<DownloadCatalogMeasuredSpeed>,
 }
 
 impl DownloadCatalog {
@@ -328,7 +319,6 @@ fn parse_catalog_entry(
         entry_document.included_paths,
         entry_document.build_of.as_deref(),
         entry_document.build_difference,
-        entry_document.measured_speed.as_ref(),
         entry_index,
     )?;
     Ok(DownloadCatalogEntry {
@@ -348,32 +338,28 @@ fn parse_catalog_entry(
         upstream_license: entry_texts.upstream_license,
         presentation: entry_texts.presentation,
         build: entry_build_and_files.build,
-        measured_speed: entry_document.measured_speed,
         download_path_selection: entry_build_and_files.download_path_selection,
     })
 }
 
 /// What an entry says about its files and its place among builds: the
-/// included paths and the build it belongs to. Its measured speed is checked
-/// alongside them but kept on the entry as written.
+/// included paths and the build it belongs to.
 struct EntryBuildAndFiles {
     download_path_selection: DownloadPathSelection,
     build: Option<DownloadCatalogBuild>,
 }
 
-/// Checks the included paths, the build link and the measured speed, in that
-/// authored order, so a multi-invalid entry reports the same first failure.
+/// Checks the included paths and the build link, in that authored order, so
+/// a multi-invalid entry reports the same first failure.
 fn parse_entry_build_and_files(
     included_paths: Option<Vec<String>>,
     build_of: Option<&str>,
     build_difference: Option<DownloadCatalogBuildDifference>,
-    measured_speed: Option<&DownloadCatalogMeasuredSpeed>,
     entry_index: usize,
 ) -> Result<EntryBuildAndFiles, DownloadCatalogError> {
     let download_path_selection = DownloadPathSelection::try_new(included_paths)
         .map_err(|_invalid_selection| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
     let build = parse_entry_build(build_of, build_difference, entry_index)?;
-    validate_measured_speed(measured_speed, entry_index)?;
     Ok(EntryBuildAndFiles {
         download_path_selection,
         build,
@@ -638,13 +624,6 @@ impl DownloadCatalogEntry {
     #[must_use]
     pub const fn build(&self) -> Option<&DownloadCatalogBuild> {
         self.build.as_ref()
-    }
-
-    /// Reply speeds measured on a named Mac, or `None` when this entry has not
-    /// been measured; the Models page then shows no speed rather than a guess.
-    #[must_use]
-    pub const fn measured_speed(&self) -> Option<&DownloadCatalogMeasuredSpeed> {
-        self.measured_speed.as_ref()
     }
 
     #[must_use]

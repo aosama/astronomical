@@ -91,6 +91,8 @@ function configurationSettingDescriptors(schema, objectNode, parentPath) {
                 // Written for someone new to the app; the description stays exact for
                 // the schema's other readers.
                 explanation: schemaNode["x-astronomical-explanation"],
+                // Advice short enough to show under the setting itself, without opening it.
+                advice: schemaNode["x-astronomical-advice"],
                 ...configurationNumericBounds(schemaNode) });
         }
     }
@@ -244,6 +246,27 @@ function neuralEnginePrefillStatusMessage(neuralEnginePrefill) {
         return `Enabled but not running: ${neuralEnginePrefill.reason}.`;
     }
     return "Off for the loaded model.";
+}
+
+// The words for what the loaded model's prompt chunk is and what decided it. A model
+// that sent no report (none loaded, or an engine that settles no chunk) gets nothing.
+const PROMPT_CHUNK_REASON_WORDS = {
+    configured: "the size set here",
+    expert_model_on_m5_or_newer: "Automatic picked it because this model has experts and this Mac has an M5 chip or newer",
+    model_without_experts: "Automatic picked it because a larger size does not speed up models without experts",
+    gpu_older_than_m5: "Automatic picked it because a larger size has only been measured faster on an M5 chip or newer",
+    cpu_build: "Automatic picked it because this build runs models on the CPU",
+};
+
+function promptProcessingChunkStatusMessage(promptProcessingChunk) {
+    if (!promptProcessingChunk) { return ""; }
+    const chunkTokens = promptProcessingChunk.chunk_tokens.toLocaleString("en-US");
+    if (promptProcessingChunk.reason === "ssd_streaming") {
+        return `Not in use now: part of this model is read from the SSD, so prompts are read `
+            + `${chunkTokens} tokens at a time, the SSD streaming size.`;
+    }
+    const reasonWords = PROMPT_CHUNK_REASON_WORDS[promptProcessingChunk.reason] || "the engine picked it";
+    return `In use now: ${chunkTokens} tokens, ${reasonWords}.`;
 }
 
 // Settings edited by their own live control on the Settings page. Their generic

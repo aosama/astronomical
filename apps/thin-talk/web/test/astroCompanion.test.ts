@@ -66,7 +66,7 @@ test("should_welcome_a_newcomer_and_land_them_in_an_empty_chat_when_a_chat_model
   assert.equal(composerField().value, "", "nothing is typed for the person");
   assert.equal(document.activeElement?.id, "composer-input", "the caret is in the message field");
   assert.deepEqual(host.astroProfile, { nickname: "", hasFinishedFirstFlight: true, isAstroShown: true });
-  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey");
+  assert.match(document.querySelector(".astro-home__greeting")?.textContent ?? "", /^Good (morning|afternoon|evening)$/);
   assert.equal(composerField().placeholder, "Ask Astro anything");
   assert.deepEqual(daemon.requestedLibraryDownloads, [], "nothing downloads when a chat model is already here");
 });
@@ -75,7 +75,7 @@ test("should_go_straight_home_for_someone_astro_already_met", async () => {
   const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   await waitFor(() => isPresent("astro-home"), "Astro's home");
   assert.equal(overlay().hidden, true);
-  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey, Maya");
+  assert.match(document.querySelector(".astro-home__greeting")?.textContent ?? "", /^Good (morning|afternoon|evening), Maya$/);
   assert.equal(daemon.requests.some((request) => request.url.includes("/v1/library/download")), false, "nothing downloads on its own");
 });
 
@@ -91,7 +91,7 @@ test("should_show_a_saved_name_as_text_never_as_markup", async () => {
   bootJourney(undefined, { astroProfile: { ...MET_ASTRO_PROFILE, nickname: "<b>Bo</b>" } });
   await waitFor(() => isPresent("astro-home"), "Astro's home");
   assertNoElement(document, ".astro-home__greeting b");
-  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey, <b>Bo</b>");
+  assert.match(document.querySelector(".astro-home__greeting")?.textContent ?? "", /^Good (morning|afternoon|evening), <b>Bo<\/b>$/);
 });
 
 test("should_end_the_journey_when_the_person_returns_with_a_model_downloaded_on_the_models_page", async () => {
@@ -204,18 +204,30 @@ test("should_say_plainly_when_a_paused_download_holds_the_library", async () => 
   await waitFor(() => overlay().hidden, "the journey to close");
 });
 
-test("should_say_voice_is_coming_on_home_and_fill_nothing", async () => {
+test("should_show_four_quiet_ideas_and_the_privacy_line_on_home_and_no_skill_cards", async () => {
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   await waitFor(() => isPresent("astro-home"), "Astro's home");
-  element<HTMLButtonElement>("astro-home-skill-voice").click();
-  await waitFor(() => /coming soon/.test(document.querySelector(".astro-home__reply")?.textContent ?? ""), "the voice reply");
-  assert.equal(composerField().value, "");
+  assert.equal(isPresent("astro-home-below"), true, "the ideas show below the message field");
+  for (const kind of ["write", "pictures", "look", "read"]) {
+    assert.ok((element(`astro-home-idea-${kind}`).textContent ?? "").length > 0, `the ${kind} idea has words`);
+  }
+  assertNoElement(document, ".skill-card", "the coloured skill cards are gone");
+  assert.equal(document.querySelector(".astro-home__privacy")?.textContent, "Runs on this Mac. Nothing you type leaves it.");
+  assert.match(element("astro-home").textContent ?? "", /What can I help with\?/);
+});
+
+test("should_hide_the_ideas_below_the_field_once_astro_is_hidden", async () => {
+  bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
+  await waitFor(() => isPresent("astro-home-below"), "the ideas below the field");
+  window.__thintalkCommands?.run({ name: "toggleAstro" });
+  assert.equal(isPresent("astro-home-below"), false);
 });
 
 test("should_offer_the_image_model_before_drawing_and_take_no_for_an_answer", async () => {
   const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, libraryCatalog: STARTER_CATALOG });
   await waitFor(() => isPresent("astro-home"), "Astro's home");
-  element<HTMLButtonElement>("astro-home-skill-pictures").click();
+  await waitUntilReady();
+  element<HTMLButtonElement>("composer-skill-pictures").click();
   await waitFor(() => isPresent("astro-home-get-image-model"), "the image model offer");
   assert.match(document.querySelector(".astro-home__reply")?.textContent ?? "", /image model/);
   assert.equal(element("astro-home-download-size").textContent, "4.3 GB, one time");
@@ -240,8 +252,9 @@ test("should_fill_the_message_field_from_a_home_idea_without_sending_it", async 
   const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   await waitFor(() => isPresent("astro-home"), "Astro's home");
   await waitUntilReady();
-  element<HTMLButtonElement>("astro-home-idea-0").click();
-  assert.equal(composerField().value, "Explain black holes in three sentences");
+  const writingIdea = element<HTMLButtonElement>("astro-home-idea-write");
+  writingIdea.click();
+  assert.equal(composerField().value, writingIdea.dataset.prompt);
   assertFocusOn(composerField());
   assert.equal(daemon.chatRequestBody(), null, "an idea only prepares the message");
 });
@@ -250,7 +263,7 @@ test("should_offer_the_image_model_from_a_drawing_idea_when_none_is_installed", 
   const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, libraryCatalog: STARTER_CATALOG });
   await waitFor(() => isPresent("astro-home"), "Astro's home");
   await waitUntilReady();
-  element<HTMLButtonElement>("astro-home-idea-3").click();
+  element<HTMLButtonElement>("astro-home-idea-pictures").click();
   await waitFor(() => isPresent("astro-home-get-image-model"), "the image model offer");
   assert.equal(composerField().value, "", "a prompt that can only fail is not offered");
   assert.equal(daemon.chatRequestBody(), null);
@@ -265,11 +278,12 @@ test("should_fill_the_message_field_with_the_drawing_idea_once_the_offered_image
   });
   await waitFor(() => isPresent("astro-home"), "Astro's home");
   await waitUntilReady();
-  element<HTMLButtonElement>("astro-home-idea-3").click();
+  element<HTMLButtonElement>("astro-home-idea-pictures").click();
   await waitFor(() => isPresent("astro-home-get-image-model"), "the image model offer");
   assert.equal(composerField().value, "", "nothing is filled in while the model is missing");
   element<HTMLButtonElement>("astro-home-get-image-model").click();
-  await waitFor(() => composerField().value === "Draw a poster of a rocket launch", "the idea to return once the model is here");
+  const drawingPrompt = element<HTMLButtonElement>("astro-home-idea-pictures").dataset.prompt;
+  await waitFor(() => composerField().value === drawingPrompt, "the idea to return once the model is here");
   assert.deepEqual(daemon.requestedLibraryDownloads, [IMAGE_MODEL_ID]);
   assert.equal(daemon.chatRequestBody(), null, "the idea is prepared, not sent");
 });
@@ -282,8 +296,9 @@ test("should_fill_the_message_field_from_a_drawing_idea_when_an_image_model_is_i
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, models: installedModels });
   await waitFor(() => isPresent("astro-home"), "Astro's home");
   await waitUntilReady();
-  element<HTMLButtonElement>("astro-home-idea-3").click();
-  await waitFor(() => composerField().value === "Draw a poster of a rocket launch", "the drawing prompt");
+  element<HTMLButtonElement>("astro-home-idea-pictures").click();
+  const drawingPrompt = element<HTMLButtonElement>("astro-home-idea-pictures").dataset.prompt;
+  await waitFor(() => composerField().value === drawingPrompt, "the drawing prompt");
   assert.equal(isPresent("astro-home-get-image-model"), false);
 });
 
@@ -322,8 +337,9 @@ test("should_add_a_starter_question_after_a_draft_instead_of_replacing_it", asyn
   await waitFor(() => isPresent("astro-home"), "Astro's home");
   await waitUntilReady();
   composerField().value = "Hi Astro!";
-  element<HTMLButtonElement>("astro-home-idea-0").click();
-  assert.equal(composerField().value, "Hi Astro! Explain black holes in three sentences");
+  const writingIdea = element<HTMLButtonElement>("astro-home-idea-write");
+  writingIdea.click();
+  assert.equal(composerField().value, `Hi Astro! ${writingIdea.dataset.prompt ?? ""}`);
 });
 
 test("should_hide_the_library_notice_while_home_offers_a_chat_model_itself", async () => {

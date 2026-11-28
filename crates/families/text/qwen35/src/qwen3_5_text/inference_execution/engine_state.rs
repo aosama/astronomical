@@ -22,6 +22,10 @@ pub struct Qwen3_5InferenceExecution {
     /// A span, as (layer, span), that the next layer-at-a-time prompt fails
     /// once on purpose; set only by a test.
     pub(in crate::qwen3_5_text) prompt_span_to_fail_once_for_tests: Option<(usize, usize)>,
+    /// The prompt chunk startup settled on and what decided it, reported
+    /// with the load result.
+    pub(in crate::qwen3_5_text) prompt_processing_chunk_report:
+        Option<ipc_protocol::PromptProcessingChunkReport>,
 }
 
 pub type Qwen3_5EngineState = Qwen3_5InferenceExecution;

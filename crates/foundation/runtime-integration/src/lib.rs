@@ -70,6 +70,7 @@
 //! reason about Metallib resolution and boundary types on any machine — for
 //! example a container lane that only checks formatting or documentation.
 
+mod apple_gpu_generation;
 mod mlx_metallib_path;
 mod mlx_runtime_types;
 #[cfg(test)]
@@ -80,6 +81,7 @@ mod mlx_runtime;
 #[cfg(feature = "mlx")]
 mod safetensors;
 
+pub use apple_gpu_generation::{apple_gpu_generation, is_m5_or_newer_gpu};
 pub use mlx_metallib_path::resolve_mlx_metallib_path;
 pub use mlx_runtime_types::{
     MLX_BUFFER_CACHE_MEASURED_LIMIT_FLOOR_BYTES, MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES,
@@ -94,7 +96,8 @@ pub use mlx_runtime::{
 };
 #[cfg(all(feature = "mlx", target_os = "macos"))]
 pub use mlx_runtime::{
-    compiled_metallib_path, maximum_recommended_gpu_working_set_size_bytes, validate_metallib_path,
+    compiled_metallib_path, gpu_architecture_name, maximum_recommended_gpu_working_set_size_bytes,
+    validate_metallib_path,
 };
 #[cfg(feature = "mlx")]
 pub use safetensors::file_writer::{MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};

@@ -129,7 +129,8 @@ pub use memory_policy::residency::{
     kept_layer_indexes_to_seat_before_reply, minimum_decode_warm_slot_count,
     observed_expert_memory_mode, plan_expert_residency, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,
-    should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
+    should_complete_partial_layer_in_phase, should_complete_partial_layer_on_prefill_read,
+    should_seed_partial_layer_on_prefill_read,
 };
 pub use memory_policy::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,

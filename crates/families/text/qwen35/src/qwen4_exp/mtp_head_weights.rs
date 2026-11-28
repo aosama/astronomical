@@ -20,13 +20,13 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5DecoderLayerWeights,
 };
 use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
-use crate::qwen3_5_core::model_math::weights::bind_mtp_head_weights;
+use crate::qwen3_5_core::model_math::weights::bind_flash_next_mtp_head_weights;
 
 use super::hyper_connection::HyperConnectionWeights;
 
 /// Everything the head owns.
 #[derive(Debug)]
-pub struct MtpHeadWeights {
+pub struct FlashNextMtpHeadWeights {
     /// Norm of a token's embedding before `embedding_projection`.
     pub embedding_norm_scale: MlxArray,
     /// One norm across all of the target's lanes before `lane_projection`.
@@ -53,10 +53,10 @@ pub struct MtpHeadWeights {
 /// for a Flash-Next checkpoint without `mtp.*` tensors. The head has a
 /// shard of its own, which binding the language weights leaves untaken, so
 /// this runs before or after that.
-pub fn load_mtp_head_weights(
+pub fn load_flash_next_mtp_head_weights(
     runtime: &MlxRuntime,
     validated_artifact: &mut ValidatedQwen3_5Artifact,
-) -> Result<Option<MtpHeadWeights>, TextExecutionError> {
+) -> Result<Option<FlashNextMtpHeadWeights>, TextExecutionError> {
     if validated_artifact
         .config()
         .qwen4_exp_architecture()
@@ -84,7 +84,7 @@ pub fn load_mtp_head_weights(
             .into_file();
         head_shards.insert(shard_file_name, runtime.load_safetensors(shard_file, None)?);
     }
-    bind_mtp_head_weights(
+    bind_flash_next_mtp_head_weights(
         runtime,
         validated_artifact.config(),
         validated_artifact.shard_index(),
@@ -92,5 +92,5 @@ pub fn load_mtp_head_weights(
     )
 }
 
-/// The head's shards by file name, as `load_mtp_head_weights` opens them.
+/// The head's shards by file name, as `load_flash_next_mtp_head_weights` opens them.
 pub type MtpHeadShards = HashMap<String, MlxSafetensors>;

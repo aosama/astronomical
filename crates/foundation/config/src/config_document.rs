@@ -53,9 +53,8 @@ impl UserConfigFile {
             },
             astro_ssd_prompt_cache: None,
             chunking: Some(ChunkingConfigFile {
-                fixed_prompt_processing_chunk_size_tokens: Some(
-                    crate::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-                ),
+                // Written as null so the file shows the setting, set to Automatic.
+                prompt_processing_chunk_size_tokens: Some(None),
                 fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Some(
                     crate::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
                 ),

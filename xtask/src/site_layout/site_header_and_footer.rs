@@ -15,6 +15,12 @@ pub(crate) const SITE_TAGLINE: &str = "Local language, vision, and image models 
 /// pointless: the next `cargo xtask site-layout` run would overwrite it.
 const GENERATED_NOTICE: &str = "<!-- Shared by every page: edit xtask/src/site_layout/site_header_and_footer.rs, then run `cargo xtask site-layout`. -->";
 
+/// The download stays one click away on every page, because a visitor who
+/// arrives on a field note or the model list has no hero to scroll back to.
+/// It points at the releases page, and `assets/release-feed.js` swaps in the
+/// newest disk image on the pages that load it.
+const HEADER_DOWNLOAD_BUTTON: &str = "<a class=\"button site-download\" data-latest-disk-image href=\"https://github.com/aosama/astronomical/releases/latest\">Download</a>";
+
 pub(crate) enum SiteLinkTarget {
     /// A page of this site, as a path from the site root (`site/`), which
     /// is rewritten relative to each page so the site also works from disk.
@@ -137,6 +143,7 @@ pub(crate) fn render_site_header(page_path: &str, indentation: &str) -> String {
         header_lines.push(format!("    {}", link_markup(site_link, page_path, true)));
     }
     header_lines.push("  </nav>".to_owned());
+    header_lines.push(format!("  {HEADER_DOWNLOAD_BUTTON}"));
     header_lines.push("</header>".to_owned());
     indent_lines(&header_lines, indentation)
 }

@@ -50,8 +50,8 @@ const LINES: Record<AstroMoment, (nickname: string) => string> = {
   [AstroMoment.SKILL_LOOK]: () => "Pick a photo and Astro will describe it.",
   [AstroMoment.SKILL_READ]: () => "Pick a file and Astro will summarise or explain it.",
   [AstroMoment.SKILL_VOICE]: () => "Voice is coming soon.",
-  [AstroMoment.HOME_GREETING]: (nickname) => addressed("Hey", nickname),
-  [AstroMoment.HOME_PROMPT]: () => "What are we working on?",
+  [AstroMoment.HOME_GREETING]: (nickname) => addressed(timeOfDayOpening(new Date().getHours()), nickname),
+  [AstroMoment.HOME_PROMPT]: () => "What can I help with?",
   [AstroMoment.SETTINGS]: () => "These settings are kept on this Mac.",
   [AstroMoment.ASK_NAME]: () => "What should Astro call you?",
   [AstroMoment.PRIVACY]: () => "What Astro does and what stays private.",
@@ -65,17 +65,81 @@ export function astroLine(moment: AstroMoment, nickname: string): string {
   return LINES[moment](nickname);
 }
 
+/** "Good morning" before noon, "Good afternoon" until six, "Good evening"
+ * after that and through the night: a greeting that follows the clock reads
+ * as the Mac noticing the person, where a fixed "Hey" read as a slogan. */
+export function timeOfDayOpening(hourOfDay: number): string {
+  if (hourOfDay >= 5 && hourOfDay < 12) {
+    return "Good morning";
+  }
+  if (hourOfDay >= 12 && hourOfDay < 18) {
+    return "Good afternoon";
+  }
+  return "Good evening";
+}
+
+/** What kind of help a home idea shows off. Each kind is drawn with the glyph
+ * the message field's own buttons use, so the idea also teaches that button. */
+export enum HomeIdeaKind {
+  WRITE = "write",
+  PICTURES = "pictures",
+  LOOK = "look",
+  READ = "read",
+}
+
 /** One idea offered as a chip on Astro's home. */
 export interface HomeIdea {
+  readonly kind: HomeIdeaKind;
   readonly prompt: string;
   /** True when the idea asks for a picture. Without an image model the chip
    * offers that download instead of a prompt that can only fail. */
   readonly needsImageModel: boolean;
 }
 
-export const HOME_IDEAS: readonly HomeIdea[] = [
-  { prompt: "Explain black holes in three sentences", needsImageModel: false },
-  { prompt: "Quiz me on the French Revolution", needsImageModel: false },
-  { prompt: "Help me plan a science project", needsImageModel: false },
-  { prompt: "Draw a poster of a rocket launch", needsImageModel: true },
-];
+/**
+ * Everyday requests for the person Astronomical is for, an ordinary Mac
+ * owner, rather than school exercises. One idea of each kind is shown, so the
+ * four chips together show everything the window can do. The photo and file
+ * ideas keep "I choose" in their words: that is what makes the model open the
+ * picker instead of asking the person to paste something.
+ */
+const HOME_IDEA_CHOICES: Readonly<Record<HomeIdeaKind, readonly string[]>> = {
+  [HomeIdeaKind.WRITE]: [
+    "Write a polite reply to a late invoice",
+    "Plan a week of easy dinners",
+    "Help me write a thank-you note to a neighbour",
+  ],
+  [HomeIdeaKind.PICTURES]: [
+    "Draw a birthday card for my mum",
+    "Draw a poster for a garage sale",
+    "Draw a cosy cabin in the snow",
+  ],
+  [HomeIdeaKind.LOOK]: [
+    "Describe a photo I choose",
+    "Read the text in a photo I choose",
+  ],
+  [HomeIdeaKind.READ]: [
+    "Summarise a file I choose in five points",
+    "Explain a document I choose in plain words",
+  ],
+};
+
+const HOME_IDEA_ORDER: readonly HomeIdeaKind[] = [HomeIdeaKind.WRITE, HomeIdeaKind.PICTURES, HomeIdeaKind.LOOK, HomeIdeaKind.READ];
+const MILLISECONDS_PER_DAY = 86_400_000;
+
+/** The four ideas shown on `day`, one of each kind. They change once a day,
+ * not on every visit, so an idea someone meant to try is still there when
+ * they come back to an empty chat later the same day. */
+export function homeIdeasFor(day: Date): readonly HomeIdea[] {
+  const dayNumber = Math.floor((day.getTime() - day.getTimezoneOffset() * 60_000) / MILLISECONDS_PER_DAY);
+  return HOME_IDEA_ORDER.map((kind) => ({ kind, prompt: ideaOfTheDay(kind, dayNumber), needsImageModel: kind === HomeIdeaKind.PICTURES }));
+}
+
+function ideaOfTheDay(kind: HomeIdeaKind, dayNumber: number): string {
+  const choices = HOME_IDEA_CHOICES[kind];
+  const chosenPrompt = choices[Math.abs(dayNumber) % choices.length];
+  if (chosenPrompt === undefined) {
+    throw new Error(`there are no home ideas of kind "${kind}"`);
+  }
+  return chosenPrompt;
+}

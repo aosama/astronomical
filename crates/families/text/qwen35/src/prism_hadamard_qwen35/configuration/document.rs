@@ -32,6 +32,11 @@ where
     })
 }
 
+/// The DeltaNet output gate a pack means when it does not name one.
+fn default_output_gate_type() -> String {
+    super::FOLDED_OUTPUT_GATE_TYPE.to_owned()
+}
+
 /// Intermediate enum for `eos_token_id` in either wire shape.
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -72,8 +77,9 @@ pub(super) struct FoldedPackDocument {
     pub(super) quantization: FoldedQuantizationDocument,
     pub(super) modules: Vec<PackedModuleDocument>,
     pub(super) tie_word_embeddings: bool,
-    /// Prism's own marker for a head that is the embedding table; packs with
-    /// their own head omit it.
+    // Packs whose output head is the embedding table (Ternary Bonsai 2's 2B)
+    // say so here as well as in `tie_word_embeddings`; packs with their own
+    // head omit it, so absence means an untied head.
     #[serde(default)]
     pub(super) tied_output: bool,
     pub(super) vision_config: Option<serde_json::Value>,
@@ -138,10 +144,10 @@ pub(super) struct FoldedTextConfigDocument {
     pub(super) attention_bias: bool,
     pub(super) tie_word_embeddings: bool,
     pub(super) attn_output_gate: bool,
-    // Qwen 3.5's own 2B and 9B configs leave the gate out (the 3.8 27B names
-    // it), because swish is the only gate the architecture has; Prism copies
-    // whichever config it started from.
-    #[serde(default = "qwen3_5_output_gate_type")]
+    // Later Prism exports (Ternary Bonsai 2's 2B and 9B) leave the gate type
+    // out, because Qwen 3.5's DeltaNet gate has only ever been swish; the
+    // value stays validated when a pack does state it.
+    #[serde(default = "default_output_gate_type")]
     pub(super) output_gate_type: String,
     pub(super) mamba_ssm_dtype: String,
 }
@@ -160,9 +166,4 @@ pub(super) struct RopeParametersDocument {
     pub(super) partial_rotary_factor_bits: u32,
     pub(super) mrope_interleaved: bool,
     pub(super) mrope_section: Vec<u32>,
-}
-
-/// The GDN output gate a Qwen 3.5 text config implies when it names none.
-fn qwen3_5_output_gate_type() -> String {
-    super::FOLDED_OUTPUT_GATE_TYPE.to_owned()
 }

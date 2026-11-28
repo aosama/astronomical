@@ -68,7 +68,7 @@ impl Qwen3_5Model {
 
     /// Each forward owns one deferred missing-route collection. Clears any
     /// leftover roots from a cancelled or failed previous attempt.
-    fn discard_previous_forward_leftovers(&self) {
+    pub(super) fn discard_previous_forward_leftovers(&self) {
         self.clear_paged_forward_missing_route_roots();
         self.route_observation
             .borrow_mut()

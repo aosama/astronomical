@@ -46,10 +46,9 @@ pub struct FoldedTernaryRotations {
     rotated_weight_names: BTreeSet<String>,
     hidden_size: u32,
     embedding_is_inverse_rotated: bool,
-    /// Whether the output head is the embedding table. The core binds that
-    /// head as `language_model.lm_head` over the embedding's codes, a name the
-    /// sign table does not list, so it is rotated by this flag instead.
-    output_head_is_tied: bool,
+    /// Whether the output head is the embedding table, which the sign table
+    /// then lists only as the inverse-rotated embedding.
+    has_tied_output: bool,
     /// The pack's Hadamard block, which decides whether the one-launch
     /// signed rotation can reproduce the composed route.
     block_size: u32,
@@ -78,7 +77,7 @@ impl FoldedTernaryRotations {
             hidden_size: config.hidden_size(),
             embedding_is_inverse_rotated: hadamard_contract
                 .is_inverse(&format!("{EMBEDDING_MODULE_NAME}.weight")),
-            output_head_is_tied: hadamard_contract.has_tied_output(),
+            has_tied_output: config.has_tied_embeddings(),
             block_size: hadamard_contract.block_size(),
         })
     }
@@ -94,11 +93,7 @@ impl FoldedTernaryRotations {
         for layer_weights in &mut weights.decoder_layer_weights {
             self.apply_to_layer(runtime, layer_weights)?;
         }
-        if self.output_head_is_tied {
-            self.rotate_tied_output_head(&mut weights.language_model_head_weights)?;
-        } else {
-            self.rotate_projection(&mut weights.language_model_head_weights)?;
-        }
+        self.rotate_output_head(&mut weights.language_model_head_weights)?;
         weights.final_normalization_weight =
             narrowed(runtime, &weights.final_normalization_weight)?;
         if self.embedding_is_inverse_rotated {
@@ -126,6 +121,21 @@ impl FoldedTernaryRotations {
         Ok(())
     }
 
+    /// Gives the output head its input rotation. A tied head is the
+    /// embedding table, which the sign table names only as inverse-rotated:
+    /// its rows were rotated along the hidden axis, so read as a head they
+    /// take the hidden width's forward rotation on their input, exactly as a
+    /// head of its own would (the pack's reference runtime does the same).
+    fn rotate_output_head(
+        &self,
+        output_head: &mut Qwen3_5DenseProjection,
+    ) -> Result<(), TextExecutionError> {
+        if self.has_tied_output && self.embedding_is_inverse_rotated {
+            return self.rotate_with_width(output_head, self.hidden_size);
+        }
+        self.rotate_projection(output_head)
+    }
+
     /// Gives `projection` its input rotation when the sign table names it.
     fn rotate_projection(
         &self,
@@ -138,39 +148,25 @@ impl FoldedTernaryRotations {
         let Qwen3_5ProjectionStorage::Bound(bound_weights) = &projection.storage else {
             return Ok(());
         };
-        let rotation = self.rotation_for_width(stored_input_width(&weight_name, bound_weights)?)?;
+        let input_width = stored_input_width(&weight_name, bound_weights)?;
+        self.rotate_with_width(projection, input_width)
+    }
+
+    /// Stores `projection` rotated at `input_width`; a projection already
+    /// rotated, or not bound, is left as it is.
+    fn rotate_with_width(
+        &self,
+        projection: &mut Qwen3_5DenseProjection,
+        input_width: u32,
+    ) -> Result<(), TextExecutionError> {
+        let Qwen3_5ProjectionStorage::Bound(bound_weights) = &projection.storage else {
+            return Ok(());
+        };
+        let rotation = self.rotation_for_width(input_width)?;
         let stored_weights = bound_weights.retained_reference()?;
         projection.storage = Qwen3_5ProjectionStorage::HadamardRotated(HadamardRotatedWeights {
             weights: stored_weights,
             rotation,
-        });
-        Ok(())
-    }
-
-    /// Gives a tied head the hidden-width forward rotation. The embedding is
-    /// stored as `E·R` (its lookup applies the inverse), so the logits
-    /// `h·Eᵀ` are `(h·R)·(E·R)ᵀ`: the same codes serve as a rotated head, as
-    /// Prism's reference runtime serves them.
-    fn rotate_tied_output_head(
-        &self,
-        output_head: &mut Qwen3_5DenseProjection,
-    ) -> Result<(), TextExecutionError> {
-        if !self.embedding_is_inverse_rotated {
-            return Err(TextExecutionError::InvalidTensor {
-                tensor_name: output_head.module_name.clone(),
-                description: "a folded pack's tied output head needs an inverse-rotated embedding",
-            });
-        }
-        let Qwen3_5ProjectionStorage::Bound(bound_weights) = &output_head.storage else {
-            return Err(TextExecutionError::InvalidTensor {
-                tensor_name: output_head.module_name.clone(),
-                description: "a folded pack's tied output head must be bound before it is rotated",
-            });
-        };
-        let stored_weights = bound_weights.retained_reference()?;
-        output_head.storage = Qwen3_5ProjectionStorage::HadamardRotated(HadamardRotatedWeights {
-            weights: stored_weights,
-            rotation: self.rotation_for_width(self.hidden_size)?,
         });
         Ok(())
     }

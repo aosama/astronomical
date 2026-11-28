@@ -198,6 +198,35 @@ final class DaemonStatusJourneyTests: XCTestCase {
   }
 
   @MainActor
+  func test_should_accept_null_for_the_automatic_in_memory_prompt_chunk() async throws {
+    let validStatusResponse = try fixtureData(named: "full-autoregressive-status")
+    var automaticChunkStatusFixture = try jsonObject(from: validStatusResponse)
+    var runtimeConfiguration = try XCTUnwrap(
+      automaticChunkStatusFixture["worker_runtime_feature_configuration"] as? [String: Any])
+    var loadedModel = try XCTUnwrap(runtimeConfiguration["loaded_model"] as? [String: Any])
+    var loadedModelConfiguration = try XCTUnwrap(
+      loadedModel["configuration"] as? [String: Any])
+    var chunkingConfiguration = try XCTUnwrap(
+      loadedModelConfiguration["chunking"] as? [String: Any])
+    chunkingConfiguration["prompt_processing_chunk_size_tokens"] = NSNull()
+    loadedModelConfiguration["chunking"] = chunkingConfiguration
+    loadedModel["configuration"] = loadedModelConfiguration
+    runtimeConfiguration["loaded_model"] = loadedModel
+    automaticChunkStatusFixture["worker_runtime_feature_configuration"] = runtimeConfiguration
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200,
+      responseBody: try JSONSerialization.data(withJSONObject: automaticChunkStatusFixture)
+    )
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let telemetryStore = TelemetryStore(daemonClient: localDevelopmentDaemonClient())
+
+    await telemetryStore.refresh()
+
+    XCTAssertEqual(telemetryStore.statusDocument.status, "ready")
+    XCTAssertNil(telemetryStore.lastStatusRefreshErrorMessage)
+  }
+
+  @MainActor
   func test_should_not_let_an_older_failure_replace_a_newer_success() async throws {
     let validStatusDocument = try decodedFixtureStatusDocument()
     let daemonClient = OutOfOrderStatusDaemonClient(

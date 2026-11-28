@@ -1,23 +1,25 @@
 //! Filesystem primitives shared by astro SSD prompt cache artifact owners.
 //!
-//! Format-11 decoder state takes the direct writer path: MLX serializes tensors
-//! through one retained file descriptor without constructing a second complete
-//! Rust byte payload. Publication uses no-follow opens and temporary-name replacement.
+//! Decoder-state block files are written from host copies by
+//! `host_safetensors_writer`, so the background publication writer never
+//! touches MLX; projected visual embeddings still stream through MLX's
+//! descriptor-backed writer. Publication uses no-follow opens and
+//! temporary-name replacement.
 
-use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
-use runtime_integration::{MlxRuntime, MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};
+use runtime_integration::MlxSafetensorsWriterError;
 
 use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 use super::block_format::AstroSsdPromptCacheBlockHeader;
 use super::block_format_error::AstroSsdPromptCacheBlockError;
 use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
+use super::host_safetensors_writer::write_host_safetensors;
+use super::host_state_tensor::AstroSsdPromptCacheHostTensors;
 use super::model_contract::AstroSsdPromptCacheModelContract;
-use mlx_bridge::MlxArray;
 
 #[derive(Clone, Copy)]
 pub enum AstroSsdPromptCacheFileKind {
@@ -27,10 +29,9 @@ pub enum AstroSsdPromptCacheFileKind {
 }
 
 pub(super) fn save_direct_safetensors_file_with_name(
-    runtime: &MlxRuntime,
     directory: &Path,
     file_name: &str,
-    tensors: &HashMap<String, MlxArray>,
+    host_tensors: &AstroSsdPromptCacheHostTensors,
     block_token_count: usize,
     astro_ssd_prompt_cache_model_contract: &AstroSsdPromptCacheModelContract,
     performance_attribution: &mut PerformanceAttribution,
@@ -41,37 +42,33 @@ pub(super) fn save_direct_safetensors_file_with_name(
     let temporary_file_path = directory.join(format!("{file_name}.tmp"));
     remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
     let temporary_file = create_temporary_state_file(&temporary_file_path)?;
-    // These references remain valid for the entire synchronous native call.
-    // The retained descriptor streams each MLX materialization to disk; there is
-    // deliberately no queue, detached thread, or serialized block-sized buffer.
-    let named_arrays: Vec<(&str, &MlxArray)> = tensors
-        .iter()
-        .map(|(tensor_name, tensor)| (tensor_name.as_str(), tensor))
-        .collect();
+    // The tensors are host copies, so this write runs on whichever thread
+    // publishes: the background writer for a prompt being read, which is
+    // how a prompt's first token stops waiting for its blocks (measured
+    // 2026-11-27, 15,000 tokens of Ornith 35B-A3B: ~420 ms of serialization
+    // and directory syncs left the engine thread).
+    //
     // The header records the block's own token count so partial tails
     // self-describe their geometry; tensor layout validation reads this same
     // header, keeping the file self-consistent.
     let prepared_metadata =
         PreparedSafetensorsMetadata::new(block_token_count, astro_ssd_prompt_cache_model_contract);
     let metadata_entries = prepared_metadata.entries();
-    let write_outcome = match performance_attribution.measure_operation(
+    let written_byte_count = match performance_attribution.measure_operation(
         serialization_operation,
         |_performance_attribution| {
-            runtime.save_safetensors(temporary_file, &named_arrays, &metadata_entries)
+            write_host_safetensors(temporary_file, host_tensors, &metadata_entries)
         },
     ) {
-        Ok(write_outcome) => write_outcome,
-        Err(source) => {
-            return remove_temporary_state_file_then_fail(
-                &temporary_file_path,
-                map_safetensors_writer_error(source),
-            );
+        Ok(written_byte_count) => written_byte_count,
+        Err(write_error) => {
+            return remove_temporary_state_file_then_fail(&temporary_file_path, write_error);
         }
     };
     let actual_file_size_bytes = validate_written_temporary_state_file(
         &temporary_file_path,
         file_kind,
-        &write_outcome,
+        written_byte_count,
         astro_ssd_prompt_cache_model_contract,
         performance_attribution,
     )?;
@@ -109,14 +106,14 @@ fn remove_temporary_state_file_then_fail<Outcome>(
     Err(failure)
 }
 
-/// Checks the temporary file after the native write and returns its size:
+/// Checks the temporary file after the write and returns its size:
 /// the size the filesystem sees must match what the writer reported, and the
 /// header and tensor layout must validate against the model contract for the
 /// file's kind. Every failure removes the temporary file before it propagates.
 fn validate_written_temporary_state_file(
     temporary_file_path: &Path,
     file_kind: AstroSsdPromptCacheFileKind,
-    write_outcome: &MlxSafetensorsWriteOutcome,
+    written_byte_count: u64,
     astro_ssd_prompt_cache_model_contract: &AstroSsdPromptCacheModelContract,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<u64, AstroSsdPromptCacheDiskStoreError> {
@@ -124,7 +121,7 @@ fn validate_written_temporary_state_file(
     // A successful native status alone is not sufficient evidence of a complete
     // file when descriptor I/O callbacks can fail independently.
     let actual_file_size_bytes =
-        match confirm_written_file_size_bytes(temporary_file_path, write_outcome) {
+        match confirm_written_file_size_bytes(temporary_file_path, written_byte_count) {
             Ok(actual_file_size_bytes) => actual_file_size_bytes,
             Err(metadata_error) => {
                 return remove_temporary_state_file_then_fail(temporary_file_path, metadata_error);
@@ -257,13 +254,13 @@ impl PreparedSafetensorsMetadata {
 /// file is allowed to progress toward publication.
 fn confirm_written_file_size_bytes(
     temporary_file_path: &Path,
-    write_outcome: &MlxSafetensorsWriteOutcome,
+    written_byte_count: u64,
 ) -> Result<u64, AstroSsdPromptCacheDiskStoreError> {
     let actual_file_size_bytes = read_file_size_bytes(temporary_file_path)?;
-    if actual_file_size_bytes != write_outcome.written_byte_count() {
+    if actual_file_size_bytes != written_byte_count {
         return Err(AstroSsdPromptCacheDiskStoreError::WrittenFileSizeMismatch {
             file_path: temporary_file_path.to_path_buf(),
-            reported_size_bytes: write_outcome.written_byte_count(),
+            reported_size_bytes: written_byte_count,
             actual_size_bytes: actual_file_size_bytes,
         });
     }

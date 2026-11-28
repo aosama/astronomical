@@ -29,98 +29,102 @@ fn should_offer_the_bonsai_2_5_package_with_vision_and_its_drafter() {
     assert!(package_entry.approximate_size_bytes() > FOLDED_TARGET_WEIGHTS_BYTES);
 }
 
-/// The community pack's drafter is served now, so its entry no longer says
-/// it goes unused; it has no vision tower, so it still says text only.
+/// Ternary Bonsai 2.5 supersedes Bonsai 2 at 27B, so the catalog offers the
+/// 2.5 package alone rather than two 27B Bonsai builds side by side.
 #[test]
-fn should_describe_the_community_bonsai_2_drafter_as_used_and_text_only() {
+fn should_offer_bonsai_2_5_as_the_only_27b_bonsai() {
     let download_catalog =
         DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    let drafter_bundle = shipped_entry(
-        &download_catalog,
-        "nathansutton/Qwen3.8-27B-Ternary-Bonsai-2-DFlash2-MLX",
-    );
-    let catalog_text = format!(
-        "{} {}",
-        drafter_bundle.summary().unwrap_or_default(),
-        drafter_bundle.description().unwrap_or_default()
-    );
-    assert!(!catalog_text.contains("does not use"), "{catalog_text}");
-    assert!(catalog_text.contains("Text only"), "{catalog_text}");
-    assert!(!drafter_bundle.capabilities().supports_vision);
-}
-
-/// Prism ML's own Bonsai 2 pack carries a vision tower, which the shared core
-/// serves, so its entry must not call it text only.
-#[test]
-fn should_offer_prism_mls_bonsai_2_pack_with_vision() {
-    let download_catalog =
-        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    let prism_pack = shipped_entry(&download_catalog, "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit");
-    assert!(prism_pack.capabilities().supports_vision);
-    assert!(
-        !prism_pack
-            .summary()
-            .unwrap_or_default()
-            .contains("Text only")
+    let bonsai_27b_ids: Vec<&str> = download_catalog
+        .entries()
+        .iter()
+        .map(crate::DownloadCatalogEntry::huggingface_id)
+        .filter(|huggingface_id| {
+            huggingface_id.contains("Bonsai") && huggingface_id.contains("27B")
+        })
+        .collect();
+    assert_eq!(
+        bonsai_27b_ids,
+        ["ahmedihamdy/Ternary-Bonsai-2.5-27B-MLX-2bit-vision-DFLASH2"]
     );
 }
 
-/// Prism ML's Bonsai 2 9B and 2B packs (#2669). Both carry their vision tower
-/// in the one weights file, so they read pictures; both are pinned at a full
-/// commit; and neither drafts here, so nothing in their text promises the
-/// quicker replies a draft model gives.
-const SMALL_BONSAI_2_PACKS: [&str; 2] = [
-    "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
-    "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
-];
-
+/// Bonsai 2.5 is the 27B. The smaller packs are Bonsai 2, and these four
+/// identities are the whole Bonsai lineup the catalog offers.
 #[test]
-fn should_offer_prism_mls_bonsai_2_9b_and_2b_packs_with_vision() {
+fn should_offer_only_the_four_bonsai_packs() {
     let download_catalog =
         DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    for huggingface_id in SMALL_BONSAI_2_PACKS {
-        let prism_pack = shipped_entry(&download_catalog, huggingface_id);
-        assert_eq!(prism_pack.family().as_str(), FOLDED_TERNARY_FAMILY);
-        assert_eq!(prism_pack.revision().len(), 40, "{huggingface_id}");
-        assert!(
-            prism_pack.capabilities().supports_vision,
-            "{huggingface_id}"
-        );
-        assert!(
-            prism_pack.build().is_none(),
-            "{huggingface_id} is its own model"
-        );
+    let mut bonsai_ids: Vec<&str> = download_catalog
+        .entries()
+        .iter()
+        .map(crate::DownloadCatalogEntry::huggingface_id)
+        .filter(|huggingface_id| huggingface_id.contains("Bonsai"))
+        .collect();
+    bonsai_ids.sort_unstable();
+    assert_eq!(
+        bonsai_ids,
+        [
+            "ahmedihamdy/Ternary-Bonsai-2.5-27B-MLX-2bit-vision-DFLASH2",
+            "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+            "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+            "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+        ]
+    );
+}
+
+/// Ternary Bonsai 2's 2B, 4B and 9B packs are the small Bonsai builds, and the
+/// shared core serves them with their vision tower.
+#[test]
+fn should_offer_the_small_bonsai_2_packs_with_vision() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let mut memory_bytes = Vec::new();
+    for small_pack_id in [
+        "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+        "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+        "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+    ] {
+        let small_pack = shipped_entry(&download_catalog, small_pack_id);
+        assert_eq!(small_pack.family().as_str(), FOLDED_TERNARY_FAMILY);
+        assert_eq!(small_pack.revision().len(), 40);
+        assert!(small_pack.capabilities().supports_vision);
+        assert!(small_pack.approximate_memory_bytes() < FOLDED_TARGET_WEIGHTS_BYTES);
+        memory_bytes.push(small_pack.approximate_memory_bytes());
+    }
+    assert!(memory_bytes[0] < memory_bytes[1] && memory_bytes[1] < memory_bytes[2]);
+}
+
+/// The 9B pack ships its multi-token-prediction head in `mtp/`, which the
+/// engine drafts with when asked, so the download keeps it beside every
+/// file the pack loads with.
+#[test]
+fn should_download_the_4b_and_9b_prediction_heads_with_the_packs() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    for huggingface_id in [
+        "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+        "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+    ] {
+        let selection = shipped_entry(&download_catalog, huggingface_id).download_path_selection();
+        assert_prediction_head_download(selection);
     }
 }
 
-#[test]
-fn should_not_promise_drafting_for_the_small_bonsai_2_packs() {
-    let download_catalog =
-        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    for huggingface_id in SMALL_BONSAI_2_PACKS {
-        let prism_pack = shipped_entry(&download_catalog, huggingface_id);
-        let catalog_text = format!(
-            "{} {}",
-            prism_pack.summary().unwrap_or_default(),
-            prism_pack.description().unwrap_or_default()
-        );
-        assert!(!catalog_text.contains("checks them all"), "{catalog_text}");
-        assert!(!catalog_text.contains("Text only"), "{catalog_text}");
-        assert!(prism_pack.measured_speed().is_none(), "{huggingface_id}");
+fn assert_prediction_head_download(selection: &crate::DownloadPathSelection) {
+    for packed_file in [
+        "mtp/config.json",
+        "mtp/model.safetensors",
+        "config.json",
+        "hadamard.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja",
+        "generation_config.json",
+        "preprocessor_config.json",
+        "video_preprocessor_config.json",
+    ] {
+        assert!(selection.includes(packed_file), "{packed_file}");
     }
-}
-
-/// The smaller packs must stay smaller than the 27B: a swapped size would
-/// steer a small Mac to the wrong download.
-#[test]
-fn should_size_the_small_bonsai_2_packs_below_the_27b_target() {
-    let download_catalog =
-        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    let bonsai_9b_entry = shipped_entry(&download_catalog, SMALL_BONSAI_2_PACKS[0]);
-    let bonsai_2b_entry = shipped_entry(&download_catalog, SMALL_BONSAI_2_PACKS[1]);
-    assert!(bonsai_2b_entry.approximate_size_bytes() < bonsai_9b_entry.approximate_size_bytes());
-    assert!(bonsai_9b_entry.approximate_size_bytes() < FOLDED_TARGET_WEIGHTS_BYTES);
-    assert!(
-        bonsai_2b_entry.approximate_memory_bytes() < bonsai_9b_entry.approximate_memory_bytes()
-    );
 }

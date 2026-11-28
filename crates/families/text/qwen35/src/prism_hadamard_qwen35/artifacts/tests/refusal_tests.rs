@@ -206,3 +206,31 @@ fn should_refuse_a_pack_missing_a_canonical_projection_module() {
     ));
     remove_fixture_directory(&fixture_directory);
 }
+
+#[test]
+fn should_refuse_a_tied_pack_whose_sign_table_says_untied() {
+    let (error, fixture_directory) = validate_mutated(|mutation| {
+        mutation.tie_output_head_to_embedding();
+        mutation.hadamard["prism.hadamard.tied_output"] = serde_json::json!(false);
+    });
+    assert!(matches!(
+        error,
+        FoldedPackValidationError::ContractModuleDisagreement { .. }
+    ));
+    remove_fixture_directory(&fixture_directory);
+}
+
+#[test]
+fn should_refuse_a_tied_pack_that_still_lists_its_own_head() {
+    let (error, fixture_directory) = validate_mutated(|mutation| {
+        mutation.config["tie_word_embeddings"] = serde_json::json!(true);
+        mutation.config["text_config"]["tie_word_embeddings"] = serde_json::json!(true);
+        mutation.config["tied_output"] = serde_json::json!(true);
+        mutation.hadamard["prism.hadamard.tied_output"] = serde_json::json!(true);
+    });
+    assert!(
+        !matches!(error, FoldedPackValidationError::Artifact(_)),
+        "the extra lm_head module must be refused by the inventory, not by file checks: {error:?}"
+    );
+    remove_fixture_directory(&fixture_directory);
+}

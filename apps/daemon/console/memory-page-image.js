@@ -1,10 +1,16 @@
-// The Memory page's shareable picture: the headline, the Mac's memory bar
-// with the wire limit, the four facts and the token columns, drawn on a
-// canvas at a size made for a post, then copied or saved.
+// The picture "Copy as image" makes, on Under the hood and on Home: one
+// sentence a stranger understands ("A 22.9 GB model in an 8 GB limit"),
+// three large figures, one bar of where the model's experts are and a footer naming
+// the model and the app, drawn on a canvas at a size made for a post. The
+// whole-Mac bar and the wire limit stay on the page: in a post they needed
+// explaining, and the people who would share it are not the ones who know
+// what a wire limit is.
 
 const MEMORY_PAGE_IMAGE_WIDTH_PIXELS = 1200;
-const MEMORY_PAGE_IMAGE_HEIGHT_PIXELS = 675;
+const MEMORY_PAGE_IMAGE_HEIGHT_PIXELS = 630;
 const MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS = 64;
+const MEMORY_PAGE_IMAGE_FONT_FAMILY = "-apple-system, system-ui, sans-serif";
+const MEMORY_PAGE_IMAGE_SITE = "getastronomical.com";
 
 // The colours the page is drawn in, read from the page so the image follows
 // the light or dark appearance the person is looking at.
@@ -12,147 +18,113 @@ function memoryPageImagePalette() {
     const pageStyle = getComputedStyle(document.documentElement);
     const colorOf = (tokenName) => pageStyle.getPropertyValue(tokenName).trim();
     return {
-        background: colorOf("--panel"), ink: colorOf("--ink"), inkDim: colorOf("--ink-dim"), track: colorOf("--panel-2"),
-        parts: {
-            other: colorOf("--ink-faint"), fixed: colorOf("--ink-dim"), experts: colorOf("--resident"),
-            conversation: colorOf("--memory-context"), working: colorOf("--accent")
-        },
-        memoryServed: colorOf("--resident"), storageRead: colorOf("--accent"),
-        wireLimit: colorOf("--danger") || colorOf("--accent")
+        background: colorOf("--panel"), ink: colorOf("--ink"), inkDim: colorOf("--ink-dim"),
+        accent: colorOf("--accent"), memoryServed: colorOf("--resident"), onStorage: colorOf("--border")
     };
 }
 
-// Where each legend entry of the picture goes: entries run left to right
-// and start a new line when the next would cross the right margin.
-function memoryPageImageLegendPlacements(legendTextWidths, legendTop) {
-    const legendLeftEdge = MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS;
-    const legendRightEdge = MEMORY_PAGE_IMAGE_WIDTH_PIXELS - MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS;
-    let legendLeft = legendLeftEdge;
-    let legendLineTop = legendTop;
-    return legendTextWidths.map((legendTextWidth) => {
-        const legendEntryWidth = 24 + legendTextWidth;
-        if (legendLeft > legendLeftEdge && legendLeft + legendEntryWidth > legendRightEdge) {
-            legendLeft = legendLeftEdge;
-            legendLineTop += 30;
-        }
-        const legendPlacement = { left: legendLeft, top: legendLineTop };
-        legendLeft += legendEntryWidth + 28;
-        return legendPlacement;
-    });
+// "a 16 GB limit" but "an 8 GB limit": the article follows how the number
+// is spoken, and 8, 11, 18 and the eighties are the whole numbers a limit
+// can take that begin with a vowel sound.
+function memoryPageImageLimitPhrase(limitGigabytes) {
+    const spokenWithVowel = /^8/.test(String(limitGigabytes)) || limitGigabytes === 11 || limitGigabytes === 18;
+    return (spokenWithVowel ? "an " : "a ") + limitGigabytes + " GB limit";
 }
 
-function drawMemoryPageImageBar(drawingContext, barPresentation, palette, barTop) {
-    const barLeft = MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, barHeight = 56;
-    const barWidth = MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 2 * MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS;
-    drawingContext.fillStyle = palette.track;
-    drawingContext.fillRect(barLeft, barTop, barWidth, barHeight);
-    let partLeft = barLeft;
-    for (const barPart of barPresentation.parts) {
-        const partWidth = (barPart.widthPercent / 100) * barWidth;
-        drawingContext.fillStyle = palette.parts[barPart.key];
-        drawingContext.fillRect(partLeft, barTop, partWidth, barHeight);
-        partLeft += partWidth;
-    }
-    // Near-empty parts stay on the bar but leave the legend, where they
-    // would only read "0.0 GB".
-    const legendParts = barPresentation.parts.filter((barPart) => !barPart.isEmpty);
-    drawingContext.font = "22px -apple-system, system-ui, sans-serif";
-    const legendTexts = legendParts.map((barPart) => barPart.label + " " + barPart.text);
-    const legendPlacements = memoryPageImageLegendPlacements(
-        legendTexts.map((legendText) => drawingContext.measureText(legendText).width), barTop + barHeight + 24);
-    legendParts.forEach((barPart, legendIndex) => {
-        const legendPlacement = legendPlacements[legendIndex];
-        drawingContext.fillStyle = palette.parts[barPart.key];
-        drawingContext.fillRect(legendPlacement.left, legendPlacement.top, 16, 16);
+// The sentence at the top. Without a model size or a limit it falls back to
+// the page's own headline, so a picture is never made of empty words.
+function memoryPageImageHeadline(statusDocument, pageHeadline) {
+    const modelSizeBytes = statusDocument?.ready_model_size_bytes || 0;
+    const limitGigabytes = memoryPageLimitGigabytes(statusDocument || {});
+    if (!(modelSizeBytes > 0) || !(limitGigabytes > 0)) return pageHeadline;
+    return "A " + formatMemoryPageGigabytes(modelSizeBytes) + " model in " + memoryPageImageLimitPhrase(limitGigabytes);
+}
+
+// The three large figures. A figure the app does not know yet reads "—".
+function memoryPageImageFigures(statusDocument, expertStatsDocument) {
+    const tokensPerSecond = statusDocument?.serving_session?.average_generation_tok_per_second || 0;
+    const memoryServedPercent = memoryPageMemoryServedPercent(expertStatsDocument?.last_reply);
+    return [
+        { value: tokensPerSecond > 0 ? String(Math.round(tokensPerSecond)) : "—", label: "tokens a second", isAccent: true },
+        { value: memoryServedPercent === null ? "—" : memoryServedPercent + "%", label: "of each token's experts already in memory", isAccent: false },
+        { value: "0", label: "cloud accounts", isAccent: false }
+    ];
+}
+
+// The footer's left side: the model, then the app and its version.
+function memoryPageImageFooter(statusDocument) {
+    const footerParts = [statusDocument?.ready_model_id || "No model loaded"];
+    const applicationVersion = statusDocument?.application?.version;
+    footerParts.push(applicationVersion ? "Astronomical " + applicationVersion : "Astronomical");
+    return footerParts.join(" · ");
+}
+
+function drawMemoryPageImageFigures(drawingContext, figures, palette, figuresTop) {
+    const figureWidth = (MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 2 * MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS) / figures.length;
+    figures.forEach((figure, figureIndex) => {
+        const figureLeft = MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS + figureIndex * figureWidth;
+        drawingContext.fillStyle = figure.isAccent ? palette.accent : palette.ink;
+        drawingContext.font = "700 52px " + MEMORY_PAGE_IMAGE_FONT_FAMILY;
+        drawingContext.fillText(figure.value, figureLeft, figuresTop);
         drawingContext.fillStyle = palette.inkDim;
-        drawingContext.fillText(legendTexts[legendIndex], legendPlacement.left + 24, legendPlacement.top + 15);
+        drawingContext.font = "21px " + MEMORY_PAGE_IMAGE_FONT_FAMILY;
+        drawingContext.fillText(figure.label, figureLeft, figuresTop + 34, figureWidth - 24);
     });
 }
 
-function drawMemoryPageImageWireLimit(drawingContext, barPresentation, palette, barTop) {
-    if (barPresentation.wireLimitPercent === null) return;
-    const barLeft = 64, barWidth = MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 128;
-    const markerLeft = barLeft + (barPresentation.wireLimitPercent / 100) * barWidth;
-    drawingContext.fillStyle = palette.wireLimit;
-    drawingContext.fillRect(markerLeft - 1.5, barTop - 34, 3, 100);
-    drawingContext.font = "22px -apple-system, system-ui, sans-serif";
-    drawingContext.textAlign = "right";
-    drawingContext.fillText(barPresentation.wireLimitText, markerLeft - 12, barTop - 14);
-    drawingContext.textAlign = "left";
+// One bar for the whole model: the part of its experts in memory, solid,
+// and the part left on the SSD, dim, with the two sizes written under it.
+// Nothing is drawn for a model that keeps no experts apart.
+function drawMemoryPageImageLibrarySplit(drawingContext, librarySplit, palette, barTop) {
+    if (!librarySplit) return;
+    const barWidth = MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 2 * MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, barHeight = 28;
+    drawingContext.fillStyle = palette.onStorage;
+    drawingContext.fillRect(MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, barTop, barWidth, barHeight);
+    drawingContext.fillStyle = palette.memoryServed;
+    drawingContext.fillRect(MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, barTop, barWidth * librarySplit.residentPercent / 100, barHeight);
+    drawingContext.fillStyle = palette.inkDim;
+    drawingContext.font = "21px " + MEMORY_PAGE_IMAGE_FONT_FAMILY;
+    drawingContext.fillText(librarySplit.caption, MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, barTop + barHeight + 34);
 }
 
-function drawMemoryPageImageFacts(drawingContext, facts, palette, factsTop) {
-    const factWidth = (MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 128) / facts.length;
-    facts.forEach((fact, factIndex) => {
-        const factLeft = 64 + factIndex * factWidth;
-        drawingContext.fillStyle = palette.inkDim;
-        drawingContext.font = "22px -apple-system, system-ui, sans-serif";
-        drawingContext.fillText(fact.label, factLeft, factsTop);
-        drawingContext.fillStyle = palette.ink;
-        // A long value such as "27 of 384 experts" shrinks to its column
-        // rather than running into the next fact.
-        let valueFontPixels = 40;
-        do {
-            drawingContext.font = "600 " + valueFontPixels + "px -apple-system, system-ui, sans-serif";
-            valueFontPixels -= 2;
-        } while (valueFontPixels > 20 && drawingContext.measureText(fact.value).width > factWidth - 24);
-        drawingContext.fillText(fact.value, factLeft, factsTop + 48);
-    });
-}
-
-function drawMemoryPageImageTokens(drawingContext, tokenPresentations, palette, stripTop) {
-    const stripWidth = MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 128, columnHeight = 80, columnGap = 2;
-    // Columns narrow to fit a long reply on one row instead of wrapping it.
-    const columnWidth = Math.min(10, (stripWidth - columnGap * tokenPresentations.length) / Math.max(1, tokenPresentations.length));
-    tokenPresentations.forEach((token, tokenIndex) => {
-        const columnLeft = 64 + tokenIndex * (columnWidth + columnGap);
-        const storageHeight = (token.storageSharePercent / 100) * columnHeight;
-        drawingContext.fillStyle = palette.memoryServed;
-        drawingContext.fillRect(columnLeft, stripTop, columnWidth, columnHeight - storageHeight);
-        drawingContext.fillStyle = palette.storageRead;
-        drawingContext.fillRect(columnLeft, stripTop + columnHeight - storageHeight, columnWidth, storageHeight);
-    });
-}
-
-// Draws the page's facts as one picture sized for a post.
-function drawMemoryPageImage(imageCanvas, presentation, palette) {
+// Draws the picture from the page's two documents.
+function drawMemoryPageImage(imageCanvas, statusDocument, expertStatsDocument, palette) {
+    const presentation = memoryPagePresentation(statusDocument, expertStatsDocument);
     imageCanvas.width = MEMORY_PAGE_IMAGE_WIDTH_PIXELS;
     imageCanvas.height = MEMORY_PAGE_IMAGE_HEIGHT_PIXELS;
     const drawingContext = imageCanvas.getContext("2d");
     drawingContext.fillStyle = palette.background;
     drawingContext.fillRect(0, 0, imageCanvas.width, imageCanvas.height);
     drawingContext.textBaseline = "alphabetic";
-    drawingContext.fillStyle = palette.inkDim;
-    drawingContext.font = "24px -apple-system, system-ui, sans-serif";
-    drawingContext.fillText(presentation.modelLine + " · Astronomical", 64, 74);
     drawingContext.fillStyle = palette.ink;
-    drawingContext.font = "600 46px -apple-system, system-ui, sans-serif";
-    drawingContext.fillText(presentation.headline, 64, 134);
-    if (presentation.bar) {
-        drawMemoryPageImageBar(drawingContext, presentation.bar, palette, 228);
-        drawMemoryPageImageWireLimit(drawingContext, presentation.bar, palette, 228);
-    }
-    drawMemoryPageImageFacts(drawingContext, presentation.facts, palette, 430);
+    drawingContext.font = "600 24px " + MEMORY_PAGE_IMAGE_FONT_FAMILY;
+    drawingContext.fillText("Astronomical", MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, 82);
+    drawingContext.font = "700 58px " + MEMORY_PAGE_IMAGE_FONT_FAMILY;
+    drawingContext.fillText(memoryPageImageHeadline(statusDocument, presentation.headline),
+        MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, 168, MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 2 * MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS);
+    drawMemoryPageImageFigures(drawingContext, memoryPageImageFigures(statusDocument, expertStatsDocument), palette, 270);
+    drawMemoryPageImageLibrarySplit(drawingContext, memoryPageLibrarySplit(expertStatsDocument), palette, 390);
     drawingContext.fillStyle = palette.inkDim;
-    drawingContext.font = "22px -apple-system, system-ui, sans-serif";
-    drawingContext.fillText(presentation.tokenNote, 64, 540);
-    drawMemoryPageImageTokens(drawingContext, presentation.tokens, palette, 562);
-}
-
-function setMemoryPageCopyFeedback(feedbackText) {
-    document.getElementById("memory-page-copy-feedback").textContent = feedbackText;
+    drawingContext.font = "18px " + MEMORY_PAGE_IMAGE_FONT_FAMILY;
+    drawingContext.fillText(memoryPageImageFooter(statusDocument), MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, 580);
+    drawingContext.fillStyle = palette.accent;
+    drawingContext.font = "600 20px " + MEMORY_PAGE_IMAGE_FONT_FAMILY;
+    drawingContext.textAlign = "right";
+    drawingContext.fillText(MEMORY_PAGE_IMAGE_SITE, MEMORY_PAGE_IMAGE_WIDTH_PIXELS - MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, 580);
+    drawingContext.textAlign = "left";
 }
 
 // Copies the picture to the clipboard; where the browser will not allow
-// that, saves it as a file so the picture is never lost.
-async function copyMemoryPageImage() {
+// that, saves it as a file so the picture is never lost. `feedbackElementId`
+// names the line beside the button that was pressed.
+async function copyMemoryPageImage(feedbackElementId) {
     const imageCanvas = document.createElement("canvas");
-    drawMemoryPageImage(imageCanvas,
-        memoryPagePresentation(memoryPageStatusDocument, memoryPageExpertStatsDocument), memoryPageImagePalette());
+    drawMemoryPageImage(imageCanvas, memoryPageStatusDocument, memoryPageExpertStatsDocument, memoryPageImagePalette());
     const imageBlob = await new Promise((resolve) => imageCanvas.toBlob(resolve, "image/png"));
+    const feedbackElement = document.getElementById(feedbackElementId);
     try {
         await navigator.clipboard.write([new ClipboardItem({ "image/png": imageBlob })]);
-        setMemoryPageCopyFeedback("Copied. Paste it into a post.");
+        if (feedbackElement) feedbackElement.textContent = "Copied. Paste it into a post.";
     } catch (clipboardError) {
         const downloadLink = document.createElement("a");
         downloadLink.href = URL.createObjectURL(imageBlob);
@@ -161,6 +133,6 @@ async function copyMemoryPageImage() {
         // WebKit can cancel a download whose address is revoked in the same
         // task as the click, so the address is released a moment later.
         setTimeout(() => URL.revokeObjectURL(downloadLink.href), 1000);
-        setMemoryPageCopyFeedback("Saved as astronomical-memory.png.");
+        if (feedbackElement) feedbackElement.textContent = "Saved as astronomical-memory.png.";
     }
 }

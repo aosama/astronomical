@@ -2,10 +2,8 @@
 
 .memory-page-model { margin: 0; color: var(--ink-dim); font-size: var(--text-md); }
 .memory-page-headline { margin: 0; font-size: var(--text-3xl); font-weight: 750; line-height: 1.15; letter-spacing: -0.025em; }
-.memory-page-heading-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
 .memory-page-copy-block { display: flex; align-items: center; gap: 12px; }
 .memory-page-copy-feedback { margin: 0; color: var(--ink-dim); font-size: var(--text-sm); }
-.memory-page-layout { display: grid; gap: 20px; }
 
 /* Room above the bar for the wire limit's label. */
 .memory-page-bar-wrap { position: relative; padding-top: 34px; }
@@ -30,10 +28,22 @@
 .memory-page-fact dt { color: var(--ink-dim); font-size: var(--text-sm); }
 .memory-page-fact dd { margin: 6px 0 0; font-size: var(--text-2xl); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.memory-page-token-strip { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 14px; }
-/* A token's column is every expert it routed to; the violet foot is the
-   share read from the SSD, drawn to scale. */
-.memory-page-token { display: flex; align-items: flex-end; width: 5px; height: 96px; border-radius: 2px; overflow: hidden; background: var(--resident); }
-.memory-page-token-ssd { display: block; width: 100%; background: var(--accent); }
-.memory-page-token-legend { display: flex; align-items: center; gap: 8px 18px; margin-top: 12px; color: var(--ink-dim); font-size: var(--text-sm); }
-.memory-page-token-legend span { display: flex; align-items: center; gap: 8px; }
+/* Under the hood: the heading the merged page opens with, then three plain
+   facts, the one-line safety note and the closed developer details. */
+/* A row, overriding .view-heading's column: in a column the words' 560px
+   basis became a height and left a tall gap above the button. */
+.under-the-hood-heading { display: flex; flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.under-the-hood-heading-words { display: flex; flex-direction: column; gap: 8px; flex: 1 1 560px; min-width: 0; }
+.under-the-hood-heading .memory-page-copy-block { flex-direction: column; align-items: flex-end; gap: 8px; }
+.under-the-hood-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 0; }
+.under-the-hood-fact { padding: 18px 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.under-the-hood-fact dt { color: var(--ink-dim); font-size: var(--text-sm); }
+.under-the-hood-fact-value { margin: 6px 0 0; font-size: var(--text-2xl); font-weight: 700; font-variant-numeric: tabular-nums; }
+.under-the-hood-fact-detail { margin: 4px 0 0; color: var(--ink-dim); font-size: var(--text-sm); }
+.under-the-hood-safety { display: flex; align-items: flex-start; gap: 10px; margin: 0; color: var(--ink-dim); font-size: var(--text-md); line-height: 1.5; }
+.under-the-hood-safety-dot { flex: 0 0 auto; width: 9px; height: 9px; margin-top: 7px; border-radius: 50%; background: var(--ok); }
+.under-the-hood-developer > summary { cursor: pointer; font-weight: var(--weight-label); }
+.under-the-hood-developer-body { display: grid; gap: 16px; margin-top: 16px; }
+/* A text button that reads as a link: "Change it in Settings". */
+.button-link { padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; cursor: pointer; }
+.button-link:hover { text-decoration: underline; }

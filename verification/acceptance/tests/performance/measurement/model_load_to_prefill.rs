@@ -85,7 +85,7 @@ fn should_configure_model_directory_and_fixed_chunk_for_load_measurement_worker(
     .expect("the load-measurement worker config should be JSON");
 
     assert_eq!(
-        configuration_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
+        configuration_document["chunking"]["prompt_processing_chunk_size_tokens"],
         FIXED_PROMPT_PROCESSING_CHUNK_TOKENS,
         "load-to-prefill measurement must pin the repo-standard prefill chunk size",
     );
@@ -335,7 +335,7 @@ fn isolated_load_measurement_worker_launcher(
     let configuration_document = json!({
         "model_directories": [model_directory],
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": FIXED_PROMPT_PROCESSING_CHUNK_TOKENS,
+            "prompt_processing_chunk_size_tokens": FIXED_PROMPT_PROCESSING_CHUNK_TOKENS,
         },
     });
     fs::write(

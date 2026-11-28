@@ -260,7 +260,10 @@ pub fn plan_neural_engine_output_gate_programs(
     chunking: &WorkerChunkingConfiguration,
     astro_neural_engine_program_cache_directory: Option<&Path>,
 ) -> Result<OutputGateProgramPlan, &'static str> {
-    let chunk_token_count = chunking.fixed_prompt_processing_chunk_size_tokens;
+    // Startup settles Automatic into a number before any engine loads.
+    let Some(chunk_token_count) = chunking.prompt_processing_chunk_size_tokens else {
+        return Err("the prompt-processing chunk was not settled");
+    };
     if !chunk_fits_surface_rows(chunk_token_count) {
         return Err("the prompt-processing chunk is not a multiple of the surface alignment");
     }

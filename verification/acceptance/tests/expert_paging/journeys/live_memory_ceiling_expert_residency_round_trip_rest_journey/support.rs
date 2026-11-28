@@ -32,7 +32,7 @@ pub(super) fn write_round_trip_config(
         "persistent_prompt_cache_enabled": false,
         "performance_attribution_enabled": true,
         "logging": {"level": "debug", "retained_files": 2},
-        "chunking": {"fixed_prompt_processing_chunk_size_tokens": 1_024},
+        "chunking": {"prompt_processing_chunk_size_tokens": 1_024},
     });
     fs::write(
         configuration_directory.join("config.json"),
