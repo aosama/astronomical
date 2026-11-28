@@ -135,16 +135,16 @@
               <div><dt>22.9 GB</dt><dd>the model on disk</dd></div>
               <div><dt>8 GB</dt><dd>the memory it was allowed</dd></div>
               <div><dt class="proof-accent">39</dt><dd>tokens a second while writing</dd></div>
-              <div><dt>81%</dt><dd>of the experts each token needed were already in memory</dd></div>
+              <div><dt>78%</dt><dd>of the experts each token needed were already in memory</dd></div>
             </dl>
           </div>
 
           <figure class="window-shot">
             <div class="window-frame">
               <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Observatory · Under the hood</span></div>
-              <img src="./assets/home/observatory-under-the-hood-8gb.jpg" width="2360" height="2630" loading="lazy" alt="Observatory's Under the hood page after a reply: 22.9 GB model, 8 GB limit, 39 tokens a second. A map of 40 layers shows a small part of each in memory and the rest on the SSD, and a chart of the last reply shows each token mostly in blue, experts already in memory, with a thin violet band read from the SSD. Below: 4.6 GB of experts kept in memory, 62 of 320 experts read from the SSD for a typical token, an 8 GB memory limit.">
+              <img src="./assets/home/observatory-under-the-hood-8gb.jpg" width="2340" height="1760" loading="lazy" alt="Observatory\'s Under the hood page after a reply: 22.9 GB model, 8 GB limit, 39 tokens a second. A map of 40 layers shows a small part of each in memory and the rest on the SSD. Below it: 4.6 GB of experts kept in memory, 25% of all of them; 71 of 320 experts read from the SSD for a typical token, the other 78% already in memory; and an 8 GB memory limit.">
             </div>
-            <figcaption><strong>Every token, accounted for.</strong> Under the hood draws the last reply one column per token: blue for experts already in memory, violet for the few read from your SSD. With 8 GB only a quarter of the experts fit, yet four in five of the ones each token needs are already there.</figcaption>
+            <figcaption><strong>See where every expert lives.</strong> Each of the 40 layers keeps its busiest experts in memory, solid blue, and leaves the rest on your SSD. With 8 GB only a quarter of the experts fit, yet more than three in four of the ones each token needs are already there.</figcaption>
           </figure>
 
           <div class="shot-pair">
@@ -153,8 +153,8 @@
               <figcaption><strong>Stays inside the limit you set.</strong> 7.6 of 8 GB in use in the middle of a reply, and macOS reports memory pressure as normal.</figcaption>
             </figure>
             <figure class="window-shot">
-              <div class="window-frame"><img src="./assets/home/observatory-under-the-hood-16gb.jpg" width="2360" height="1781" loading="lazy" alt="Observatory's Under the hood page with a 16 GB limit: 22.9 GB model, 16 GB limit, 44 tokens a second. In the map of 40 layers about two thirds of each layer is now in memory."></div>
-              <figcaption><strong>Give it more, it keeps more.</strong> With 16 GB two thirds of the experts stay in memory, and the same reply is written at 44 tokens a second.</figcaption>
+              <div class="window-frame"><img src="./assets/home/observatory-under-the-hood-16gb.jpg" width="2340" height="1760" loading="lazy" alt="Observatory\'s Under the hood page with a 16 GB limit: 22.9 GB model, 16 GB limit, 46 tokens a second. In the map of 40 layers about two thirds of each layer is now in memory: 12.3 GB of experts kept, and 25 of 320 read from the SSD for a typical token."></div>
+              <figcaption><strong>Give it more, it keeps more.</strong> With 16 GB two thirds of the experts stay in memory, and the same reply is written at 46 tokens a second.</figcaption>
             </figure>
           </div>
 
@@ -165,14 +165,14 @@
                 <h3>A 16 GB Mac, giving it 8 GB</h3>
                 <dl>
                   <div><dt class="proof-accent">39</dt><dd>tokens a second</dd></div>
-                  <div><dt>81%</dt><dd>already in memory</dd></div>
+                  <div><dt>78%</dt><dd>already in memory</dd></div>
                   <div><dt>4.6 GB</dt><dd>of experts kept</dd></div>
                 </dl>
               </div>
               <div class="compare-card">
                 <h3>A 32 GB Mac, giving it 16 GB</h3>
                 <dl>
-                  <div><dt class="proof-accent">44</dt><dd>tokens a second</dd></div>
+                  <div><dt class="proof-accent">46</dt><dd>tokens a second</dd></div>
                   <div><dt>92%</dt><dd>already in memory</dd></div>
                   <div><dt>12.3 GB</dt><dd>of experts kept</dd></div>
                 </dl>
