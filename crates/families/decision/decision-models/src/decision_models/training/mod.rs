@@ -8,6 +8,10 @@
 //! the final layers read; a whole-model training (`adapter_training`) runs
 //! the model itself through the same loop.
 
+// A diagnostic for acceptance journeys, not for serving: built only for
+// tests and with the `gradient-check` feature.
+#[cfg(any(test, feature = "gradient-check"))]
+pub mod directional_gradient_check;
 pub mod gpu_adam;
 pub mod gpu_heads;
 pub mod gpu_math;

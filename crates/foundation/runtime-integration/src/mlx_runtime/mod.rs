@@ -4,7 +4,11 @@
 //! # Module map
 //!
 //! - `initialization` — the one-time construction path: error handler,
-//!   Metallib path, memory policy, bindings context.
+//!   Metallib path, CUDA run-time settings, memory policy, bindings context.
+//! - `cuda_runtime_settings` — on a Linux CUDA build, hands MLX's run-time
+//!   CUDA compiler its header folders and turns TF32 off (issue #2699).
+//! - `cuda_device_memory` — on a Linux CUDA build, caps the limits MLX holds
+//!   at the GPU's own memory (issue #2699).
 //! - `memory_policy` — the live memory-limit surface: updates with rollback,
 //!   snapshots, peak reset, MLX buffer-cache reclamation, stream
 //!   synchronization.
@@ -18,6 +22,7 @@
 //! - `safetensors_io` — the runtime-level entry points that hand the custom
 //!   input/output engines under `crate::safetensors` to callers.
 
+mod cuda_device_memory;
 mod cuda_runtime_settings;
 mod error_classification;
 mod initialization;

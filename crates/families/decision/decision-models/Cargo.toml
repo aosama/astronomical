@@ -20,6 +20,10 @@ workspace = true
 [features]
 default = []
 direct-mlx = ["dep:runtime-integration", "dep:mlx-bridge", "qwen35/direct-mlx", "engine-core/direct-mlx", "model-primitives/direct-mlx"]
+# The directional gradient check (`training::directional_gradient_check`):
+# a diagnostic the acceptance journeys run on a real checkpoint to prove a
+# backend's backward pass, kept out of the serving build (issue #2699).
+gradient-check = ["direct-mlx"]
 
 # The decision shell (issues #2340, #2473): what every decision family
 # shares, above the Qwen 3.5 family the Kev and Clef backbone comes from.

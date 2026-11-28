@@ -46,8 +46,8 @@ mod romeo_and_juliet;
 
 /// Enough for Clef's 9B backbone at 8 bits, its training graph and the
 /// `mlx_buffer_cache`; Laya and Kev use a fraction of it.
-const TEST_MLX_MEMORY_CEILING_BYTES: usize = 20 * 1024 * 1024 * 1024;
-const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
+pub(super) const TEST_MLX_MEMORY_CEILING_BYTES: usize = 20 * 1024 * 1024 * 1024;
+pub(super) const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 /// Enough states for every role to hold several: of each six, four train,
 /// one chooses the stopping point and one is judged.
 const EXAMPLE_COUNT: usize = 36;
