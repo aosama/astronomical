@@ -16,11 +16,20 @@ const KEY_HEAD_COUNT: i32 = 2;
 const VALUE_HEAD_COUNT: i32 = 4;
 const KEY_HEAD_DIMENSION: i32 = 128;
 const VALUE_HEAD_DIMENSION: i32 = 32;
+// One seed per input. MLX's random draws depend only on the key, so inputs
+// of the same shape drawn from one key come out equal: queries would equal
+// keys and decays would equal update rates, and a route that swapped either
+// pair would still match its row run alone.
+const QUERY_SEED: u64 = 2699;
+const KEY_SEED: u64 = 2700;
+const VALUE_SEED: u64 = 2701;
+const DECAY_SEED: u64 = 2702;
+const UPDATE_RATE_SEED: u64 = 2703;
+const STATE_SEED: u64 = 2704;
 
 impl RecurrenceInputs {
     /// Inputs for `row_count` rows of `token_count` tokens.
     fn batch(runtime: &MlxRuntime, row_count: i32, token_count: i32) -> Self {
-        let key = runtime.random_key(2699).expect("a key builds");
         let key_shape = [row_count, token_count, KEY_HEAD_COUNT, KEY_HEAD_DIMENSION];
         let value_shape = [
             row_count,
@@ -36,12 +45,12 @@ impl RecurrenceInputs {
             KEY_HEAD_DIMENSION,
         ];
         Self {
-            queries: normal_values(runtime, &key, &key_shape, 0.1),
-            keys: normal_values(runtime, &key, &key_shape, 0.1),
-            values: normal_values(runtime, &key, &value_shape, 1.0),
-            decays: unit_interval_values(runtime, &key, &rate_shape),
-            update_rates: unit_interval_values(runtime, &key, &rate_shape),
-            recurrent_state: normal_values(runtime, &key, &state_shape, 0.5),
+            queries: normal_values(runtime, QUERY_SEED, &key_shape, 0.1),
+            keys: normal_values(runtime, KEY_SEED, &key_shape, 0.1),
+            values: normal_values(runtime, VALUE_SEED, &value_shape, 1.0),
+            decays: unit_interval_values(runtime, DECAY_SEED, &rate_shape),
+            update_rates: unit_interval_values(runtime, UPDATE_RATE_SEED, &rate_shape),
+            recurrent_state: normal_values(runtime, STATE_SEED, &state_shape, 0.5),
         }
     }
 
@@ -58,15 +67,16 @@ impl RecurrenceInputs {
     }
 }
 
-fn normal_values(runtime: &MlxRuntime, key: &MlxArray, shape: &[i32], scale: f32) -> MlxArray {
+fn normal_values(runtime: &MlxRuntime, seed: u64, shape: &[i32], scale: f32) -> MlxArray {
+    let key = runtime.random_key(seed).expect("a key builds");
     runtime
-        .random_normal(shape, MlxDtype::Float32, 0.0, scale, key)
+        .random_normal(shape, MlxDtype::Float32, 0.0, scale, &key)
         .expect("random inputs build")
 }
 
 /// Rates between 0 and 1, as the layer's sigmoid gives them.
-fn unit_interval_values(runtime: &MlxRuntime, key: &MlxArray, shape: &[i32]) -> MlxArray {
-    let rate_logits = normal_values(runtime, key, shape, 1.0);
+fn unit_interval_values(runtime: &MlxRuntime, seed: u64, shape: &[i32]) -> MlxArray {
+    let rate_logits = normal_values(runtime, seed, shape, 1.0);
     runtime.sigmoid(&rate_logits).expect("rates build")
 }
 

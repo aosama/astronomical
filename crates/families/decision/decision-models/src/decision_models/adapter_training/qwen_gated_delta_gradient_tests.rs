@@ -22,6 +22,11 @@ const VALUE_HEAD_COUNT: i32 = 32;
 const HEAD_DIMENSION: i32 = 128;
 /// Long enough for the kernel's pipelined blocks and its tail block.
 const COMPARED_TOKEN_COUNT: i32 = 160;
+/// The one-token operations have no blocks, so a short chain proves them.
+/// They also keep every token's 2 MB state in one lazy graph: over 160
+/// tokens that came to 516.6 MB against the test runtime's 517.1 MB limit
+/// and was refused once main grew, while 24 tokens sit far below it.
+const OPERATIONS_COMPARED_TOKEN_COUNT: i32 = 24;
 
 /// The recurrence's inputs for `token_count` tokens, decays near the
 /// model's typical 0.9 and write strengths near 0.5.
@@ -94,9 +99,9 @@ fn largest_magnitude(array: &MlxArray) -> f32 {
 /// The largest output and state gaps between the trainable recurrence and
 /// serving's route over the same inputs, and the served outputs' largest
 /// magnitude, which keeps the comparison from being vacuous.
-fn served_and_trainable_gaps(serving_uses_fused_kernel: bool) -> (f32, f32, f32) {
+fn served_and_trainable_gaps(serving_uses_fused_kernel: bool, token_count: i32) -> (f32, f32, f32) {
     let runtime = initialize_test_runtime();
-    let inputs = RecurrenceInputs::new(&runtime, COMPARED_TOKEN_COUNT, 0, 0.9);
+    let inputs = RecurrenceInputs::new(&runtime, token_count, 0, 0.9);
     let served_kernel = if serving_uses_fused_kernel {
         Some(qwen3_5_gated_delta_kernel().unwrap())
     } else {
@@ -135,7 +140,8 @@ fn should_score_exactly_as_the_served_fused_kernel() {
     ) {
         return;
     }
-    let (output_gap, state_gap, served_magnitude) = served_and_trainable_gaps(true);
+    let (output_gap, state_gap, served_magnitude) =
+        served_and_trainable_gaps(true, COMPARED_TOKEN_COUNT);
     // Both run serving's kernel on the same inputs: exactly equal.
     assert_eq!(output_gap, 0.0);
     assert_eq!(state_gap, 0.0);
@@ -148,7 +154,8 @@ fn should_score_exactly_as_the_served_fused_kernel() {
 #[test]
 #[file_serial]
 fn should_score_exactly_as_the_served_operations_when_serving_demoted_the_kernel() {
-    let (output_gap, state_gap, served_magnitude) = served_and_trainable_gaps(false);
+    let (output_gap, state_gap, served_magnitude) =
+        served_and_trainable_gaps(false, OPERATIONS_COMPARED_TOKEN_COUNT);
     assert_eq!(output_gap, 0.0);
     assert_eq!(state_gap, 0.0);
     assert!(served_magnitude > 0.0, "the comparison must not be vacuous");
