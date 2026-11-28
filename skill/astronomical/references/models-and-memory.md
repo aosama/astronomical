@@ -41,8 +41,7 @@ lower limit leaves more room for the rest of the Mac.
 Some models carry a draft model: a small helper that guesses the next few
 words, which the main model checks all at once. Replies arrive sooner, most
 of all for code, and every word is still the main model's own. Their names
-contain `DFLASH` or `DFLASH2`; the listing's measured speeds say how much each
-gains.
+contain `DFLASH` or `DFLASH2`.
 
 - **It needs an M5-family Mac.** A Mac without an M5 chip runs the model
   without the helper, at its normal speed.

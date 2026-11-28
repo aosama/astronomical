@@ -675,8 +675,8 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # Development is idle first and name one small model with --model for a short
 # run. `cargo test -p xtask --bin xtask small_mac_matrix` runs its tests,
 # which never touch an instance.
-# `cargo xtask measure-speed [--base-url URL] [--temperature T] [--measured-on TEXT]
-# [--reference-set] [--write-ledger] [--write-catalog] [MODEL_ID...]` measures
+# `cargo xtask measure-speed [--base-url URL] [--temperature T]
+# [--reference-set] [--write-ledger] [MODEL_ID...]` measures
 # how fast models reply. Against the Development instance only. A case (a
 # model under one memory limit) is warmed up once, then writes an essay
 # (temperature 1.0) and code (0.7) after a short and a long prompt, 200
@@ -698,9 +698,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # for a task whose replies drafted, the rounds a reply, the drafts kept a
 # round and the share of the reply that was kept drafts; and the most MLX
 # memory a reply had in use, read from the engine's status after each reply.
-# --write-catalog writes the cases measured at the Mac's own memory limit
-# into registry/download_catalog.json as each entry's measured_speed, which
-# the Models page shows. Progress and time left print every five seconds;
+# The catalog does not copy these figures. Progress and time left print every five seconds;
 # the whole reference set takes about three minutes. It refuses to start until
 # Development's config.json sets "ssd_prompt_cache": {"enabled": false} and
 # "skill": {"declare_to_models": false} (restart it after editing, and put
@@ -708,8 +706,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # Development and Stable are idle first.
 # `cargo xtask release-speed-table [--previous VERSION|FILE --current VERSION|FILE]`
 # prints the "Speed" section of a release's notes from two ledgers (the two
-# newest when none is named); `cargo xtask release-speed-table --check-catalog`
-# fails when the catalog's measured speeds differ from the newest ledger's.
+# newest when none is named). The catalog does not publish those figures.
 # `cargo test -p xtask --bin xtask -- measure_speed release_speed` runs their
 # tests, which never touch an instance.
 # Test impact selection (CI only): `cargo xtask classify-scope` publishes
@@ -1326,6 +1323,17 @@ measure-prism-shared-core-reply-token = "run -p xtask -- test-run --package astr
 measure-prism-stacked-sibling-projections = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --filter stacked_sibling_projection --ignored"
 test-prism-hadamard-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter folded_ternary --ignored"
 test-prism-hadamard-serving = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --filter should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack --ignored"
+# Ternary Bonsai 2 text and picture replies (issue #2763). Each alias is one
+# journey: thinking off, and the prediction-head draft count left unset.
+# Append --configuration PATH whose model_directory is the installed pack.
+# The optimized build is part of the alias because the journey loads the
+# real weights.
+test-bonsai-2-9b-text = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --release --ignored --case-budget-seconds 1000 --filter should_write_a_greedy_text_reply_from_the_bonsai_2_9b"
+test-bonsai-2-9b-picture = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --release --ignored --case-budget-seconds 1000 --filter should_answer_a_picture_from_the_bonsai_2_9b"
+test-bonsai-2-4b-text = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --release --ignored --case-budget-seconds 1000 --filter should_write_a_greedy_text_reply_from_the_bonsai_2_4b"
+test-bonsai-2-4b-picture = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --release --ignored --case-budget-seconds 1000 --filter should_answer_a_picture_from_the_bonsai_2_4b"
+test-bonsai-2-2b-text = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --release --ignored --case-budget-seconds 1000 --filter should_write_a_greedy_text_reply_from_the_bonsai_2_2b"
+test-bonsai-2-2b-picture = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --release --ignored --case-budget-seconds 1000 --filter should_answer_a_picture_from_the_bonsai_2_2b"
 
 # Prefill memory recovery on the largest sparse model (issues #1729, #2217):
 # two real-model REST journeys. One sends a prompt whose first full chunk runs

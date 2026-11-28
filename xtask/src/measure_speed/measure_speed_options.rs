@@ -7,8 +7,7 @@ use crate::small_mac_matrix::matrix_cells::DEVELOPMENT_BASE_URL;
 
 /// The widest temperature a chat request accepts.
 const MAXIMUM_MEASUREMENT_TEMPERATURE: f64 = 2.0;
-const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
-const MEASURE_SPEED_USAGE: &str = "usage: cargo xtask measure-speed [--base-url URL] [--temperature T] [--measured-on TEXT] [--reference-set] [--write-ledger] [--write-catalog] [MODEL_ID...]";
+const MEASURE_SPEED_USAGE: &str = "usage: cargo xtask measure-speed [--base-url URL] [--temperature T] [--reference-set] [--write-ledger] [MODEL_ID...]";
 
 #[derive(Debug, PartialEq)]
 pub struct MeasureSpeedOptions {
@@ -17,10 +16,6 @@ pub struct MeasureSpeedOptions {
     /// otherwise (`SpeedTask::default_temperature`). A release ledger is only
     /// written at the tasks' own temperatures, so releases stay comparable.
     pub temperature_override: Option<f64>,
-    /// Where the figures were measured, when given; `run` reads this Mac
-    /// otherwise, so parsing never touches the hardware.
-    pub measured_on: Option<String>,
-    pub should_write_catalog: bool,
     /// Measure the cases of `registry/release_speed/reference_set.json`,
     /// narrowed to the named models when any are named.
     pub should_use_reference_set: bool,
@@ -33,8 +28,6 @@ impl MeasureSpeedOptions {
         let mut parsed_options = Self {
             base_url: DEVELOPMENT_BASE_URL.to_owned(),
             temperature_override: None,
-            measured_on: None,
-            should_write_catalog: false,
             should_use_reference_set: false,
             should_write_ledger: false,
             model_ids: Vec::new(),
@@ -42,11 +35,10 @@ impl MeasureSpeedOptions {
         let mut remaining_arguments = arguments.iter();
         while let Some(argument) = remaining_arguments.next() {
             match argument.as_str() {
-                "--base-url" | "--measured-on" | "--temperature" => {
+                "--base-url" | "--temperature" => {
                     let value = option_value(&mut remaining_arguments, argument)?;
                     parsed_options.apply_valued_option(argument, value)?;
                 }
-                "--write-catalog" => parsed_options.should_write_catalog = true,
                 "--reference-set" => parsed_options.should_use_reference_set = true,
                 "--write-ledger" => parsed_options.should_write_ledger = true,
                 flag if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
@@ -82,7 +74,7 @@ impl MeasureSpeedOptions {
         match option_name {
             "--base-url" => self.base_url = value,
             "--temperature" => self.temperature_override = Some(parse_temperature(&value)?),
-            _ => self.measured_on = Some(value),
+            _ => return Err(format!("unknown option {option_name}")),
         }
         Ok(())
     }
@@ -109,13 +101,6 @@ fn option_value(
         .next()
         .cloned()
         .ok_or_else(|| format!("{option_name} needs a value"))
-}
-
-/// "Mac with an M5 Pro and 48 GB", read from this Mac, so the figures always
-/// say where they were measured without anyone typing it.
-pub(crate) fn this_mac_description() -> String {
-    let this_mac = this_mac();
-    describe_mac(&this_mac.chip, this_mac.memory_bytes / BYTES_PER_GIGABYTE)
 }
 
 /// This Mac's chip ("M5 Pro") and memory, the only facts about the machine a
