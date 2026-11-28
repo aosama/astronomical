@@ -37,8 +37,12 @@ pub mod gated_delta_launch_geometry;
 pub mod gated_delta_sequence;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_sequence_contract;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod gated_delta_sequence_ops_fallback_tests;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_step;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod gated_delta_test_inputs;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_tree;
 #[cfg(all(test, feature = "direct-mlx"))]

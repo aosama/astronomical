@@ -181,10 +181,13 @@ fn slice_rank_four_token(
     head_count: i32,
     head_dimension: i32,
 ) -> Result<MlxArray, MlxRuntimeError> {
+    // Every row of the batch: training scores several rows at once, while
+    // serving reads one.
+    let batch_size = sequence_array.shape()[0];
     let sliced_token = runtime.slice(
         sequence_array,
         &[0, token_index, 0, 0],
-        &[1, token_index + 1, head_count, head_dimension],
+        &[batch_size, token_index + 1, head_count, head_dimension],
         &[1, 1, 1, 1],
     )?;
     Ok(runtime.squeeze_axis(&sliced_token, 1)?)
@@ -196,10 +199,11 @@ fn slice_rank_three_token(
     token_index: i32,
     head_count: i32,
 ) -> Result<MlxArray, MlxRuntimeError> {
+    let batch_size = sequence_array.shape()[0];
     let sliced_token = runtime.slice(
         sequence_array,
         &[0, token_index, 0],
-        &[1, token_index + 1, head_count],
+        &[batch_size, token_index + 1, head_count],
         &[1, 1, 1],
     )?;
     Ok(runtime.squeeze_axis(&sliced_token, 1)?)

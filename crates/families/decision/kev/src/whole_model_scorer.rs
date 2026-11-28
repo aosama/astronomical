@@ -124,11 +124,7 @@ impl KevWholeModelScorer {
         for example in examples {
             tokenized_examples.push(tokenized_example(loaded_state, example)?);
         }
-        let differentiable_recurrence = DifferentiableGatedDelta::new().map_err(|mlx_error| {
-            DecisionFailure::fatal_execution(&format!(
-                "the trainable recurrence could not be built: {mlx_error}"
-            ))
-        })?;
+        let differentiable_recurrence = backbone.trainable_recurrence()?;
         let scorer = Self {
             pass_recomputation,
             loaded_state: Rc::clone(loaded_state),

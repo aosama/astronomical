@@ -27,6 +27,7 @@ use crate::decision_models::decision_adapters::{
 };
 use crate::linear_adapters::LinearAdapters;
 use crate::qwen3_5_core::model::layer_additions::Qwen3_5LayerAdditions;
+use crate::qwen3_5_core::model_math::differentiable_gated_delta::DifferentiableGatedDelta;
 use crate::{
     Qwen3_5ArtifactValidator, Qwen3_5TextModel, RequestDecoderStateStack,
     TextModelChunkingConfiguration,
@@ -132,6 +133,20 @@ impl QwenDecisionBackbone {
         self.model
             .final_normalized_hidden_states(token_ids, starting_position, request_decoder_state)
             .map_err(|forward_error| backbone_failure("readout", &forward_error.to_string()))
+    }
+
+    /// The Gated DeltaNet recurrence a whole-model training differentiates,
+    /// running forward on the route this backbone serves with: the fused
+    /// kernel when the worker's capability probe kept it, the one-token
+    /// operations when it demoted it (as on MLX's CUDA backend). Trained and
+    /// served scores then come from the same arithmetic.
+    pub fn trainable_recurrence(&self) -> Result<DifferentiableGatedDelta, DecisionFailure> {
+        let serving_uses_fused_kernel = self.model.base.gated_delta_kernel.is_some();
+        DifferentiableGatedDelta::new(serving_uses_fused_kernel).map_err(|mlx_error| {
+            DecisionFailure::fatal_execution(&format!(
+                "the trainable recurrence could not be built: {mlx_error}"
+            ))
+        })
     }
 }
 

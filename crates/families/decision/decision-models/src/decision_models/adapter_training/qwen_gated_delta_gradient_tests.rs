@@ -1,6 +1,7 @@
-//! The trainable Gated DeltaNet recurrence against serving's fused kernel,
-//! and its borrowed gradient against the loss's own change along a
-//! direction. It lives with decision training, whose loss it checks the
+//! The trainable Gated DeltaNet recurrence against serving's two routes (the
+//! fused kernel, on Metal only, and the one-token operations, on every
+//! backend), and its borrowed gradient against the loss's own change along
+//! a direction. It lives with decision training, whose loss it checks the
 //! gradient against, because the Qwen 3.5 crate sits below decision models
 //! (issue #2340).
 
@@ -90,18 +91,17 @@ fn largest_magnitude(array: &MlxArray) -> f32 {
     largest
 }
 
-#[test]
-#[file_serial]
-fn should_score_exactly_as_the_served_fused_kernel() {
-    if test_harness::skip_without(
-        test_harness::PlatformRequirement::MetalGpu,
-        "should_score_exactly_as_the_served_fused_kernel",
-    ) {
-        return;
-    }
+/// The largest output and state gaps between the trainable recurrence and
+/// serving's route over the same inputs, and the served outputs' largest
+/// magnitude, which keeps the comparison from being vacuous.
+fn served_and_trainable_gaps(serving_uses_fused_kernel: bool) -> (f32, f32, f32) {
     let runtime = initialize_test_runtime();
     let inputs = RecurrenceInputs::new(&runtime, COMPARED_TOKEN_COUNT, 0, 0.9);
-    let served_kernel = qwen3_5_gated_delta_kernel().unwrap();
+    let served_kernel = if serving_uses_fused_kernel {
+        Some(qwen3_5_gated_delta_kernel().unwrap())
+    } else {
+        None
+    };
     let gated_delta_inputs = GatedDeltaInputs {
         queries: &inputs.queries,
         keys: &inputs.keys,
@@ -111,22 +111,47 @@ fn should_score_exactly_as_the_served_fused_kernel() {
         recurrent_state: &inputs.recurrent_state,
     };
     let (served_outputs, served_state) =
-        qwen3_5_gated_delta_sequence(&runtime, Some(&served_kernel), &gated_delta_inputs).unwrap();
-    let (trainable_outputs, trainable_state) = DifferentiableGatedDelta::new()
-        .unwrap()
-        .sequence(&gated_delta_inputs)
-        .unwrap();
-
+        qwen3_5_gated_delta_sequence(&runtime, served_kernel.as_ref(), &gated_delta_inputs)
+            .unwrap();
+    let (trainable_outputs, trainable_state) =
+        DifferentiableGatedDelta::new(serving_uses_fused_kernel)
+            .unwrap()
+            .sequence(&gated_delta_inputs)
+            .unwrap();
     let output_gap = largest_gap(&served_outputs, &trainable_outputs);
     let state_gap = largest_gap(&served_state, &trainable_state);
-    eprintln!("[differentiable-gated-delta] output_gap={output_gap:e} state_gap={state_gap:e}");
+    eprintln!(
+        "[differentiable-gated-delta] fused_kernel={serving_uses_fused_kernel} output_gap={output_gap:e} state_gap={state_gap:e}"
+    );
+    (output_gap, state_gap, largest_magnitude(&served_outputs))
+}
+
+#[test]
+#[file_serial]
+fn should_score_exactly_as_the_served_fused_kernel() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_score_exactly_as_the_served_fused_kernel",
+    ) {
+        return;
+    }
+    let (output_gap, state_gap, served_magnitude) = served_and_trainable_gaps(true);
     // Both run serving's kernel on the same inputs: exactly equal.
     assert_eq!(output_gap, 0.0);
     assert_eq!(state_gap, 0.0);
-    assert!(
-        largest_magnitude(&served_outputs) > 0.0,
-        "the comparison must not be vacuous"
-    );
+    assert!(served_magnitude > 0.0, "the comparison must not be vacuous");
+}
+
+/// Where the worker demoted the fused kernel (MLX's CUDA backend runs no
+/// Metal kernel), serving falls back to one-token operations, and training
+/// must score exactly as that route does. It runs on every backend.
+#[test]
+#[file_serial]
+fn should_score_exactly_as_the_served_operations_when_serving_demoted_the_kernel() {
+    let (output_gap, state_gap, served_magnitude) = served_and_trainable_gaps(false);
+    assert_eq!(output_gap, 0.0);
+    assert_eq!(state_gap, 0.0);
+    assert!(served_magnitude > 0.0, "the comparison must not be vacuous");
 }
 
 #[test]
@@ -136,7 +161,7 @@ fn should_refuse_inputs_whose_heads_do_not_match_and_name_the_recurrence() {
     let inputs = RecurrenceInputs::new(&runtime, 1, 0, 0.9);
     let mismatched_values = shakespeare_values(&runtime, &[1, 1, 3, HEAD_DIMENSION], 0, 0.0);
 
-    let Err(refusal) = DifferentiableGatedDelta::new()
+    let Err(refusal) = DifferentiableGatedDelta::new(false)
         .unwrap()
         .sequence(&GatedDeltaInputs {
             queries: &inputs.queries,
@@ -162,9 +187,14 @@ struct RecurrenceLoss {
 }
 
 impl RecurrenceLoss {
-    fn new(runtime: &MlxRuntime, inputs: &RecurrenceInputs, token_count: i32) -> Self {
+    fn new(
+        runtime: &MlxRuntime,
+        inputs: &RecurrenceInputs,
+        token_count: i32,
+        serving_uses_fused_kernel: bool,
+    ) -> Self {
         Self {
-            recurrence: DifferentiableGatedDelta::new().unwrap(),
+            recurrence: DifferentiableGatedDelta::new(serving_uses_fused_kernel).unwrap(),
             recurrent_state: inputs.recurrent_state.retain().unwrap(),
             output_weights: shakespeare_values(
                 runtime,
@@ -215,22 +245,17 @@ fn dot(left: &MlxArray, right: &MlxArray) -> f64 {
     dot_product
 }
 
-#[test]
-#[file_serial]
-fn should_match_the_loss_change_along_a_direction_through_the_recurrence() {
-    if test_harness::skip_without(
-        test_harness::PlatformRequirement::MetalGpu,
-        "should_match_the_loss_change_along_a_direction_through_the_recurrence",
-    ) {
-        return;
-    }
+/// The loss change the borrowed gradient predicts along a fixed direction,
+/// and the change a central difference measures, with the forward on
+/// serving's fused kernel or on its one-token operations.
+fn predicted_and_measured_change(serving_uses_fused_kernel: bool) -> (f64, f64) {
     const TOKEN_COUNT: i32 = 24;
     let runtime = initialize_test_runtime();
     let inputs = RecurrenceInputs::new(&runtime, TOKEN_COUNT, 0, 0.9);
     // Centred on zero, so a step along them keeps decays and rates in range.
     let directions = RecurrenceInputs::new(&runtime, TOKEN_COUNT, 41_000, 0.0).trainable();
     let gradients = loss_gradients(
-        RecurrenceLoss::new(&runtime, &inputs, TOKEN_COUNT),
+        RecurrenceLoss::new(&runtime, &inputs, TOKEN_COUNT, serving_uses_fused_kernel),
         &inputs.trainable(),
     )
     .unwrap()
@@ -240,11 +265,13 @@ fn should_match_the_loss_change_along_a_direction_through_the_recurrence() {
         predicted_change += dot(gradient, direction);
     }
 
-    let reference_loss = RecurrenceLoss::new(&runtime, &inputs, TOKEN_COUNT);
+    let reference_loss =
+        RecurrenceLoss::new(&runtime, &inputs, TOKEN_COUNT, serving_uses_fused_kernel);
     // The recurrence is smooth in every input, so a central difference at
     // 0.01 is the true derivative to about 1e-5 relative. The borrowed
     // backward pass differentiates MLX's recurrence, which differs from the
-    // served forward by about 8e-4 relative; measured 4.5e-4 here.
+    // served fused kernel by about 8e-4 relative (measured 4.5e-4 here on
+    // Metal); the gap for the one-token operations is printed beside it.
     let step = 1e-2_f32;
     let mut stepped_losses = Vec::with_capacity(2);
     for signed_step in [step, -step] {
@@ -260,8 +287,14 @@ fn should_match_the_loss_change_along_a_direction_through_the_recurrence() {
     }
     let measured_change = (stepped_losses[0] - stepped_losses[1]) / (2.0 * f64::from(step));
     eprintln!(
-        "[differentiable-gated-delta] predicted={predicted_change} measured={measured_change}"
+        "[differentiable-gated-delta] fused_kernel={serving_uses_fused_kernel} predicted={predicted_change} measured={measured_change}"
     );
+    (predicted_change, measured_change)
+}
+
+/// The borrowed gradient agrees with the loss's own change to within
+/// `1e-3` relative, along a direction that moves the loss.
+fn assert_gradient_matches(predicted_change: f64, measured_change: f64) {
     assert!(
         predicted_change.abs() > 1e-3,
         "the direction should move the loss"
@@ -271,4 +304,24 @@ fn should_match_the_loss_change_along_a_direction_through_the_recurrence() {
         relative_gap < 1e-3,
         "gradient predicts {predicted_change}, loss moved {measured_change}"
     );
+}
+
+#[test]
+#[file_serial]
+fn should_match_the_loss_change_along_a_direction_through_the_recurrence() {
+    if test_harness::skip_without(
+        test_harness::PlatformRequirement::MetalGpu,
+        "should_match_the_loss_change_along_a_direction_through_the_recurrence",
+    ) {
+        return;
+    }
+    let (predicted_change, measured_change) = predicted_and_measured_change(true);
+    assert_gradient_matches(predicted_change, measured_change);
+}
+
+#[test]
+#[file_serial]
+fn should_match_the_loss_change_along_a_direction_through_the_served_operations() {
+    let (predicted_change, measured_change) = predicted_and_measured_change(false);
+    assert_gradient_matches(predicted_change, measured_change);
 }

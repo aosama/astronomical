@@ -3,11 +3,11 @@
 //! row's chain alone.
 
 use mlx_bridge::{MlxArray, MlxDtype};
-use runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use runtime_integration::MlxRuntime;
 use serial_test::file_serial;
 
-use super::gated_delta_inputs::GatedDeltaInputs;
 use super::gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
+use super::gated_delta_test_inputs::{RecurrenceInputs, gated_delta_test_runtime as test_runtime};
 use super::gated_delta_tree::{
     TreeRowChains, qwen3_5_gated_delta_replay, qwen3_5_gated_delta_replay_kernel,
     qwen3_5_gated_delta_tree, qwen3_5_gated_delta_tree_kernel,
@@ -18,37 +18,6 @@ const VALUE_HEAD_COUNT: i32 = 4;
 /// The kernels' lane layout reads 128-wide keys.
 const KEY_HEAD_DIMENSION: i32 = 128;
 const VALUE_HEAD_DIMENSION: i32 = 32;
-
-fn test_runtime() -> MlxRuntime {
-    MlxRuntime::initialize(
-        MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
-            .expect("the tree recurrence test memory limits are valid"),
-    )
-    .expect("the direct MLX runtime initializes")
-}
-
-/// One step's inputs for `row_count` rows, shaped as the layer passes them.
-struct RecurrenceInputs {
-    queries: MlxArray,
-    keys: MlxArray,
-    values: MlxArray,
-    decays: MlxArray,
-    update_rates: MlxArray,
-    recurrent_state: MlxArray,
-}
-
-impl RecurrenceInputs {
-    fn as_gated_delta_inputs(&self) -> GatedDeltaInputs<'_> {
-        GatedDeltaInputs {
-            queries: &self.queries,
-            keys: &self.keys,
-            values: &self.values,
-            decays: &self.decays,
-            update_rates: &self.update_rates,
-            recurrent_state: &self.recurrent_state,
-        }
-    }
-}
 
 fn recurrence_inputs(runtime: &MlxRuntime, row_count: i32, seed: u64) -> RecurrenceInputs {
     recurrence_inputs_of_spread(runtime, row_count, seed, 1.0)
