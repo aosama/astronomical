@@ -3,18 +3,17 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Astronomical | Models larger than your memory, on your Mac</title>
-    <meta name="description" content="Set one memory ceiling. Astronomical runs language, vision, image, and embedding models on this Mac — sparse experts stream from SSD when they do not fit, without hidden quantization — and serves them to coding agents over an OpenAI- and Anthropic-compatible loopback API.">
-    <meta name="theme-color" content="#141517">
+    <title>Astronomical | Private AI on your Mac, even the big models</title>
+    <meta name="description" content="Chat, make pictures and get help with code, with models that run on your Mac and nowhere else. Free and open source. Astronomical even runs models larger than the memory you give it.">
+    <meta name="theme-color" content="#f5f4f1">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Astronomical | Models larger than your memory, on your Mac">
-    <meta property="og:description" content="Set one memory ceiling. Sparse experts stream from SSD when they do not fit. Declared precision is preserved. Nothing leaves the laptop.">
+    <meta property="og:title" content="Astronomical | Private AI on your Mac, even the big models">
+    <meta property="og:description" content="Chat, make pictures and get help with code on your Mac and nowhere else. Free and open source, and it runs models larger than the memory you give it.">
     <meta property="og:url" content="https://getastronomical.com/">
     <meta property="og:image" content="https://getastronomical.com/assets/astronomical-social-preview.png">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
-    <link rel="preload" href="./assets/fonts/newsreader-roman.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./home.css">
   </head>
@@ -35,113 +34,205 @@
         <a href="https://discord.gg/E8a5qmhRhr">Discord</a>
         <a href="https://github.com/aosama/astronomical">Source</a>
       </nav>
+      <a class="button site-download" data-latest-disk-image href="https://github.com/aosama/astronomical/releases/latest">Download</a>
     </header>
 
     <main id="main">
       <section class="hero">
-        <div class="hero-grid shell">
-          <div class="hero-copy">
-            <p class="hero-release"><span class="signal-dot signal-dot-release" aria-hidden="true"></span>Stable <a id="home-stable-version" class="home-version" href="https://github.com/aosama/astronomical/releases/latest">on GitHub Releases</a> · Apple silicon · macOS 14 and later</p>
-            <h1>Models larger than your memory, <em>on your Mac.</em></h1>
-            <p class="hero-deck">Set one memory ceiling. When a mixture-of-experts model does not fit, Astronomical streams the experts the router selects from your SSD, keeps the precision the model declares, and answers every request on this Mac.</p>
-            <div class="hero-actions">
-              <a class="button button-primary" data-latest-disk-image href="https://github.com/aosama/astronomical/releases/latest">Download for Mac</a>
-              <a class="text-link" href="#reports">Read the field notes →</a>
+        <div class="shell hero-stack">
+          <p class="hero-release">Stable <a id="home-stable-version" class="home-version" href="https://github.com/aosama/astronomical/releases/latest">on GitHub Releases</a> · Free and open source</p>
+          <h1>Private AI on your Mac. <em>Even the big models.</em></h1>
+          <p class="hero-deck">Chat, make pictures and get help with code, with models that run on your Mac and nowhere else. Astronomical even runs models larger than the memory you give it.</p>
+          <div class="hero-actions">
+            <a class="button button-primary button-large" data-latest-disk-image href="https://github.com/aosama/astronomical/releases/latest">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+              Download for Mac
+            </a>
+            <a class="button button-large" href="https://github.com/aosama/astronomical">View on GitHub</a>
+          </div>
+          <p class="hero-requirements">For Macs with Apple silicon · macOS 14 or later · No account needed</p>
+
+          <div class="hero-shot">
+            <img src="./assets/home/chat-home.jpg" width="2160" height="1440" alt="The Astronomical chat window ready for a new chat: Good morning, What can I help with?, the message field in the middle with a model chosen, four everyday ideas under it, and the line Runs on this Mac. Nothing you type leaves it. Two earlier chats are listed at the side.">
+            <a class="hero-proof night" href="#how">
+              <span class="hero-proof-label"><span class="signal-dot" aria-hidden="true"></span>Live in Observatory</span>
+              <strong>22.9 GB model</strong>
+              <span class="hero-proof-claim">running inside an 8 GB limit, writing 39 tokens a second</span>
+              <span class="hero-proof-bar" aria-hidden="true"><i style="width: 25%"></i></span>
+              <span class="hero-proof-note">25% of the experts in memory, the rest read from the SSD</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="promises" aria-label="What you get">
+        <div class="shell promise-grid">
+          <div class="promise">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <h2>Stays on your Mac</h2>
+            <p>What you type, what it answers and the models themselves never leave this Mac. There is no account to make.</p>
+          </div>
+          <div class="promise">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 7v6c0 4.5 3.4 7.4 8 8 4.6-.6 8-3.5 8-8V7z"/><path d="m9 12 2 2 4-4"/></svg>
+            <h2>Free, and open to read</h2>
+            <p>No subscription and no trial. Every line of the app is public on GitHub, and it is signed and checked by Apple.</p>
+          </div>
+          <div class="promise">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg>
+            <h2>Models bigger than your memory</h2>
+            <p>Give it the 8 GB a 16 GB Mac can spare and it still runs a 22.9 GB model, reading the rest from your SSD.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="feature shell" aria-labelledby="chat-title">
+        <div class="feature-copy">
+          <p class="section-index">Chat</p>
+          <h2 id="chat-title">Ask anything.</h2>
+          <p>Plan a project, learn something new or get a draft started. Attach a photo or a document and it reads that too, right here on your Mac.</p>
+          <p class="feature-aside">Works offline once a model is downloaded.</p>
+        </div>
+        <img class="feature-shot" src="./assets/home/chat-reply.jpg" width="2160" height="1440" alt="A chat in Astronomical: asked to plan a week of easy dinners for two, the assistant answers with a recipe for each day, starting with a one-pot creamy garlic lemon pasta on Monday.">
+      </section>
+
+      <section class="feature feature-reversed shell" aria-labelledby="pictures-title">
+        <div class="feature-copy">
+          <p class="section-index">Pictures and voice</p>
+          <h2 id="pictures-title">Describe it. It draws it.</h2>
+          <p>Ask for a poster, a card or an idea sketch, then save it or copy it straight into anything. Astronomical can also read any reply aloud.</p>
+        </div>
+        <img class="feature-shot" src="./assets/home/picture-reply.jpg" width="2160" height="1440" alt="A chat in Astronomical: asked to draw a cosy reading nook by a rainy window in watercolour, the assistant shows the painting it made, an armchair with a knitted blanket and an open book beside a lamp, with Save and Copy picture buttons under it.">
+      </section>
+
+      <section class="night how" id="how" aria-labelledby="how-title">
+        <div class="shell how-stack">
+          <div class="how-head">
+            <p class="section-index">How it works</p>
+            <h2 id="how-title">Bigger than your memory.</h2>
+            <p>A big model is made of many specialists, called experts, and only a few are needed for each word. Astronomical keeps the busy ones in memory and reads the rest from your SSD the moment they are needed, so the rest of your Mac stays usable.</p>
+          </div>
+
+          <div class="idea" role="img" aria-label="A drawing of the idea: a small grid of experts in memory, four of them just brought in for this word, beside a much larger grid of the whole model on the SSD, five of its experts being read right now.">
+            <div class="idea-panel idea-memory">
+              <p class="idea-title"><strong>Memory</strong><span>8 GB, the limit you set</span></p>
+              <div class="tile-grid tile-grid-memory"><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile tile-arrived"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile tile-arrived"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile tile-arrived"></i><i class="tile"></i><i class="tile"></i><i class="tile tile-arrived"></i><i class="tile"></i></div>
+              <p class="idea-key"><i class="tile tile-arrived"></i>Just brought in for this word</p>
+            </div>
+            <div class="idea-flow">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 8H5"/><path d="m9 4-4 4 4 4"/><path d="M5 16h14"/><path d="m15 12 4 4-4 4"/></svg>
+              <span>read as needed</span>
+            </div>
+            <div class="idea-panel idea-storage">
+              <p class="idea-title"><strong>Your SSD</strong><span>the whole model, 22.9 GB</span></p>
+              <div class="tile-grid tile-grid-storage"><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile tile-reading"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile tile-reading"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile tile-reading"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile tile-reading"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile tile-reading"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i><i class="tile"></i></div>
+              <p class="idea-key"><i class="tile tile-reading"></i>Being read right now</p>
             </div>
           </div>
 
-          <figure class="hero-figure">
-            <div class="figure-plate">
-              <svg viewBox="0 0 420 292" role="img" aria-label="Sixty experts. Thirty above the memory ceiling are resident in memory; thirty below wait on the SSD, and four of those are streaming in for the current token.">
-                <defs>
-                  <pattern id="hero-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.6" height="6" fill="#b9b4a9"/></pattern>
-                  <g id="expert-row"><circle cx="30" cy="30" r="11"/><circle cx="70" cy="30" r="11"/><circle cx="110" cy="30" r="11"/><circle cx="150" cy="30" r="11"/><circle cx="190" cy="30" r="11"/><circle cx="230" cy="30" r="11"/><circle cx="270" cy="30" r="11"/><circle cx="310" cy="30" r="11"/><circle cx="350" cy="30" r="11"/><circle cx="390" cy="30" r="11"/></g>
-                </defs>
-                <g fill="#b9b4a9"><use href="#expert-row"/><use href="#expert-row" y="40"/><use href="#expert-row" y="80"/></g>
-                <g fill="none" stroke="#b9b4a9" stroke-opacity="0.45" stroke-width="1.5"><use href="#expert-row" y="142"/><use href="#expert-row" y="182"/><use href="#expert-row" y="222"/></g>
-                <g fill="url(#hero-hatch)" stroke="#b9b4a9" stroke-width="1.5"><circle cx="110" cy="172" r="11"/><circle cx="270" cy="212" r="11"/><circle cx="350" cy="172" r="11"/><circle cx="190" cy="252" r="11"/></g>
-                <path d="M8 143H412" stroke="#e4e0d6" stroke-width="1.5" stroke-dasharray="5 4"/>
-                <text x="412" y="137" text-anchor="end" font-family="ui-monospace, SF Mono, monospace" font-size="11" fill="#e4e0d6">your memory ceiling</text>
-              </svg>
+          <div class="proof">
+            <p class="section-index">Not a drawing: one real reply with 8 GB to spare, what a 16 GB Mac can give</p>
+            <dl class="proof-grid">
+              <div><dt>22.9 GB</dt><dd>the model on disk</dd></div>
+              <div><dt>8 GB</dt><dd>the memory it was allowed</dd></div>
+              <div><dt class="proof-accent">39</dt><dd>tokens a second while writing</dd></div>
+              <div><dt>78%</dt><dd>of the experts each token needed were already in memory</dd></div>
+            </dl>
+          </div>
+
+          <figure class="window-shot">
+            <div class="window-frame">
+              <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Observatory · Under the hood</span></div>
+              <img src="./assets/home/observatory-under-the-hood-8gb.jpg" width="2340" height="1760" loading="lazy" alt="Observatory\'s Under the hood page after a reply: 22.9 GB model, 8 GB limit, 39 tokens a second. A map of 40 layers shows a small part of each in memory and the rest on the SSD. Below it: 4.6 GB of experts kept in memory, 25% of all of them; 71 of 320 experts read from the SSD for a typical token, the other 78% already in memory; and an 8 GB memory limit.">
             </div>
-            <figcaption>Fig. 1. Solid experts are in memory. Below the ceiling they wait on the SSD; hatched ones are streaming in for this token.</figcaption>
+            <figcaption><strong>See where every expert lives.</strong> Each of the 40 layers keeps its busiest experts in memory, solid blue, and leaves the rest on your SSD. With 8 GB only a quarter of the experts fit, yet more than three in four of the ones each token needs are already there.</figcaption>
           </figure>
+
+          <div class="shot-pair">
+            <figure class="window-shot">
+              <div class="window-frame"><img src="./assets/home/observatory-home-8gb.jpg" width="2325" height="1755" loading="lazy" alt="Observatory's Home page in the middle of a reply: This 22.9 GB model is answering inside your 8 GB limit, at 40 tokens a second. Memory shows 7.6 GB of an 8.0 GB ceiling in use and macOS pressure normal."></div>
+              <figcaption><strong>Stays inside the limit you set.</strong> 7.6 of 8 GB in use in the middle of a reply, and macOS reports memory pressure as normal.</figcaption>
+            </figure>
+            <figure class="window-shot">
+              <div class="window-frame"><img src="./assets/home/observatory-under-the-hood-16gb.jpg" width="2340" height="1760" loading="lazy" alt="Observatory\'s Under the hood page with a 16 GB limit: 22.9 GB model, 16 GB limit, 46 tokens a second. In the map of 40 layers about two thirds of each layer is now in memory: 12.3 GB of experts kept, and 25 of 320 read from the SSD for a typical token."></div>
+              <figcaption><strong>Give it more, it keeps more.</strong> With 16 GB two thirds of the experts stay in memory, and the same reply is written at 46 tokens a second.</figcaption>
+            </figure>
+          </div>
+
+          <div class="compare">
+            <p class="section-index">The same model, the same reply, two everyday amounts of memory</p>
+            <div class="compare-grid">
+              <div class="compare-card compare-card-raised">
+                <h3>A 16 GB Mac, giving it 8 GB</h3>
+                <dl>
+                  <div><dt class="proof-accent">39</dt><dd>tokens a second</dd></div>
+                  <div><dt>78%</dt><dd>already in memory</dd></div>
+                  <div><dt>4.6 GB</dt><dd>of experts kept</dd></div>
+                </dl>
+              </div>
+              <div class="compare-card">
+                <h3>A 32 GB Mac, giving it 16 GB</h3>
+                <dl>
+                  <div><dt class="proof-accent">46</dt><dd>tokens a second</dd></div>
+                  <div><dt>92%</dt><dd>already in memory</dd></div>
+                  <div><dt>12.3 GB</dt><dd>of experts kept</dd></div>
+                </dl>
+              </div>
+            </div>
+          </div>
+
+          <div class="how-foot">
+            <p>Captured 28 November 2026 with a development build of Astronomical after version 0.2.138 and Ornith 1.5 35B-A3B at 4 bits, one 2,500-token reply to a Shakespeare prompt, on an Apple M5 Pro Mac with its memory limit set to 8 GB and then to 16 GB. A Mac with 16 or 32 GB in total usually has a slower graphics chip and SSD than this one, so expect fewer tokens a second. Observatory comes with the app: open it from the menu bar and watch your own.</p>
+            <a class="text-link" href="#reports">Read the field notes →</a>
+          </div>
         </div>
-        <div class="hero-limb" aria-hidden="true"></div>
       </section>
 
-      <section class="fact-band" aria-label="One captured run">
-        <div class="shell fact-grid">
-          <div class="fact"><strong>11 GB</strong><span>the ceiling that was set</span></div>
-          <div class="fact"><strong>21.61 GB</strong><span>the model on disk, still generating</span></div>
-          <div class="fact"><strong>0</strong><span>cloud accounts</span></div>
-          <p class="fact-note">One captured development run of Qwen3.6-35B-A3B-oQ4e-mtp. It demonstrates the operating mode; it is not a throughput claim. Results vary by model, context, storage, and Mac.</p>
+      <section class="feature shell" id="developers" aria-labelledby="developers-title">
+        <div class="feature-copy">
+          <p class="section-index">For developers</p>
+          <h2 id="developers-title">Your coding agent, on a local model.</h2>
+          <p>One command starts Claude Code, Codex or OpenCode already pointed at your Mac. Any tool that speaks the OpenAI or Anthropic API can use it too, even with a model bigger than your memory.</p>
+          <a class="text-link" href="./local-api.html">Set up your tools →</a>
+        </div>
+        <div class="terminal night">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <pre><code><span class="terminal-dim">$</span> astronomical launch claude
+<span class="terminal-dim">$</span> astronomical launch codex
+<span class="terminal-dim">$</span> astronomical launch opencode
+
+<span class="terminal-dim"># any other tool</span>
+base URL  <span class="terminal-accent">http://127.0.0.1:6732/</span></code></pre>
         </div>
       </section>
 
-      <section class="split shell" id="use" aria-labelledby="use-title">
-        <div class="split-head">
-          <p class="section-index">On this Mac</p>
-          <h2 id="use-title">Install it. Open the Library. <em>Launch your coding agent.</em></h2>
-        </div>
-        <div class="split-body">
-          <p>Astronomical is a local model runner for one person on Apple silicon. Open the app and the runner goes live on this Mac; three surfaces show and use it.</p>
-          <dl class="term-list">
-            <div><dt>The menu</dt><dd>Effective memory, expert residency, graphics-processor use, prompt progress, and prompt reuse, while you work.</dd></div>
-            <div><dt>Observatory</dt><dd>The local console on the same loopback address: install from the Library, watch status, and send a chat without a separate monitoring stack.</dd></div>
-            <div><dt>The local API</dt><dd>OpenAI-compatible Chat Completions, Responses, embeddings, image generation, and speech, plus Anthropic-compatible Messages, over loopback only. <code>astronomical launch claude</code>, <code>codex</code>, or <code>opencode</code> starts the agent already pointed at this Mac, and the OpenCode plugin keeps your models in OpenCode's picker. <a class="text-link" href="./local-api.html">Connect a coding agent →</a></dd></div>
+      <section class="start" id="download" aria-labelledby="start-title">
+        <div class="shell start-stack">
+          <div class="start-head">
+            <h2 id="start-title">Up and running in a few minutes.</h2>
+            <p>No terminal and no settings to learn first.</p>
+          </div>
+          <ol class="step-grid">
+            <li><h3>Download and drag</h3><p>Open the disk image and drag Astronomical into Applications.</p></li>
+            <li><h3>Take the suggested model</h3><p>It suggests one that suits your Mac. One click downloads and checks it. <a class="text-link" href="./models.html">See the models →</a></p></li>
+            <li><h3>Start chatting</h3><p>Type your first message. Everything happens on your Mac.</p></li>
+          </ol>
+          <div class="start-action">
+            <a class="button button-primary button-large" data-latest-disk-image href="https://github.com/aosama/astronomical/releases/latest">Download for Mac</a>
+            <p id="home-stable-note">A small download · updates itself</p>
+          </div>
+          <dl class="question-grid">
+            <div><dt>Is it really free?</dt><dd>Yes. It is open source and has no paid tier. Each model has its own licence, shown before you download it.</dd></div>
+            <div><dt>Will it run on my 16 GB Mac?</dt><dd>Yes. Give it 8 GB and it stays inside that, leaving the rest for your other apps, even with a model far bigger than 8 GB.</dd></div>
+            <div><dt>Does anything leave my Mac?</dt><dd>Only what you agree to: a problem report you choose to send, or a once-a-day count you can switch on. You see each one in full first. <a class="text-link" href="./privacy.html">Read the privacy page →</a></dd></div>
           </dl>
-          <p class="home-note" id="home-stable-note"><strong>Stable</strong> is on GitHub Releases — open it and the local runner goes live on this Mac; Observatory is the local console for the Library, status, and interim chat.</p>
-        </div>
-      </section>
-
-      <section class="split shell" id="capabilities" aria-labelledby="capabilities-title">
-        <div class="split-head">
-          <p class="section-index">Capabilities</p>
-          <h2 id="capabilities-title">What the app does <em>today.</em></h2>
-          <p class="split-aside">Shipped product surfaces. Speed still depends on the model, context, storage, and the memory you leave for the rest of the Mac.</p>
-        </div>
-        <dl class="term-list term-list-ruled">
-          <div><dt>Chat locally</dt><dd>Observatory or any local OpenAI- or Anthropic-compatible client. Tool calls, Responses, and Messages share the same loopback server.</dd></div>
-          <div><dt>Vision in the same chat</dt><dd>Attach an image; a vision-capable model sees it on this Mac and the image does not leave the laptop.</dd></div>
-          <div><dt>Generate an image</dt><dd>A text prompt becomes one lossless PNG through the local image endpoint or <code>astronomical image</code>, served by the same app.</dd></div>
-          <div><dt>Speak text aloud</dt><dd>The speech endpoint or <code>astronomical speak</code> turns text into audio with a speech model on this Mac, and the chat window can read a reply aloud.</dd></div>
-          <div><dt>Decide with a small model</dt><dd><code>astronomical decide</code> asks a small decision model a question about a situation you describe and gets a short, structured answer.</dd></div>
-          <div><dt>Install from the Library</dt><dd>Download a curated public model; Astronomical verifies the payload before the model becomes discoverable. <a class="text-link" href="./models.html">See the models →</a></dd></div>
-          <div><dt>One memory ceiling</dt><dd>Set the model RAM your laptop can spare. Complete experts stay resident when they fit; selected experts stream from storage when the request needs room.</dd></div>
-          <div><dt>No hidden quantization</dt><dd>A tighter ceiling never silently downgrades the model. Paging keeps the artifact's declared types; unsupported files fail validation instead of being guessed from a name.</dd></div>
-          <div><dt>Launch a coding agent</dt><dd><code>astronomical launch claude</code>, <code>codex</code>, or <code>opencode</code> runs the agent on a local model for one session, with the model's real context window declared, without touching the agent's own settings.</dd></div>
-          <div><dt>Embed text</dt><dd>The embeddings endpoint or <code>astronomical embed</code> turns text into vectors for search and retrieval that stay on this Mac.</dd></div>
-          <div><dt>Drive it from the terminal</dt><dd><code>astronomical respond</code> answers one prompt, <code>models</code> lists and downloads, <code>status</code> shows the worker and resident model, and <code>doctor</code> checks which instance the command line talks to.</dd></div>
-        </dl>
-      </section>
-
-      <section class="split shell" aria-labelledby="residency-title">
-        <div class="split-head">
-          <p class="section-index">How it decides</p>
-          <h2 id="residency-title">Fully in memory when it fits. <em>Streamed when it does not.</em></h2>
-        </div>
-        <div class="split-body">
-          <p>You never pick a mode. The runner projects what the next request needs, keeps every expert resident when the whole sparse payload fits, and pages router-selected experts from the SSD when live context needs the room. When the room comes back, the complete expert layers do too.</p>
-          <figure class="memory-figure">
-            <svg viewBox="0 0 600 46" role="img" aria-label="Memory under the ceiling: model core, experts in memory, experts streaming, live context, then headroom.">
-              <defs><pattern id="bar-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="7" fill="#b9b4a9"/></pattern></defs>
-              <rect x="0.5" y="6.5" width="560" height="34" rx="3" fill="#1d1e21" stroke="rgba(228,224,214,0.3)"/>
-              <rect x="1" y="7" width="110" height="33" fill="#e4e0d6"/>
-              <rect x="111" y="7" width="190" height="33" fill="#b9b4a9"/>
-              <rect x="301" y="7" width="120" height="33" fill="url(#bar-hatch)"/>
-              <rect x="421" y="7" width="70" height="33" fill="#9d988e" fill-opacity="0.28"/>
-              <path d="M561 0v46" stroke="#e4e0d6" stroke-width="2"/>
-            </svg>
-            <figcaption class="legend"><span><i class="swatch swatch-core"></i>Model core</span><span><i class="swatch swatch-resident"></i>Experts in memory</span><span><i class="swatch swatch-streaming"></i>Experts streaming</span><span><i class="swatch swatch-context"></i>Live context</span><span><i class="swatch swatch-ceiling"></i>Your ceiling</span></figcaption>
-          </figure>
         </div>
       </section>
 
       <section class="notes shell" id="reports" aria-labelledby="reports-title">
         <div class="notes-head">
-          <h2 id="reports-title">Claims need <em>receipts.</em></h2>
-          <p>Each field note separates architecture facts, acceptance evidence, and open questions. Failed ideas stay on the record.</p>
+          <p class="section-index">Field notes</p>
+          <h2 id="reports-title">Claims need receipts.</h2>
+          <p>Each field note says what was measured, how, and what is still open. Ideas that did not work stay on the record.</p>
         </div>
         <ol class="note-list">
           <li>
@@ -166,29 +257,6 @@
             </a>
           </li>
         </ol>
-      </section>
-
-      <section class="split shell" id="method" aria-labelledby="method-title">
-        <div class="split-head">
-          <p class="section-index">Evidence standard</p>
-          <h2 id="method-title">Fast is a measurement, <em>not an adjective.</em></h2>
-        </div>
-        <ol class="method-list">
-          <li><strong>Representative work.</strong> Performance claims use at least 10,000 input tokens and about 500 output tokens, the shape of a coding-agent turn, after a small warmup, on an optimized build, with the exact workload disclosed.</li>
-          <li><strong>Memory beside speed.</strong> Throughput is reported with model precision, effective memory ceiling, and peak MLX memory.</li>
-          <li><strong>Cold and warm separated.</strong> Operating-system file reuse is not presented as SSD performance, and throughput runs disable the persistent prompt cache so a cache hit never passes for speed.</li>
-          <li><strong>Failed ideas stay visible.</strong> A smaller command count or a prettier trace is not a win unless end-to-end behavior improves.</li>
-        </ol>
-      </section>
-
-      <section class="closing">
-        <div class="shell closing-grid">
-          <h2>The laptop is the deployment target.</h2>
-          <div class="hero-actions">
-            <a class="button button-primary" data-latest-disk-image href="https://github.com/aosama/astronomical/releases/latest">Download for Mac</a>
-            <a class="text-link" href="https://github.com/aosama/astronomical">Follow the work on GitHub ↗</a>
-          </div>
-        </div>
       </section>
     </main>
 
