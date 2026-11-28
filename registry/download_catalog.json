@@ -185,12 +185,12 @@
             "upstream_license": "MIT",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.137",
+                "astronomical_version": "0.2.138",
                 "tokens_per_second": {
-                    "essay_short_prompt": 51,
+                    "essay_short_prompt": 53,
                     "essay_long_prompt": 50,
-                    "code_short_prompt": 50,
-                    "code_long_prompt": 51
+                    "code_short_prompt": 53,
+                    "code_long_prompt": 53
                 }
             }
         },
@@ -591,12 +591,12 @@
             "build_difference": "draft_model",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.137",
+                "astronomical_version": "0.2.138",
                 "tokens_per_second": {
-                    "essay_short_prompt": 86,
-                    "essay_long_prompt": 76,
-                    "code_short_prompt": 97,
-                    "code_long_prompt": 92
+                    "essay_short_prompt": 92,
+                    "essay_long_prompt": 86,
+                    "code_short_prompt": 104,
+                    "code_long_prompt": 95
                 }
             }
         },
@@ -734,12 +734,12 @@
             "upstream_license": "Apache-2.0",
             "measured_speed": {
                 "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.137",
+                "astronomical_version": "0.2.138",
                 "tokens_per_second": {
                     "essay_short_prompt": 53,
-                    "essay_long_prompt": 55,
-                    "code_short_prompt": 57,
-                    "code_long_prompt": 54
+                    "essay_long_prompt": 53,
+                    "code_short_prompt": 61,
+                    "code_long_prompt": 58
                 }
             }
         },
