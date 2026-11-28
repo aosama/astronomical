@@ -79,20 +79,3 @@ fn should_ship_the_optiq_vision_dflash_package_as_a_drafting_build_of_the_optiq_
     );
     assert!(package_entry.approximate_memory_bytes() > package_entry.approximate_size_bytes());
 }
-
-#[test]
-fn should_record_the_optiq_vision_dflash_package_as_faster_than_its_lead_at_every_task() {
-    let download_catalog =
-        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    let speed_of = |huggingface_id| {
-        shipped_entry(&download_catalog, huggingface_id)
-            .measured_speed()
-            .expect("both builds were measured")
-            .tokens_per_second()
-    };
-    let package_speed = speed_of("ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH");
-    let lead_speed = speed_of("mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit");
-    assert!(package_speed.code_short_prompt > lead_speed.code_short_prompt);
-    assert!(package_speed.code_long_prompt > lead_speed.code_long_prompt);
-    assert!(package_speed.essay_short_prompt > lead_speed.essay_short_prompt);
-}

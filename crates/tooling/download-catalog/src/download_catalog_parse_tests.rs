@@ -624,3 +624,20 @@ fn should_reject_a_zero_streaming_floor_or_one_above_the_full_footprint() {
         ));
     }
 }
+
+#[test]
+fn should_refuse_an_entry_that_still_carries_measured_speed() {
+    let mut catalog_entry = baseline_entry_document();
+    catalog_entry["measured_speed"] = json!({"tokens_per_second": {}});
+    let catalog_json = json!({
+        "schema_version": 5,
+        "entries": [catalog_entry]
+    })
+    .to_string();
+
+    assert!(
+        super::DownloadCatalog::parse_json(&catalog_json).is_err(),
+        "a speed block is not a catalog field"
+    );
+    assert!(super::DownloadCatalog::load_bundled().is_ok());
+}

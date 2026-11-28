@@ -7,11 +7,11 @@
     "references/getting-started.md": "8202bb225ab88b4300a0d8a3ee8d56ebd00fc2def6f6e7bb3501d9e3d25ec2fe",
     "references/images.md": "9e58d2d8197829fe955629930e1e8548641a38d756d8e2698f04708fead0bc2f",
     "references/local-api.md": "7d1a513c37a05a7d6ff22b3ad2529a9d8121ea7bbd396a013d18bbfbe89c7d50",
-    "references/models-and-memory.md": "13b08700349960b40804e34c25e982240a9d6b5475b077c2ccc792cd6c6c804c",
+    "references/models-and-memory.md": "6041aff6161f79cd53da5a110fc8603d0b6e31f3939fa450c61456ac038e1bc8",
     "references/settings.md": "36c5bd46bf3c0fea0bc375f88c907f24acb996e4d1cedd0e0e0a032a8db063b7",
     "references/speech.md": "892a232176de1435776df11f45ab2cc98f5db17debc54bb033bac86157aacacd",
     "references/troubleshooting.md": "c78350daceb34f4aa7c596f152a26404598269ef8d022d55837460b4df721e2a"
   },
   "minimum_app_version": "0.2.135",
-  "skill_version": 5
+  "skill_version": 6
 }

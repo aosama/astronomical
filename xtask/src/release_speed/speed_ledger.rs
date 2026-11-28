@@ -1,8 +1,8 @@
 //! The release speed ledger: one source-controlled file a release under
 //! `registry/release_speed/`, holding every reference measurement taken of
 //! that release's build. It is the one durable record of how fast
-//! Astronomical serves its reference models; the catalog's `measured_speed`
-//! and the release notes' speed section are both derived from it.
+//! Astronomical serves its reference models. The release notes' speed section
+//! is derived from it. The catalog does not copy the figures.
 //!
 //! A file a release, rather than one growing file, because a release's
 //! figures are written once and then only read: two branches never edit the
@@ -290,8 +290,10 @@ pub fn merged_ledger(
 }
 
 /// The ledger of the highest release version in the directory, or `None`
-/// when no release has been measured yet.
-pub fn newest_ledger(repository_root: &Path) -> Result<Option<ReleaseSpeedLedger>, String> {
+/// when no release has been measured yet. The table command compares two
+/// named ledgers, so only the tests ask for the newest one by itself.
+#[cfg(test)]
+pub(crate) fn newest_ledger(repository_root: &Path) -> Result<Option<ReleaseSpeedLedger>, String> {
     ledger_versions_newest_first(repository_root)
         .first()
         .map(|newest_version| read_ledger(&ledger_path(repository_root, newest_version)))

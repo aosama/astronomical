@@ -125,7 +125,6 @@ function downloadModelsFactEntries(catalogRow) {
     ];
     const rememberedWordsText = downloadModelsRememberedWordsText(catalogRow.contextWindow);
     if (rememberedWordsText) factEntries.push(["Remembers", rememberedWordsText]);
-    if (catalogRow.measuredSpeed) factEntries.push(...downloadModelsSpeedFactEntries(catalogRow.measuredSpeed));
     if (catalogRow.quantizationLabel) factEntries.push(["Compression", catalogRow.quantizationLabel]);
     if (catalogRow.upstreamLicense) factEntries.push(["License", catalogRow.upstreamLicense]);
     factEntries.push(["Downloaded from", catalogRow.huggingfaceId]);
@@ -134,18 +133,6 @@ function downloadModelsFactEntries(catalogRow) {
         factEntries.push([catalogRow.readyOnThisMac ? "Saved in" : "Will be saved in", destinationPath]);
     }
     return factEntries;
-}
-
-// Measured speeds sit with the technical facts, in tokens a second as they were
-// measured, with the Mac and version they came from on the next line.
-function downloadModelsSpeedFactEntries(measuredSpeed) {
-    return [
-        ["Writing an essay", measuredSpeed.essayShortPrompt + " tokens a second, " + measuredSpeed.essayLongPrompt
-            + " after a 10,000-token prompt"],
-        ["Writing code", measuredSpeed.codeShortPrompt + " tokens a second, " + measuredSpeed.codeLongPrompt
-            + " after a 10,000-token prompt"],
-        ["Speed measured on", measuredSpeed.measuredOn + ", Astronomical " + measuredSpeed.astronomicalVersion]
-    ];
 }
 
 function createDownloadModelsFactList(catalogRow) {
