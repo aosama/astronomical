@@ -13,10 +13,11 @@
 //!    bindings context exists, so the context's first graphics-processor
 //!    touch already sees the pinned kernel archive. Linux builds MLX's CPU
 //!    backend, which has no kernel archive.
-//! 3. On a Linux CUDA build, the **CUDA run-time settings** (the header
-//!    folders of MLX's run-time CUDA compiler, and TF32 off) are applied
-//!    before MLX can compile a kernel or run a matrix multiply
-//!    (`cuda_runtime_settings`).
+//! 3. **TF32 is forbidden** on every backend, so float32 matrix multiplies
+//!    stay float32 (`float32_matrix_precision`), and on a Linux CUDA build
+//!    MLX's run-time CUDA compiler is given its header folders
+//!    (`cuda_runtime_settings`), both before MLX can compile a kernel or run
+//!    a matrix multiply.
 //! 4. The **memory policy** is applied before any allocation can happen, so
 //!    no transient allocation can escape the ceiling the worker promised. On
 //!    a CUDA build it first reads the GPU's memory, and MLX holds the limits
@@ -35,7 +36,7 @@ use mlx_bridge::MlxBindingsContext;
 
 #[cfg(target_os = "macos")]
 use super::metallib;
-use super::{MlxRuntime, cuda_runtime_settings, memory_policy};
+use super::{MlxRuntime, cuda_runtime_settings, float32_matrix_precision, memory_policy};
 
 impl MlxRuntime {
     /// Installs the non-terminating error handler before any fallible MLX call
@@ -94,9 +95,10 @@ impl MlxRuntime {
 }
 
 /// The process-wide settings a runtime needs before its bindings context:
-/// MLX's CUDA run-time settings (nothing without the CUDA backend), then this
-/// runtime's memory limits, admitted and counted.
+/// TF32 forbidden, MLX's CUDA run-time settings (nothing without the CUDA
+/// backend), then this runtime's memory limits, admitted and counted.
 fn configure_process_settings(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeError> {
+    float32_matrix_precision::keep_float32_matrix_multiplies_float32()?;
     cuda_runtime_settings::configure_cuda_runtime_settings()?;
     memory_policy::configure_runtime_memory_limits(memory_limits)
 }
