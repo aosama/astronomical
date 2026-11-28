@@ -1,0 +1,70 @@
+diff --git a/mlx/c/cuda.cpp b/mlx/c/cuda.cpp
+index 71c07f5..faddad5 100644
+--- a/mlx/c/cuda.cpp
++++ b/mlx/c/cuda.cpp
+@@ -5,6 +5,7 @@
+ 
+ #include "mlx/c/cuda.h"
+ #include "mlx/backend/cuda/cuda.h"
++#include "mlx/config.h"
+ #include "mlx/c/error.h"
+ #include "mlx/c/private/mlx.h"
+ 
+@@ -17,3 +18,27 @@ extern "C" int mlx_cuda_is_available(bool* res) {
+   }
+   return 0;
+ }
++
++extern "C" int mlx_cuda_set_jit_header_directories(
++    const char* bundled_headers_directory,
++    const char* cuda_toolkit_include_directory) {
++  try {
++    mlx::core::cu::set_jit_header_directories(
++        bundled_headers_directory ? bundled_headers_directory : "",
++        cuda_toolkit_include_directory ? cuda_toolkit_include_directory : "");
++  } catch (std::exception& e) {
++    mlx_error(e.what());
++    return 1;
++  }
++  return 0;
++}
++
++extern "C" int mlx_set_tf32_enabled(bool enabled) {
++  try {
++    mlx::core::config::update("MLX_ENABLE_TF32", enabled ? 1 : 0);
++  } catch (std::exception& e) {
++    mlx_error(e.what());
++    return 1;
++  }
++  return 0;
++}
+diff --git a/mlx/c/cuda.h b/mlx/c/cuda.h
+index 4734f8c..730cb71 100644
+--- a/mlx/c/cuda.h
++++ b/mlx/c/cuda.h
+@@ -30,6 +30,25 @@ extern "C" {
+ 
+ int mlx_cuda_is_available(bool* res);
+ 
++/**
++ * Name the folders MLX's run-time CUDA compiler reads headers from: the
++ * CUTLASS, CuTe and CCCL headers MLX installs, and the CUDA runtime headers.
++ * For a program that links MLX statically. An empty string keeps MLX's own
++ * search. A no-op without the CUDA backend.
++ */
++int mlx_cuda_set_jit_header_directories(
++    const char* bundled_headers_directory,
++    const char* cuda_toolkit_include_directory);
++
++/**
++ * Allow or forbid TF32 for float32 matrix multiplies, process-wide on every
++ * backend: MLX's MLX_ENABLE_TF32 setting, which MLX allows by default. CUDA
++ * runs cuBLAS on TF32 tensor cores with it; Metal's NAX kernels read it too.
++ * TF32 keeps a 10-bit mantissa. Declared here, beside the CUDA settings it
++ * is set with, because MLX-C v0.8.0 has no configuration module.
++ */
++int mlx_set_tf32_enabled(bool enabled);
++
+ /**@}*/
+ 
+ #ifdef __cplusplus

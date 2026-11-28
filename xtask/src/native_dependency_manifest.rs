@@ -1,12 +1,12 @@
 //! Pinned-manifest policy for the native dependency bootstrap: one line per
-//! archive, four pipe-separated fields, exactly six pinned archives (the five
-//! of the serving image and the performance profiler measurement tests
-//! compile). The
+//! archive, four pipe-separated fields, exactly ten pinned archives (the five
+//! of the serving image, the performance profiler measurement tests compile,
+//! and the four sources MLX's CUDA backend declares). The
 //! validations mirror what the CMake manifest can express and what the
 //! `astro_native_build_cache` archive store must never have to trust: no line-break or empty fields, a path-safe
 //! archive file name, HTTPS-only URLs, and a lowercase 64-hex SHA-256.
 
-pub(crate) const EXPECTED_ARCHIVE_COUNT: usize = 6;
+pub(crate) const EXPECTED_ARCHIVE_COUNT: usize = 10;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ManifestEntry {
@@ -22,7 +22,7 @@ pub(crate) fn parse_manifest_text(manifest_text: &str) -> Result<Vec<ManifestEnt
         manifest_entries.push(parse_manifest_line(manifest_line)?);
     }
     if manifest_entries.len() != EXPECTED_ARCHIVE_COUNT {
-        return Err("native dependency manifest must contain exactly six archives".to_owned());
+        return Err("native dependency manifest must contain exactly ten archives".to_owned());
     }
     Ok(manifest_entries)
 }

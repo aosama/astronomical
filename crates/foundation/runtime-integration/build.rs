@@ -214,6 +214,7 @@ fn emit_native_source_rerun_contracts(
         manifest_directory.join("../native-build-orchestration/src"),
         native_source_directory.join("CMakeLists.txt"),
         native_source_directory.join("apply_patch_if_needed.cmake"),
+        native_source_directory.join("cuda_runtime_facts.cmake"),
         native_source_directory.join("tests/mlx_memory_contract_probe.cpp"),
         manifest_directory.join("../native-identity/src"),
         manifest_directory.join("../../../third-party/native-dependency-manifest.cmake"),

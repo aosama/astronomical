@@ -1,7 +1,9 @@
 //! Full-mode toolchain probes: the hosted toolchain identity folded into
 //! the native build fingerprint. The probe set follows the target's operating
 //! system (see [`crate::target_platform`]): macOS probes Xcode, the SDK and
-//! Xcode's Clang; Linux probes the `cc` and `c++` compilers CMake uses there.
+//! Xcode's Clang; Linux probes the `cc` and `c++` compilers CMake uses there,
+//! and a Linux CUDA build also the CUDA compiler, the GPU architectures and
+//! the CUDA toolkit search settings.
 //! Both probe CMake and rustc. Digest semantics are carried over from the
 //! shell era byte-for-byte so `github_actions_cache` keys stay meaningful: whole-output probes
 //! hash raw stdout (trailing newline included), composite probes hash the
@@ -29,6 +31,19 @@ pub struct ToolchainOverrides {
     /// Linux only: the CMake search settings that decide which BLAS and
     /// LAPACK MLX's configure finds, as `NAME=value` lines.
     pub blas_search: Option<String>,
+    /// Linux only: whether the host builds MLX's CUDA backend. `None` asks
+    /// the host (`linux_gpu_backend`); fixtures say it outright so their
+    /// identity never depends on the machine running them.
+    pub has_cuda_build_target: Option<bool>,
+    /// Linux CUDA only: the whole `nvcc --version` output.
+    pub cuda_compiler: Option<String>,
+    /// Linux CUDA only: MLX's CUDA architecture list, such as `86`.
+    pub cuda_architectures: Option<String>,
+    /// Linux CUDA only: the CUDA toolkit search settings, as `NAME=value`
+    /// lines.
+    pub cuda_search: Option<String>,
+    /// Linux CUDA only: the installed cuDNN's `major.minor.patch`.
+    pub cudnn_version: Option<String>,
     pub cmake: Option<String>,
     pub rustc: Option<String>,
     pub target_triple: Option<String>,
@@ -108,18 +123,116 @@ fn platform_compiler_probe_values(
     target_triple: &str,
     overrides: &ToolchainOverrides,
 ) -> Result<Vec<ProbeValue>, NativeIdentityError> {
-    let target_platform = NativeTargetPlatform::of_target_triple(target_triple)
-        .map_err(|error| NativeIdentityError::Probe(error.to_string()))?;
+    let target_platform = build_platform(target_triple, overrides)?;
     let mut compiler_probe_values = Vec::new();
+    push_platform_compiler_probe_values(target_platform, overrides, &mut compiler_probe_values)?;
+    Ok(compiler_probe_values)
+}
+
+/// The compiler probes of `target_platform`'s recipe; a CUDA build adds
+/// its CUDA probes to the Linux ones.
+fn push_platform_compiler_probe_values(
+    target_platform: NativeTargetPlatform,
+    overrides: &ToolchainOverrides,
+    probe_values: &mut Vec<ProbeValue>,
+) -> Result<(), NativeIdentityError> {
     match target_platform {
-        NativeTargetPlatform::MacOs => {
-            push_macos_compiler_probe_values(overrides, &mut compiler_probe_values)?;
-        }
-        NativeTargetPlatform::Linux => {
-            push_linux_compiler_probe_values(overrides, &mut compiler_probe_values)?;
+        NativeTargetPlatform::MacOs => push_macos_compiler_probe_values(overrides, probe_values),
+        NativeTargetPlatform::Linux => push_linux_compiler_probe_values(overrides, probe_values),
+        NativeTargetPlatform::LinuxCuda => {
+            push_linux_compiler_probe_values(overrides, probe_values)?;
+            push_cuda_probe_values(overrides, probe_values)
         }
     }
-    Ok(compiler_probe_values)
+}
+
+/// The recipe the build will use: the host's answer
+/// ([`NativeTargetPlatform::for_build`]) unless a fixture states it.
+fn build_platform(
+    target_triple: &str,
+    overrides: &ToolchainOverrides,
+) -> Result<NativeTargetPlatform, NativeIdentityError> {
+    let target_platform = match overrides.has_cuda_build_target {
+        Some(has_cuda_build_target) => NativeTargetPlatform::of_target_triple(target_triple)
+            .map_err(unsupported_platform_error)?
+            .with_gpu_backend(has_cuda_build_target),
+        None => {
+            NativeTargetPlatform::for_build(target_triple).map_err(unsupported_platform_error)?
+        }
+    };
+    Ok(target_platform)
+}
+
+fn unsupported_platform_error(
+    unsupported_platform: crate::target_platform::UnsupportedTargetPlatform,
+) -> NativeIdentityError {
+    NativeIdentityError::Probe(unsupported_platform.to_string())
+}
+
+/// The CUDA probes of a Linux CUDA build:
+///
+/// - the whole `nvcc --version` output of the detected compiler, hashed for
+///   the same reason the C compilers' is;
+/// - the architectures, which decide which kernels the archive holds;
+/// - the toolkit search settings, which decide which toolkit CMake finds,
+///   whose files the store entry then links by path;
+/// - the cuDNN version, because MLX compiles its cuDNN frontend against the
+///   installed cuDNN's headers, so an upgrade must build a new entry.
+fn push_cuda_probe_values(
+    overrides: &ToolchainOverrides,
+    probe_values: &mut Vec<ProbeValue>,
+) -> Result<(), NativeIdentityError> {
+    let cuda_compiler_program = match overrides.cuda_compiler {
+        Some(_) => String::new(),
+        None => required_cuda_build_target()?
+            .cuda_compiler_path
+            .display()
+            .to_string(),
+    };
+    probe_values.push(whole_output_probe_value(
+        "cuda-compiler",
+        overrides.cuda_compiler.as_deref(),
+        &cuda_compiler_program,
+        &["--version"],
+    )?);
+    let cuda_architectures = match overrides.cuda_architectures.as_deref() {
+        Some(override_value) => override_value.to_owned(),
+        None => required_cuda_build_target()?.cuda_architectures.clone(),
+    };
+    probe_values.push(ProbeValue {
+        name: "cuda-architectures",
+        value: format!("{cuda_architectures}\n"),
+        from_override: overrides.cuda_architectures.is_some(),
+    });
+    probe_values.push(search_settings_probe_value(
+        "cuda-search",
+        &CUDA_SEARCH_VARIABLES,
+        overrides.cuda_search.as_deref(),
+    ));
+    let cudnn_version = match overrides.cudnn_version.as_deref() {
+        Some(override_value) => override_value.to_owned(),
+        None => match crate::linux_gpu_backend::installed_cudnn_version(
+            &required_cuda_build_target()?.cuda_compiler_path,
+        ) {
+            Some(installed_cudnn_version) => installed_cudnn_version,
+            None => "absent".to_owned(),
+        },
+    };
+    probe_values.push(ProbeValue {
+        name: "cudnn-version",
+        value: format!("{cudnn_version}\n"),
+        from_override: overrides.cudnn_version.is_some(),
+    });
+    Ok(())
+}
+
+/// The host's CUDA build target, which a CUDA probe without an override
+/// reads; an error when the host has none.
+fn required_cuda_build_target()
+-> Result<&'static crate::linux_gpu_backend::CudaBuildTarget, NativeIdentityError> {
+    crate::linux_gpu_backend::detected_cuda_build_target().ok_or(NativeIdentityError::Probe(
+        "no CUDA build target on this host".to_owned(),
+    ))
 }
 
 /// The macOS compiler probes: Xcode, the macOS SDK, and Xcode's Clang. Their
@@ -184,17 +297,32 @@ pub const BLAS_SEARCH_VARIABLES: [&str; 10] = [
     "PKG_CONFIG_PATH",
 ];
 
+/// The environment settings CMake's CUDAToolkit consults to find the CUDA
+/// toolkit (`CUDA_PATH` is the one Linux distributions set). MLX's FindCUDNN
+/// reads CMake variables, not the environment, so which cuDNN is used is
+/// fingerprinted by its version instead.
+pub const CUDA_SEARCH_VARIABLES: [&str; 3] = ["CUDA_PATH", "CUDAToolkit_ROOT", "CUDACXX"];
+
 /// A Linux store entry records the BLAS and LAPACK files MLX's configure
 /// found, and links them by path. Pointing CMake at another BLAS must
 /// therefore build a new entry rather than reuse one whose recorded files
 /// are elsewhere, so the settings that steer that search are hashed. Unset
 /// settings hash as empty values, which keeps the probe present and stable.
 fn blas_search_probe_value(override_text: Option<&str>) -> ProbeValue {
+    search_settings_probe_value("blas-search", &BLAS_SEARCH_VARIABLES, override_text)
+}
+
+/// The `NAME=value` lines of `search_variables`, unset ones as empty values.
+fn search_settings_probe_value(
+    probe_name: &'static str,
+    search_variables: &[&str],
+    override_text: Option<&str>,
+) -> ProbeValue {
     let probe_output = match override_text {
         Some(override_value) => format!("{override_value}\n"),
         None => {
             let mut search_setting_lines = String::new();
-            for search_variable in BLAS_SEARCH_VARIABLES {
+            for search_variable in search_variables {
                 let search_value = std::env::var(search_variable).unwrap_or_default();
                 search_setting_lines.push_str(&format!("{search_variable}={search_value}\n"));
             }
@@ -202,7 +330,7 @@ fn blas_search_probe_value(override_text: Option<&str>) -> ProbeValue {
         }
     };
     ProbeValue {
-        name: "blas-search",
+        name: probe_name,
         value: probe_output,
         from_override: override_text.is_some(),
     }

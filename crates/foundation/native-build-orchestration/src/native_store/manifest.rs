@@ -28,7 +28,7 @@ use sha2::{Digest, Sha256};
 
 use super::NativeBuildProfile;
 use crate::native_host_platform::{
-    NativeTargetPlatform, PlatformNativeProduct, platform_native_products,
+    NativeProductKind, NativeTargetPlatform, PlatformNativeProduct, platform_native_products,
 };
 
 /// Full-entry validation: real directory, matching completion marker,
@@ -96,12 +96,13 @@ pub(super) fn write_manifest(
 /// Recursive copy that refuses symlinks on both sides of every entry.
 ///
 /// Used for the MLX header tree, where a link would poison the include path
-/// of every dependent compile.
+/// of every dependent compile, and for the CUDA recipe's run-time compiler
+/// header trees, where it would do the same to every kernel MLX compiles.
 pub(super) fn copy_directory_without_symlinks(
     source_directory: &Path,
     destination_directory: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    require_regular_directory(source_directory, "native source header directory")?;
+    require_regular_directory(source_directory, "native source directory")?;
     fs::create_dir_all(destination_directory)?;
     for directory_entry_result in fs::read_dir(source_directory)? {
         let directory_entry = directory_entry_result?;
@@ -195,21 +196,7 @@ fn require_profile_products(
     native_target_platform: NativeTargetPlatform,
     native_build_profile: NativeBuildProfile,
 ) -> Result<(), Box<dyn Error>> {
-    // One loop over the shared products followed by the platform's own, so
-    // a platform adds products without adding a validation path.
-    let platform_products = platform_native_products(native_target_platform)
-        .iter()
-        .map(PlatformNativeProduct::entry_path_and_description);
-    for (relative_path, description) in [
-        ("include/mlx/c/mlx.h", "published MLX C umbrella header"),
-        ("lib/libmlx.a", "published MLX static library"),
-        ("lib/libmlxc.a", "published MLX C static library"),
-    ]
-    .into_iter()
-    .chain(platform_products)
-    {
-        require_regular_file(&entry_directory.join(relative_path), description)?;
-    }
+    require_core_and_platform_products(entry_directory, native_target_platform)?;
     if native_build_profile.should_build_memory_contract_probe() {
         require_regular_file(
             &entry_directory.join("bin/mlx_memory_contract_probe"),
@@ -217,6 +204,42 @@ fn require_profile_products(
         )?;
     }
     Ok(())
+}
+
+/// Asserts the products every recipe shares, then the platform's own table
+/// of products, so a platform adds products without adding a validation path.
+fn require_core_and_platform_products(
+    entry_directory: &Path,
+    native_target_platform: NativeTargetPlatform,
+) -> Result<(), Box<dyn Error>> {
+    for (relative_path, description) in [
+        ("include/mlx/c/mlx.h", "published MLX C umbrella header"),
+        ("lib/libmlx.a", "published MLX static library"),
+        ("lib/libmlxc.a", "published MLX C static library"),
+    ] {
+        require_regular_file(&entry_directory.join(relative_path), description)?;
+    }
+    for platform_product in platform_native_products(native_target_platform) {
+        require_platform_product(entry_directory, platform_product)?;
+    }
+    Ok(())
+}
+
+/// Asserts one platform product is present: a regular file, or a regular
+/// directory for a header folder.
+fn require_platform_product(
+    entry_directory: &Path,
+    platform_product: &PlatformNativeProduct,
+) -> Result<(), Box<dyn Error>> {
+    let (relative_path, description) = platform_product.entry_path_and_description();
+    match platform_product.kind {
+        NativeProductKind::File => {
+            require_regular_file(&entry_directory.join(relative_path), description)
+        }
+        NativeProductKind::Directory => {
+            require_regular_directory(&entry_directory.join(relative_path), description)
+        }
+    }
 }
 
 /// Builds the sorted `<sha256>\t<size>\t<path>` body for a payload tree.

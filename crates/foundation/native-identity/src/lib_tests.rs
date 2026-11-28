@@ -166,13 +166,12 @@ fn should_keep_direct_toolchain_fixtures_deterministic() {
         xcode: Some("Xcode 26.0".to_owned()),
         sdk: Some("version=15.4\nbuild=24A123".to_owned()),
         clang: Some("version=17.0.0\ntarget=arm64-apple-darwin24".to_owned()),
-        c_compiler: None,
-        cxx_compiler: None,
-        blas_search: None,
+        has_cuda_build_target: Some(false),
         cmake: Some("cmake version 4.2.1".to_owned()),
         rustc: Some("rustc 1.97.1".to_owned()),
         target_triple: Some("aarch64-apple-darwin".to_owned()),
         build_type: None,
+        ..ToolchainOverrides::none()
     };
     let first_identity = native_build_identity(&FingerprintRequest {
         repository_root: &repository_root,
@@ -261,13 +260,12 @@ fn should_match_the_single_pass_identity_to_the_shared_identity_entry_point() {
             xcode: Some("Xcode 26.0".to_owned()),
             sdk: Some("version=15.4\nbuild=24A123".to_owned()),
             clang: Some("version=17.0.0\ntarget=arm64-apple-darwin24".to_owned()),
-            c_compiler: None,
-            cxx_compiler: None,
-            blas_search: None,
+            has_cuda_build_target: Some(false),
             cmake: Some("cmake version 4.2.1".to_owned()),
             rustc: Some("rustc 1.97.1".to_owned()),
             target_triple: Some("aarch64-apple-darwin".to_owned()),
             build_type: None,
+            ..ToolchainOverrides::none()
         },
     };
     let (identity, probe_values) = native_build_identity_with_probe_values(&request).unwrap();

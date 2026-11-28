@@ -82,6 +82,32 @@ pub fn linux_link_directives(
     native_library_directory: &Path,
     mlx_targets_text: &str,
 ) -> NativeLinkDirectives {
+    linux_link_directives_with_cuda(native_library_directory, mlx_targets_text, None)
+}
+
+/// The Linux CUDA line: the Linux line, with the CUDA and cuDNN libraries the
+/// native build resolved (`cuda_link_libraries_text`, one linker input per
+/// line: a library file, or `-lname`) linked before the C++ runtime. MLX's
+/// package names those libraries only as CMake targets (`CUDA::cublasLt`,
+/// `CUDNN::cudnn_all`), which the resolved list stands in for, so those
+/// target entries are dropped without a warning.
+pub fn linux_cuda_link_directives(
+    native_library_directory: &Path,
+    mlx_targets_text: &str,
+    cuda_link_libraries_text: &str,
+) -> NativeLinkDirectives {
+    linux_link_directives_with_cuda(
+        native_library_directory,
+        mlx_targets_text,
+        Some(cuda_link_libraries_text),
+    )
+}
+
+fn linux_link_directives_with_cuda(
+    native_library_directory: &Path,
+    mlx_targets_text: &str,
+    cuda_link_libraries_text: Option<&str>,
+) -> NativeLinkDirectives {
     let mut link_directives = NativeLinkDirectives {
         cargo_directive_lines: vec![
             format!(
@@ -96,18 +122,53 @@ pub fn linux_link_directives(
     };
     if let Some(exported_link_libraries) = mlx_exported_link_libraries(mlx_targets_text) {
         for link_library_entry in exported_link_libraries {
-            push_link_library_entry(&mut link_directives, &link_library_entry);
+            let is_resolved_cuda_target =
+                cuda_link_libraries_text.is_some() && is_cuda_library_target(&link_library_entry);
+            if !is_resolved_cuda_target {
+                push_link_library_entry(&mut link_directives, &link_library_entry);
+            }
         }
     } else {
         link_directives.warning_messages.push(
             "MLXTargets.cmake defines no `mlx` target properties, so none of the libraries MLX links (BLAS, LAPACK, dl, pthread) were linked; the final link will name the missing symbols".to_owned(),
         );
     }
+    if let Some(cuda_link_libraries) = cuda_link_libraries_text {
+        push_cuda_link_libraries(&mut link_directives, cuda_link_libraries);
+    }
     push_unique_line(
         &mut link_directives.cargo_directive_lines,
         "cargo:rustc-link-lib=dylib=stdc++".to_owned(),
     );
     link_directives
+}
+
+/// `CUDA::cublasLt` and `$<LINK_ONLY:CUDNN::cudnn_all>`: the CMake targets of
+/// the CUDA toolkit and cuDNN that MLX's CUDA backend links.
+fn is_cuda_library_target(link_library_entry: &str) -> bool {
+    let linkable_entry = linkable_entry_text(link_library_entry).unwrap_or_default();
+    linkable_entry.starts_with("CUDA::") || linkable_entry.starts_with("CUDNN::")
+}
+
+/// Links each resolved CUDA input: a library file by path (with a run path
+/// outside the loader's default folders), or `-lname` by name, as the driver
+/// library is, so the toolkit's link stub never becomes a run path.
+fn push_cuda_link_libraries(link_directives: &mut NativeLinkDirectives, cuda_link_libraries: &str) {
+    for cuda_link_line in cuda_link_libraries.lines() {
+        let linker_input = cuda_link_line.trim();
+        if linker_input.is_empty() {
+            continue;
+        }
+        if let Some(library_name) = linker_input.strip_prefix("-l") {
+            push_named_library(link_directives, linker_input, library_name);
+        } else if Path::new(linker_input).is_absolute() {
+            push_library_file(link_directives, Path::new(linker_input));
+        } else {
+            link_directives.warning_messages.push(format!(
+                "the CUDA link list names {linker_input:?}, which is neither a library file nor -lname; it was not linked"
+            ));
+        }
+    }
 }
 
 /// The `INTERFACE_LINK_LIBRARIES` MLX's installed CMake package records for

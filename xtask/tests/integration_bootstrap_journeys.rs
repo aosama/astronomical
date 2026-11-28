@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 /// As many archives as the pinned manifest must name.
-const FIXTURE_ARCHIVE_COUNT: usize = 6;
+const FIXTURE_ARCHIVE_COUNT: usize = 10;
 const FIXTURE_ARCHIVE_NAMES: [&str; FIXTURE_ARCHIVE_COUNT] = [
     "mlx.tar.gz",
     "mlx-c.tar.gz",
@@ -16,6 +16,10 @@ const FIXTURE_ARCHIVE_NAMES: [&str; FIXTURE_ARCHIVE_COUNT] = [
     "nlohmann-json.tar.gz",
     "fmt.tar.gz",
     "performance-profiler.tar.gz",
+    "cccl.zip",
+    "nvtx.tar.gz",
+    "cudnn-frontend.tar.gz",
+    "cutlass.tar.gz",
 ];
 
 struct BootstrapSandbox {

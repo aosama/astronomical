@@ -432,3 +432,142 @@ fn should_build_every_identity_in_the_same_reusable_folder() {
         "a new identity must compile at the same paths so sccache can serve unchanged objects"
     );
 }
+
+fn linux_cuda_native_build_store(store_root: &Path) -> NativeBuildStore {
+    NativeBuildStore::new(
+        store_root,
+        CORE_NATIVE_IDENTITY,
+        NativeTargetPlatform::LinuxCuda,
+        NativeBuildProfile::core(),
+    )
+    .expect("the Linux CUDA native store fixture should be valid")
+}
+
+/// A Linux CUDA CMake tree: the Linux products, the two CUDA fact files, and
+/// MLX's installed run-time compiler headers, one nested header each.
+fn create_fake_linux_cuda_native_outputs(build_directory: &Path) -> Result<(), Box<dyn Error>> {
+    create_fake_linux_native_outputs(build_directory)?;
+    let cuda_facts_directory = build_directory.join("cuda");
+    fs::create_dir_all(&cuda_facts_directory)?;
+    fs::write(cuda_facts_directory.join("link-libraries.txt"), b"-lcuda\n")?;
+    fs::write(
+        cuda_facts_directory.join("toolkit-include-directory.txt"),
+        b"/toolkit/include\n",
+    )?;
+    for (header_family, nested_header) in [
+        ("cute", "numeric/numeric_types.hpp"),
+        ("cutlass", "numeric_types.h"),
+        ("cccl", "cuda/std/type_traits"),
+    ] {
+        let header_path = build_directory
+            .join("mlx-package/include")
+            .join(header_family)
+            .join(nested_header);
+        fs::create_dir_all(header_path.parent().expect("a nested header has a folder"))?;
+        fs::write(&header_path, header_family.as_bytes())?;
+    }
+    Ok(())
+}
+
+#[test]
+fn should_publish_and_reuse_a_linux_cuda_entry_with_its_run_time_compiler_headers() {
+    let store_directory = tempfile::tempdir().expect("the test should create a temporary store");
+    let native_build_store = linux_cuda_native_build_store(store_directory.path());
+
+    native_build_store
+        .resolve_or_build(create_fake_linux_cuda_native_outputs)
+        .expect("a Linux CUDA entry should publish");
+    let reused_artifacts = native_build_store
+        .resolve_or_build(|_| Err("a valid Linux CUDA entry should not rebuild".into()))
+        .expect("a Linux CUDA entry should be reused");
+
+    let jit_headers_directory = reused_artifacts.cuda_jit_headers_directory();
+    assert!(
+        jit_headers_directory
+            .join("cute/numeric/numeric_types.hpp")
+            .is_file()
+    );
+    assert!(
+        jit_headers_directory
+            .join("cutlass/numeric_types.h")
+            .is_file()
+    );
+    assert!(
+        jit_headers_directory
+            .join("cccl/cuda/std/type_traits")
+            .is_file()
+    );
+    assert!(reused_artifacts.cuda_link_libraries_path().is_file());
+    assert!(
+        reused_artifacts
+            .cuda_toolkit_include_directory_path()
+            .is_file()
+    );
+}
+
+#[test]
+fn should_publish_an_empty_header_family_folder_as_a_folder() {
+    let store_directory = tempfile::tempdir().expect("the test should create a temporary store");
+    let native_build_store = linux_cuda_native_build_store(store_directory.path());
+
+    let published_artifacts = native_build_store
+        .resolve_or_build(|build_directory| {
+            create_fake_linux_cuda_native_outputs(build_directory)?;
+            let cccl_directory = build_directory.join("mlx-package/include/cccl");
+            fs::remove_dir_all(&cccl_directory)?;
+            fs::create_dir_all(&cccl_directory)?;
+            Ok(())
+        })
+        .expect("an empty header folder is still a folder");
+
+    assert!(
+        published_artifacts
+            .cuda_jit_headers_directory()
+            .join("cccl")
+            .is_dir()
+    );
+}
+
+#[test]
+fn should_refuse_to_publish_a_linux_cuda_entry_without_its_cutlass_headers() {
+    let store_directory = tempfile::tempdir().expect("the test should create a temporary store");
+    let native_build_store = linux_cuda_native_build_store(store_directory.path());
+
+    let publication_error = native_build_store
+        .resolve_or_build(|build_directory| {
+            create_fake_linux_cuda_native_outputs(build_directory)?;
+            fs::remove_dir_all(build_directory.join("mlx-package/include/cutlass"))?;
+            Ok(())
+        })
+        .expect_err("a Linux CUDA entry needs every run-time compiler header folder");
+
+    assert!(
+        publication_error.to_string().contains("cutlass"),
+        "the error should name the missing folder: {publication_error}"
+    );
+    assert!(!native_build_store.entry_directory().exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn should_refuse_to_publish_run_time_compiler_headers_that_hold_a_symlink() {
+    let store_directory = tempfile::tempdir().expect("the test should create a temporary store");
+    let native_build_store = linux_cuda_native_build_store(store_directory.path());
+
+    let publication_error = native_build_store
+        .resolve_or_build(|build_directory| {
+            create_fake_linux_cuda_native_outputs(build_directory)?;
+            std::os::unix::fs::symlink(
+                "/etc/hostname",
+                build_directory.join("mlx-package/include/cute/linked_header.hpp"),
+            )?;
+            Ok(())
+        })
+        .expect_err("a symlink inside the headers must never be published");
+
+    assert!(
+        publication_error.to_string().contains("symlink"),
+        "the error should name the symlink: {publication_error}"
+    );
+    assert!(!native_build_store.entry_directory().exists());
+}

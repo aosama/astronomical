@@ -14,6 +14,12 @@ fn valid_manifest_text() -> String {
         "profiler.tar.gz|https://example.com/profiler.tar.gz|".to_owned()
             + VALID_SHA256
             + "|profiler",
+        "cccl.zip|https://example.com/cccl.zip|".to_owned() + VALID_SHA256 + "|CCCL",
+        "nvtx.tar.gz|https://example.com/nvtx.tar.gz|".to_owned() + VALID_SHA256 + "|NVTX",
+        "cudnn.tar.gz|https://example.com/cudnn.tar.gz|".to_owned()
+            + VALID_SHA256
+            + "|cuDNN frontend",
+        "cutlass.tar.gz|https://example.com/cutlass.tar.gz|".to_owned() + VALID_SHA256 + "|CUTLASS",
     ]
     .join("\n")
         + "\n"
@@ -93,16 +99,16 @@ fn archive_sha256_requires_lowercase_64_hex() {
 }
 
 #[test]
-fn manifest_requires_exactly_six_entries() {
+fn manifest_requires_exactly_ten_entries() {
     assert!(parse_manifest_text(&valid_manifest_text()).is_ok());
-    let five_entries = valid_manifest_text()
+    let nine_entries = valid_manifest_text()
         .lines()
-        .take(5)
+        .take(9)
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(parse_manifest_text(&five_entries).is_err());
-    let seven_entries = valid_manifest_text() + valid_manifest_text().lines().next().unwrap();
-    assert!(parse_manifest_text(&seven_entries).is_err());
+    assert!(parse_manifest_text(&nine_entries).is_err());
+    let eleven_entries = valid_manifest_text() + valid_manifest_text().lines().next().unwrap();
+    assert!(parse_manifest_text(&eleven_entries).is_err());
 }
 
 #[test]
