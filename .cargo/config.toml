@@ -1025,11 +1025,12 @@ measure-sorted-expert-tiled-layer-verdict = "run -p xtask -- test-run --package 
 # and SwiGLU; down) at 4 and 6 bits, on uneven routing and at a 35B-A3B
 # layer, plus the refusals of widths they do not read. Seconds.
 test-sorted-expert-tiled-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --case-budget-seconds 240 --filter sorted_expert_tiled_matmul"
-# A served 2,048-token prompt chunk on an installed 4-bit mixture-of-experts
-# pack (the 35B-A3B), its gate and up projections through the sorted-expert
-# matmul against MLX's route in one loaded model: fails if the chunk's final
-# logits change in any bit, then prints the profiler's verdict over
-# interleaved rounds. Needs --configuration with model_directory. About a minute.
+# A served 2,048-token prompt chunk on an installed mixture-of-experts pack
+# (a 35B-A3B at 4 or 6 bits), its routed experts through Astronomical's
+# sorted-expert kernels (the tiled ones where the width's probe passed)
+# against MLX's route in one loaded model: fails if the chunk's final logits
+# change in any bit, then prints the profiler's verdict over interleaved
+# rounds. Needs --configuration with model_directory. About a minute.
 measure-sorted-expert-matmul-served-chunk = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --ignored --case-budget-seconds 240 --filter should_give_a_verdict_on_the_sorted_expert_matmul_in_a_served_chunk"
 measure-expert-gate-up-fusion-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 300 --filter fused_gate_and_up_projection_against_two"
 # Where a 2-bit folded ternary projection over a 2,048-token prompt chunk
