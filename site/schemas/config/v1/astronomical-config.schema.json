@@ -277,7 +277,7 @@
         },
         "multi_token_prediction_draft_tokens": {
           "title": "Tokens drafted ahead",
-          "description": "Tokens a model with a multi-token-prediction head drafts after each reply token while its experts stream from the SSD; null leaves the count to the engine, 0 drafts none.",
+          "description": "Tokens a model with a multi-token-prediction head drafts after each reply token; null leaves the count to the head (one for Qwen3.8-Flash-Next, none for a dense pack such as Ternary Bonsai 2 9B, whose head does not speed it up), 0 drafts none.",
           "default": null,
           "anyOf": [
             {

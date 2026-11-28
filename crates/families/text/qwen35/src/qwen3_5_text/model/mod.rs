@@ -23,6 +23,7 @@ mod dense_layer_register_order;
 mod dense_layer_residency;
 #[cfg(feature = "direct-mlx")]
 pub mod dense_layer_streamer;
+mod dense_mtp_head;
 #[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
@@ -38,6 +39,7 @@ mod expert_reuse_union_offer;
 #[cfg(feature = "direct-mlx")]
 mod expert_storage_streaming;
 mod expert_streaming_stats;
+mod flash_next_mtp_head;
 #[cfg(feature = "direct-mlx")]
 mod forward_layer_weights;
 mod lane_mixing_decoder_layer;

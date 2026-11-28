@@ -41,8 +41,9 @@ pub struct WorkerChunkingConfiguration {
     #[serde(default)]
     pub experimental_neural_engine_prefill_enabled: bool,
     /// How many tokens a model with a multi-token-prediction head drafts
-    /// after each reply token while its experts stream from storage: zero
-    /// drafts none, and `None` leaves the count to the engine.
+    /// after each reply token: zero drafts none, and `None` leaves the count
+    /// to the kind of head the model ships (one for Flash-Next, none for a
+    /// dense pack, whose head was measured slower than plain decoding).
     #[serde(default)]
     pub multi_token_prediction_draft_tokens: Option<u32>,
 }

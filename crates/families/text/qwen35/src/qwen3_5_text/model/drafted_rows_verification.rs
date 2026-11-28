@@ -193,7 +193,10 @@ impl Qwen3_5Model {
 
     /// `[1, rows, vocabulary]` float32 logits after every row: through the
     /// lane mixer for Flash-Next, through the final norm and head otherwise.
-    fn drafted_row_logits(&self, final_rows: &MlxArray) -> Result<MlxArray, TextExecutionError> {
+    pub(crate) fn drafted_row_logits(
+        &self,
+        final_rows: &MlxArray,
+    ) -> Result<MlxArray, TextExecutionError> {
         match self.config.qwen4_exp_architecture() {
             Some(_) => self.lane_mixed_vocabulary_logits_for_every_row(final_rows),
             None => self.normalized_vocabulary_logits_for_every_row(final_rows),

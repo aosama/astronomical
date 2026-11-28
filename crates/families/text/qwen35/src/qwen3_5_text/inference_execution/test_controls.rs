@@ -54,7 +54,7 @@ impl Qwen3_5EngineState {
         loaded_model.base.chunking = loaded_model
             .base
             .chunking
-            .with_multi_token_prediction_draft_tokens(draft_tokens);
+            .with_multi_token_prediction_draft_tokens(Some(draft_tokens));
         // The head's weights enter or leave the ledger's core weights.
         loaded_model.open_memory_governor();
         Ok(())

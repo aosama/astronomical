@@ -67,18 +67,18 @@ fn should_offer_the_small_bonsai_2_packs_with_vision() {
     }
 }
 
-/// The 9B pack ships a multi-token-prediction head in `mtp/` that the engine
-/// does not load, so the download leaves it out and keeps every file the pack
-/// loads with.
+/// The 9B pack ships its multi-token-prediction head in `mtp/`, which the
+/// engine drafts with when asked, so the download keeps it beside every
+/// file the pack loads with.
 #[test]
-fn should_leave_the_unused_prediction_head_out_of_the_9b_download() {
+fn should_download_the_9b_prediction_head_with_the_pack() {
     let download_catalog =
         DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
     let nine_b_pack = shipped_entry(&download_catalog, "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit");
     let selection = nine_b_pack.download_path_selection();
-    assert!(!selection.includes("mtp/model.safetensors"));
-    assert!(!selection.includes("mtp/config.json"));
-    for loaded_file in [
+    for packed_file in [
+        "mtp/config.json",
+        "mtp/model.safetensors",
         "config.json",
         "hadamard.json",
         "model.safetensors",
@@ -89,6 +89,6 @@ fn should_leave_the_unused_prediction_head_out_of_the_9b_download() {
         "preprocessor_config.json",
         "video_preprocessor_config.json",
     ] {
-        assert!(selection.includes(loaded_file), "{loaded_file}");
+        assert!(selection.includes(packed_file), "{packed_file}");
     }
 }

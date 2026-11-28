@@ -25,9 +25,9 @@ use text_generation::model::model_chunking_configuration::TextModelChunkingConfi
 /// kernels until something enables it.
 #[derive(Debug, Default)]
 pub struct Qwen3_5OptionalAccelerators {
-    /// Flash-Next's multi-token-prediction head, when the checkpoint ships
-    /// one; its arrays stay lazy until a request first drafts.
-    pub mtp_head: Option<Box<crate::qwen4_exp::mtp_head_weights::MtpHeadWeights>>,
+    /// The multi-token-prediction head the checkpoint ships, Flash-Next's or
+    /// a dense pack's; its arrays stay lazy until a request first drafts.
+    pub mtp_head: Option<crate::qwen3_5_core::model_math::mtp_head_kind::MtpHead>,
     /// Flash-Next's fused lane-mixing kernels, once
     /// `enable_fused_lane_mixing` has found them bit for bit equal to the
     /// composed steps on this GPU.
