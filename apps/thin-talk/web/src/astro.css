@@ -47,18 +47,11 @@
 }
 
 .astro-button:focus-visible,
-.astro-chip:focus-visible,
-.skill-card:focus-visible,
+.astro-idea:focus-visible,
 .settings__switch:focus-visible,
 .astro-screen__name-field:focus-visible {
   outline: 3px solid var(--astro-focus);
   outline-offset: 3px;
-}
-
-.astro-chip {
-  font: 500 14px/1.2 -apple-system, system-ui, sans-serif;
-  padding: 10px 15px;
-  border: 1px solid var(--astro-veil-line);
 }
 
 /* ---------- The get-started journey and Settings ----------
@@ -257,97 +250,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- Skill cards ---------- */
-
-.skill-shelf {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: center;
-  width: min(1000px, 100%);
-}
-
-/* Graphite cards with silver glyphs: the approved palette keeps colour for
- * the one violet accent and for state, so a card turns violet only where the
- * pointer or keyboard is, and the five skills are told apart by glyph and
- * word rather than by five colours. */
-.skill-card {
-  display: grid;
-  grid-template-columns: 38px 1fr;
-  gap: 2px 12px;
-  align-items: center;
-  width: 176px;
-  padding: 12px 14px;
-  border: 0;
-  border-radius: 16px;
-  color: var(--ink);
-  background: var(--surface);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  user-select: none;
-  box-shadow: inset 0 0 0 1px var(--line);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.skill-card:hover {
-  transform: translateY(-2px);
-  box-shadow: inset 0 0 0 1px var(--line-strong);
-}
-
-.skill-card__icon {
-  grid-row: span 2;
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  color: var(--ink-2);
-  background: var(--sunk);
-  transition: color 0.2s ease;
-}
-
-.skill-card:hover .skill-card__icon,
-.skill-card:focus-visible .skill-card__icon {
-  color: var(--accent-text);
-}
-
-.skill-card__icon svg {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.skill-card strong {
-  font: 600 17px/1.1 var(--astro-display);
-}
-
-.skill-card small {
-  font-size: 12px;
-  color: var(--ink-3);
-}
-
-/* Voice is not built yet: it reads as a placeholder, not a button. */
-.skill-card--voice {
-  color: var(--ink-3);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line);
-  cursor: default;
-}
-
-.skill-card--voice:hover {
-  transform: none;
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-
-.skill-card--voice:hover .skill-card__icon {
-  color: var(--ink-2);
-}
-
 /* ---------- Astro's home ---------- */
 
 .empty-state--astro .empty-state__title,
@@ -366,7 +268,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 6px;
   width: min(var(--reading-column), 100%);
   padding: 0 28px;
   pointer-events: auto;
@@ -376,14 +278,120 @@
   display: none;
 }
 
-.astro-home__header {
-  display: flex;
-  align-items: center;
-  gap: 18px;
+/*
+ * While home shows, the message field moves up between the greeting and the
+ * ideas, so the eye goes from "What can I help with?" straight to where the
+ * person types; with the field pinned to the bottom of an empty window it
+ * travelled the whole height first. Keyed on the empty state being visible,
+ * not on Astro being on, so a conversation with messages keeps its field at
+ * the bottom. Auto margins centre the three parts and, unlike
+ * justify-content: center, never push the greeting off the top of a short
+ * window: the column scrolls instead.
+ */
+#main:has(.empty-state--astro:not([hidden])) {
+  overflow-y: auto;
 }
 
-.astro-home__words {
+#main:has(.empty-state--astro:not([hidden])) #surface {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: var(--titlebar-inset, 0px);
+}
+
+#main:has(.empty-state--astro:not([hidden])) #transcript {
+  display: none;
+}
+
+/* #surface lays its children out in a row, so the now in-flow empty state
+   has to take the full width or the greeting hugs the left edge. */
+#main:has(.empty-state--astro:not([hidden])) .empty-state {
+  position: static;
+  flex: 1 1 auto;
+  padding-top: 0;
+}
+
+#main:has(.empty-state--astro:not([hidden])) .composer {
+  box-sizing: border-box;
+  width: min(var(--home-column), calc(100% - 48px));
+  margin: 26px auto 0;
+}
+
+/* With the field in the middle there is less room above it than below, and
+   the model menu opened upward ran off the top of the window, hiding the
+   first models. Here it opens downward over the ideas instead, never taller
+   than the space under the field. */
+#main:has(.empty-state--astro:not([hidden])) .composer__menu--models {
+  top: calc(100% + 8px);
+  bottom: auto;
+  max-height: min(38vh, 400px);
+}
+
+.astro-home-below {
+  display: none;
+}
+
+#main:has(.empty-state--astro:not([hidden])) .astro-home-below:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-sizing: border-box;
+  width: min(var(--home-column), calc(100% - 48px));
+  margin: 16px auto auto;
+  padding-bottom: 32px;
+}
+
+:root {
+  /* Narrower than the reading column: a field this wide still reads as the
+     one place to type, and the ideas under it form a tidy two-by-two. */
+  --home-column: 680px;
+}
+
+/* The ideas: four quiet chips, one per kind of help. Graphite with the
+   glyph in secondary ink, so Send stays the one coloured control. */
+.astro-home__ideas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.astro-idea {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  font: 500 15px/1.3 -apple-system, system-ui, sans-serif;
   text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.astro-idea:hover {
+  border-color: var(--line-strong);
+  background: var(--sunk);
+}
+
+.astro-idea__glyph {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.astro-home__privacy {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
 }
 
 .astro-home__greeting {
@@ -397,46 +405,6 @@
   font-size: 17px;
 }
 
-.astro-home__ideas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-.astro-home__ideas .astro-button {
-  font-weight: 500;
-}
-
-/* Five cards fit the reading column on one row: 5 x 132 px plus the gaps.
- * At that width the glyph, the name and the caption stack, so each card keeps
- * the caption that says what "Look" or "Read" does for someone new. */
-.astro-home .skill-card {
-  grid-template-columns: 1fr;
-  justify-items: start;
-  align-content: start;
-  gap: 4px;
-  width: 132px;
-  padding: 12px;
-}
-
-.astro-home .skill-card__icon {
-  grid-row: auto;
-  width: 32px;
-  height: 32px;
-  margin-bottom: 4px;
-  border-radius: 10px;
-}
-
-.astro-home .skill-card strong {
-  font-size: 15px;
-}
-
-.astro-home .skill-card small {
-  font-size: 11.5px;
-  line-height: 1.3;
-}
-
 .astro-home__follow-up {
   display: flex;
   flex-direction: column;
@@ -444,6 +412,14 @@
   gap: 10px;
   min-height: 24px;
   width: min(560px, 100%);
+}
+
+/* An empty follow-up area takes no room between the ideas and the privacy
+   line. It stays displayed: it is a live region, and VoiceOver may not
+   announce text that appears in a region that was display: none. */
+.astro-home__follow-up:empty {
+  min-height: 0;
+  margin-bottom: -16px;
 }
 
 .astro-home__reply {
@@ -454,7 +430,7 @@
 
 /* Reduce Motion: nothing slides. */
 @media (prefers-reduced-motion: reduce) {
-  .skill-card,
+  .astro-idea,
   .download-meter__fill {
     transition: none;
   }

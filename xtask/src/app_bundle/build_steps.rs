@@ -65,6 +65,11 @@ pub(crate) fn rust_executable_directory(repository_root: &Path) -> PathBuf {
     repository_root.join("target").join(APP_DEV_CARGO_PROFILE)
 }
 
+/// Where `app dev` and `app thin-talk` record which package-lock.json the
+/// installed `node_modules` came from. One shared stamp in the shared cache
+/// folder, so neither command repeats an `npm ci` the other already ran.
+pub(crate) const THIN_TALK_LOCKFILE_STAMP_FILE_NAME: &str = "thin-talk-package-lock.sha256";
+
 /// Builds the Thin Talk offline shell. `npm ci` deletes and reinstalls
 /// `node_modules`, which the shell builder paid on every run; here it runs
 /// only when the lockfile changed since the last install.
@@ -91,7 +96,7 @@ pub(crate) fn build_thin_talk_web_assets(
             ));
         }
     } else {
-        println!("[app-dev] npm dependencies match package-lock.json; skipping npm ci");
+        println!("[thin-talk-web] npm dependencies match package-lock.json; skipping npm ci");
     }
     run_tool(
         Command::new("npm")

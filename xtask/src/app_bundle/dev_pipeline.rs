@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 use super::build_identity::{BuildIdentity, github_pages_feed_url};
 use super::build_steps::{
-    build_rust_executables, build_swift_applications, build_thin_talk_web_assets,
-    prewarm_native_runtime, rust_executable_directory,
+    THIN_TALK_LOCKFILE_STAMP_FILE_NAME, build_rust_executables, build_swift_applications,
+    build_thin_talk_web_assets, prewarm_native_runtime, rust_executable_directory,
 };
 use super::bundle_assembly::{
     BundleInputs, BundlePlists, assemble_bundle, create_directory, missing_inputs,
@@ -139,7 +139,7 @@ fn run_compile_steps(
     step_reporter.start_step("thin-talk-web");
     let lockfile_stamp_path = pipeline_paths
         .step_timings_and_icons_directory
-        .join("thin-talk-package-lock.sha256");
+        .join(THIN_TALK_LOCKFILE_STAMP_FILE_NAME);
     build_thin_talk_web_assets(repository_root, &lockfile_stamp_path, step_reporter)?;
     step_reporter.finish_step();
     step_reporter.start_step("swift-apps");

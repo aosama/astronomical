@@ -9,7 +9,7 @@ const CARD_BY_LAUNCHER_SKILL: Readonly<Record<string, SkillCardKind>> = {
 
 /**
  * Astro's part of the message field: the skill buttons inside it. They fill
- * the field with the same starter questions as the skill cards; nothing is
+ * the field with each skill's starter question (SkillCard.ts); nothing is
  * sent until the person presses Send. Astro itself is not drawn here: the
  * field is where people type, and a figure beside it only crowded the words.
  */

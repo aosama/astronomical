@@ -12,11 +12,19 @@
 //! Thin Talk is a thin client of the running engine's REST endpoints, so the
 //! bundle carries only the chat executable, its canvas resources and the
 //! Development icon: no engine, worker, Sparkle or MLX library.
+//!
+//! The web client is rebuilt first, the same step `app dev` runs. Without it
+//! the window kept whatever `bundle.js` an earlier build left behind, so a
+//! change under `apps/thin-talk/web/src` did not show up and the old screen
+//! looked like a broken change.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::build_steps::swift_package_product_build_command;
+use super::build_steps::{
+    THIN_TALK_LOCKFILE_STAMP_FILE_NAME, build_thin_talk_web_assets,
+    swift_package_product_build_command,
+};
 use super::bundle_assembly::{copy_file, copy_tree, create_directory, write_file};
 use super::channel_profile::{Channel, ChannelProfile};
 use super::command::DevOpenPlacement;
@@ -40,7 +48,10 @@ const CANVAS_RESOURCE_BUNDLE_NAME: &str = "ThinTalk_ThinTalkCanvas.bundle";
 /// clone where the client was never built; without these files the window
 /// opens a blank conversation.
 const CANVAS_CLIENT_ASSETS: [&str; 2] = ["bundle.js", "bundle.css"];
-const THIN_TALK_STEP_NAMES: [&str; 4] = ["swift-build", "assemble", "sign", "open"];
+/// The web client comes before the Swift build: SwiftPM copies
+/// `Resources/web` into the canvas resource bundle as it finds it.
+pub(crate) const THIN_TALK_STEP_NAMES: [&str; 5] =
+    ["thin-talk-web", "swift-build", "assemble", "sign", "open"];
 
 pub(crate) fn run_thin_talk_pipeline(
     repository_root: &Path,
@@ -55,16 +66,12 @@ pub(crate) fn run_thin_talk_pipeline(
         cache_directory.join("thin-talk-step-timings.json"),
     );
     let package_directory = repository_root.join(THIN_TALK_PACKAGE_DIRECTORY);
-    step_reporter.start_step("swift-build");
-    let macos_sdk_path =
-        run_quiet_tool(Command::new("xcrun").args(["--sdk", "macosx", "--show-sdk-path"]))?;
-    let mut swift_command = swift_package_product_build_command(
+    build_web_client_and_executable(
+        repository_root,
         &package_directory,
-        THIN_TALK_EXECUTABLE_NAME,
-        macos_sdk_path.trim(),
-    );
-    run_tool(&mut swift_command, &step_reporter)?;
-    step_reporter.finish_step();
+        &cache_directory,
+        &mut step_reporter,
+    )?;
     step_reporter.start_step("assemble");
     // A running copy would keep the old build on screen: `open` only brings
     // an app that is already running forward.
@@ -108,6 +115,34 @@ pub(crate) fn run_thin_talk_pipeline(
         "[app-thin-talk] {THIN_TALK_BUNDLE_NAME} ready and opened: {}",
         bundle_path.display()
     );
+    Ok(())
+}
+
+/// The two build steps: the web client the canvas renders, then the Swift
+/// executable whose resource bundle copies it.
+fn build_web_client_and_executable(
+    repository_root: &Path,
+    package_directory: &Path,
+    cache_directory: &Path,
+    step_reporter: &mut StepReporter,
+) -> Result<(), String> {
+    step_reporter.start_step("thin-talk-web");
+    build_thin_talk_web_assets(
+        repository_root,
+        &cache_directory.join(THIN_TALK_LOCKFILE_STAMP_FILE_NAME),
+        step_reporter,
+    )?;
+    step_reporter.finish_step();
+    step_reporter.start_step("swift-build");
+    let macos_sdk_path =
+        run_quiet_tool(Command::new("xcrun").args(["--sdk", "macosx", "--show-sdk-path"]))?;
+    let mut swift_command = swift_package_product_build_command(
+        package_directory,
+        THIN_TALK_EXECUTABLE_NAME,
+        macos_sdk_path.trim(),
+    );
+    run_tool(&mut swift_command, step_reporter)?;
+    step_reporter.finish_step();
     Ok(())
 }
 

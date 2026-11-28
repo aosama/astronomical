@@ -1,6 +1,6 @@
 import { AstroMoment } from "./AstroLines";
 
-/** The skills offered as cards on Astro's home. */
+/** The skills the message field's buttons start, and the glyph each one draws. */
 export enum SkillCardKind {
   CHAT = "chat",
   PICTURES = "pictures",
@@ -10,7 +10,7 @@ export enum SkillCardKind {
 }
 
 /**
- * One card on the shelf: its words, Astro's reply, and the prompt it starts.
+ * One skill: its words, Astro's reply, and the prompt its button starts.
  *
  * Every starter prompt only ever fills the message field; the person still
  * presses send, so a card can never start a download, open a file panel or
@@ -20,7 +20,7 @@ export interface SkillCard {
   readonly kind: SkillCardKind;
   readonly title: string;
   readonly caption: string;
-  /** False for skills Astro does not have yet (voice): shown, but greyed. */
+  /** False for skills Astro does not have yet (voice): never offered. */
   readonly isAvailable: boolean;
   readonly reply: AstroMoment;
   readonly starterPrompt: string | null;

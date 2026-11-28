@@ -431,8 +431,10 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # without taking the keyboard, for rebuilding while working in another app;
 # `cargo xtask app thin-talk [--background]` builds only the standalone Thin
 # Talk chat app, always against the running Development engine, and opens it
-# (behind other windows with --background): seconds of Swift instead of an
-# engine rebuild when only the chat window changed;
+# (behind other windows with --background): it rebuilds the web client in
+# apps/thin-talk/web first (`npm run build`, `npm ci` only when the lockfile
+# changed), then seconds of Swift instead of an engine rebuild when only the
+# chat window changed;
 # `cargo xtask app draft "<text>"` puts that text in the running Development
 # chat's message field, also in the background and without sending it, so a
 # question can be typed for a live check without taking the keyboard;
