@@ -93,3 +93,30 @@ fn should_accept_a_text_only_export_without_the_requires_runtime_marker() {
     assert!(!config.vision_declared());
     assert_eq!(config.packed_modules().len(), 3);
 }
+
+#[test]
+fn should_parse_a_pack_that_leaves_out_the_gate_type() {
+    let mut document = shipped_shape_config_json();
+    document["text_config"]
+        .as_object_mut()
+        .expect("the text config is an object")
+        .remove("output_gate_type");
+    parse_config(&document).expect("an omitted gate type means swish and should parse");
+}
+
+#[test]
+fn should_parse_a_pack_whose_output_head_is_the_embedding_table() {
+    let mut document = shipped_shape_config_json();
+    document["tie_word_embeddings"] = serde_json::json!(true);
+    document["text_config"]["tie_word_embeddings"] = serde_json::json!(true);
+    document["tied_output"] = serde_json::json!(true);
+    let config = parse_config(&document).expect("a consistently tied pack should parse");
+    assert!(config.has_tied_output());
+}
+
+#[test]
+fn should_read_the_shipped_shape_as_untied() {
+    let config =
+        parse_config(&shipped_shape_config_json()).expect("the fixture config should parse");
+    assert!(!config.has_tied_output());
+}

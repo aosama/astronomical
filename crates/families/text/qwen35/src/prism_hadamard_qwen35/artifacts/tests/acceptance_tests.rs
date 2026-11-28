@@ -64,3 +64,28 @@ fn should_refuse_when_a_required_file_is_absent() {
     assert!(matches!(error, FoldedPackValidationError::Artifact(_)));
     remove_fixture_directory(&fixture_directory);
 }
+
+#[test]
+fn should_validate_a_pack_whose_output_head_is_the_embedding_table() {
+    let fixture_directory = super::pack_fixture::write_fixture_pack(
+        super::pack_fixture::FixturePackMutation::tie_output_head_to_embedding,
+    );
+    let validated_pack = FoldedPackValidator::new()
+        .validate(&fixture_directory, 4096)
+        .expect("a tied pack without an lm_head module should validate");
+    assert!(validated_pack.config().has_tied_output());
+    assert!(validated_pack.hadamard_contract().has_tied_output());
+    assert_eq!(validated_pack.config().packed_modules().len(), 26);
+    remove_fixture_directory(&fixture_directory);
+}
+
+#[test]
+fn should_validate_an_untied_pack_as_untied() {
+    let fixture_directory = fixture_pack_directory();
+    let validated_pack = FoldedPackValidator::new()
+        .validate(&fixture_directory, 4096)
+        .expect("the fixture pack should validate");
+    assert!(!validated_pack.config().has_tied_output());
+    assert!(!validated_pack.hadamard_contract().has_tied_output());
+    remove_fixture_directory(&fixture_directory);
+}

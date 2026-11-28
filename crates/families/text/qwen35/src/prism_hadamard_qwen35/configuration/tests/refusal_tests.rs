@@ -74,7 +74,11 @@ fn should_refuse_unsupported_component_declarations() {
     ));
     assert!(matches!(
         refusal(|d| d["tie_word_embeddings"] = serde_json::json!(true)),
-        FoldedPackConfigError::TiedEmbeddingsUnsupported
+        FoldedPackConfigError::TiedOutputDisagreement {
+            tie_word_embeddings: true,
+            text_tie_word_embeddings: false,
+            tied_output: false,
+        }
     ));
 }
 
@@ -125,7 +129,7 @@ fn should_refuse_unsupported_text_semantics() {
     ));
     assert!(matches!(
         refusal(|d| d["text_config"]["tie_word_embeddings"] = serde_json::json!(true)),
-        FoldedPackConfigError::TiedEmbeddingsUnsupported
+        FoldedPackConfigError::TiedOutputDisagreement { .. }
     ));
     assert!(matches!(
         refusal(|d| d["text_config"]["rope_parameters"]["type"] = serde_json::json!("yarn")),
@@ -200,5 +204,26 @@ fn should_refuse_an_absurdly_long_requires_runtime_marker() {
                 serde_json::json!["x".repeat(super::super::MAXIMUM_REQUIRES_RUNTIME_BYTES + 1)];
         }),
         FoldedPackConfigError::InvalidRequiresRuntime
+    ));
+}
+
+#[test]
+fn should_refuse_a_tied_output_marker_the_tie_flags_do_not_back() {
+    use super::FoldedPackConfigError;
+    assert!(matches!(
+        refusal(|d| d["tied_output"] = serde_json::json!(true)),
+        FoldedPackConfigError::TiedOutputDisagreement {
+            tied_output: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn should_refuse_a_stated_gate_type_other_than_swish() {
+    use super::FoldedPackConfigError;
+    assert!(matches!(
+        refusal(|d| d["text_config"]["output_gate_type"] = serde_json::json!("")),
+        FoldedPackConfigError::UnsupportedOutputGateType { .. }
     ));
 }
