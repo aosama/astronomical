@@ -1,6 +1,6 @@
 // Copy as image picture tests: the sentence at the top and its article, the
 // three figures, the footer, and that the picture is drawn with every text
-// and every token column in place.
+// the bar of where the model's experts are, in place.
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -38,7 +38,10 @@ function streamingStatusDocument() {
 }
 
 function streamingExpertStatsDocument() {
-    return { last_reply: { storage_read_expert_counts_by_token: [64, 66], routed_expert_count_per_token: 320 } };
+    return {
+        residency: { resident_expert_payload_bytes: 4.6 * GIGABYTE, complete_expert_payload_byte_count: 18.4 * GIGABYTE },
+        last_reply: { storage_read_expert_counts_by_token: [64, 66], routed_expert_count_per_token: 320 }
+    };
 }
 
 // Records every text and rectangle drawn.
@@ -97,22 +100,22 @@ test("should_name_the_model_and_the_app_version_in_the_footer", () => {
     assert.equal(evaluate("memoryPageImageFooter(null)", {}), "No model loaded · Astronomical");
 });
 
-test("should_draw_the_headline_the_figures_the_footer_and_one_column_per_token", () => {
+test("should_draw_the_headline_the_figures_the_expert_split_and_the_footer", () => {
     const scriptContext = createMemoryPageImageContext();
     const drawingContext = recordingDrawingContext();
     scriptContext.imageCanvas = { getContext: () => drawingContext };
     scriptContext.statusDocument = streamingStatusDocument();
     scriptContext.expertStatsDocument = streamingExpertStatsDocument();
     vm.runInContext("drawMemoryPageImage(imageCanvas, statusDocument, expertStatsDocument, "
-        + "{ background: 'bg', ink: 'ink', inkDim: 'dim', accent: 'violet', memoryServed: 'blue', storageRead: 'violet' })", scriptContext);
+        + "{ background: 'bg', ink: 'ink', inkDim: 'dim', accent: 'violet', memoryServed: 'blue', onStorage: 'grey' })", scriptContext);
 
     assert.deepEqual(drawingContext.drawnTexts, [
         "Astronomical", "A 22.9 GB model in an 8 GB limit",
         "37", "tokens a second", "80%", "of each token's experts already in memory", "0", "cloud accounts",
+        "4.6 GB of its experts in memory · 13.8 GB on the SSD",
         "Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2 · Astronomical 0.2.138", "getastronomical.com"
     ]);
-    const tokenRectangles = drawingContext.filledRectangles.filter((rectangle) => rectangle.rectangleTop >= 350);
-    assert.equal(tokenRectangles.length, 4, "two tokens, each drawn as its memory part and its SSD part");
-    assert.equal(tokenRectangles[1].fillStyle, "violet");
-    assert.equal(tokenRectangles[1].rectangleHeight, 30, "64 of 320 experts read from the SSD fill a fifth of 150 pixels");
+    const splitRectangles = drawingContext.filledRectangles.filter((rectangle) => rectangle.rectangleTop === 390);
+    assert.deepEqual(splitRectangles.map((rectangle) => rectangle.fillStyle), ["grey", "blue"],
+        "the whole library on the SSD first, then the part in memory over it");
 });

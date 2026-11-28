@@ -28,16 +28,6 @@
 .memory-page-fact dt { color: var(--ink-dim); font-size: var(--text-sm); }
 .memory-page-fact dd { margin: 6px 0 0; font-size: var(--text-2xl); font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* A long reply wraps into many rows; capped at four rows so the facts below
-   stay in view, with the rest a scroll away inside the strip. */
-.memory-page-token-strip { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 14px; max-height: 392px; overflow-y: auto; }
-/* A token's column is every expert it routed to; the violet foot is the
-   share read from the SSD, drawn to scale. */
-.memory-page-token { display: flex; align-items: flex-end; width: 5px; height: 96px; border-radius: 2px; overflow: hidden; background: var(--resident); }
-.memory-page-token-ssd { display: block; width: 100%; background: var(--accent); }
-.memory-page-token-legend { display: flex; align-items: center; gap: 8px 18px; margin-top: 12px; color: var(--ink-dim); font-size: var(--text-sm); }
-.memory-page-token-legend span { display: flex; align-items: center; gap: 8px; }
-
 /* Under the hood: the heading the merged page opens with, then three plain
    facts, the one-line safety note and the closed developer details. */
 /* A row, overriding .view-heading's column: in a column the words' 560px

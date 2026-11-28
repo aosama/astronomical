@@ -140,7 +140,12 @@ function memoryPagePlainFacts(statusDocument, expertStatsDocument) {
                 detail: Math.round((residentBytes / libraryBytes) * 100) + "% of all its experts, the ones used most" }
             : { value: "—", detail: "Appears for a model that streams experts" },
         read: averageStorageReads !== null && routedExpertCount > 0
-            ? { value: Math.round(averageStorageReads) + " of " + routedExpertCount, detail: "experts for a typical token" }
+            // The share already in memory is said in words, not drawn per
+            // token: across a reply it barely moves, so a column for each
+            // token showed hundreds of near-identical columns and said less
+            // than this one sentence.
+            ? { value: Math.round(averageStorageReads) + " of " + routedExpertCount,
+                detail: "experts for a typical token; the other " + memoryPageMemoryServedPercent(lastReply) + "% were already in memory" }
             : { value: "—", detail: "Appears after the first reply" },
         limit: { value: limitGigabytes > 0 ? limitGigabytes + " GB" : "—" }
     };
@@ -152,31 +157,6 @@ function memoryPageAverageStorageReads(lastReply) {
     return storageReadCounts.reduce((total, readCount) => total + readCount, 0) / storageReadCounts.length;
 }
 
-// One column per token. A column stands for every expert the token routed
-// to, and its violet part is the share read from the SSD: drawn to that
-// scale, a token that read 22 of its 384 experts looks as it was, almost
-// wholly served from memory.
-function memoryPageTokens(lastReply) {
-    const storageReadCounts = lastReply?.storage_read_expert_counts_by_token || [];
-    const largestReadCount = storageReadCounts.reduce((largest, readCount) => Math.max(largest, readCount), 0);
-    const routedExpertCount = Math.max(lastReply?.routed_expert_count_per_token || 0, largestReadCount, 1);
-    return storageReadCounts.map((readCount) => ({
-        readCount,
-        routedExpertCount,
-        storageSharePercent: (readCount / routedExpertCount) * 100
-    }));
-}
-
-function memoryPageTokenNote(lastReply) {
-    const averageStorageReads = memoryPageAverageStorageReads(lastReply);
-    const routedExpertCount = lastReply?.routed_expert_count_per_token || 0;
-    if (averageStorageReads === null || routedExpertCount === 0) {
-        return "Finish a reply on a model that streams experts to see every token here.";
-    }
-    return "Each token used " + routedExpertCount + " experts. On average " + memoryPageMemoryServedPercent(lastReply)
-        + "% of them were already in memory; the rest were read from your SSD.";
-}
-
 // The share of each token's experts already in memory, averaged over the
 // last reply, or null before a reply on a model that streams experts.
 function memoryPageMemoryServedPercent(lastReply) {
@@ -186,17 +166,28 @@ function memoryPageMemoryServedPercent(lastReply) {
     return Math.round((1 - averageStorageReads / routedExpertCount) * 100);
 }
 
+// How the model's experts are split between memory and the SSD, for the
+// one bar the shared picture draws, or null for a model that keeps no
+// experts apart.
+function memoryPageLibrarySplit(expertStatsDocument) {
+    const libraryBytes = expertStatsDocument?.residency?.complete_expert_payload_byte_count || 0;
+    const residentBytes = Math.min(expertStatsDocument?.residency?.resident_expert_payload_bytes || 0, libraryBytes);
+    if (!(libraryBytes > 0)) return null;
+    return {
+        residentPercent: (residentBytes / libraryBytes) * 100,
+        caption: formatMemoryPageGigabytes(residentBytes) + " of its experts in memory · "
+            + formatMemoryPageGigabytes(libraryBytes - residentBytes) + " on the SSD"
+    };
+}
+
 function memoryPagePresentation(statusDocument, expertStatsDocument) {
     const statusDocumentOrEmpty = statusDocument || {};
-    const lastReply = expertStatsDocument?.last_reply;
     return {
         modelLine: statusDocumentOrEmpty.ready_model_id || "No model loaded",
         headline: memoryPageHeadline(statusDocumentOrEmpty) || "Load a model to see how it fits in your memory limit",
         bar: memoryPageBar(statusDocumentOrEmpty),
         facts: memoryPageFacts(statusDocumentOrEmpty, expertStatsDocument),
-        plainFacts: memoryPagePlainFacts(statusDocumentOrEmpty, expertStatsDocument),
-        tokens: memoryPageTokens(lastReply),
-        tokenNote: memoryPageTokenNote(lastReply)
+        plainFacts: memoryPagePlainFacts(statusDocumentOrEmpty, expertStatsDocument)
     };
 }
 
@@ -247,24 +238,6 @@ function renderMemoryPageBar(barPresentation) {
     }
 }
 
-function renderMemoryPageTokens(tokenPresentations) {
-    const tokenStrip = document.getElementById("memory-page-token-strip");
-    const stripSignature = tokenPresentations.map((token) => token.readCount).join(",");
-    if (tokenStrip.dataset.signature === stripSignature) return;
-    tokenStrip.dataset.signature = stripSignature;
-    tokenStrip.replaceChildren(...tokenPresentations.map((token, tokenIndex) => {
-        const tokenCell = document.createElement("span");
-        tokenCell.className = "memory-page-token";
-        tokenCell.title = "Token " + (tokenIndex + 1) + " · " + (token.routedExpertCount - token.readCount)
-            + " experts from memory, " + token.readCount + " from the SSD";
-        const storageShare = document.createElement("span");
-        storageShare.className = "memory-page-token-ssd";
-        storageShare.style.height = token.storageSharePercent.toFixed(2) + "%";
-        tokenCell.append(storageShare);
-        return tokenCell;
-    }));
-}
-
 function renderMemoryPage() {
     if (!document.getElementById("memory-page-headline")) return;
     const presentation = memoryPagePresentation(memoryPageStatusDocument, memoryPageExpertStatsDocument);
@@ -276,8 +249,6 @@ function renderMemoryPage() {
         document.getElementById("memory-page-fact-label-" + factIndex).textContent = fact.label;
         document.getElementById("memory-page-fact-value-" + factIndex).textContent = fact.value;
     });
-    renderMemoryPageTokens(presentation.tokens);
-    document.getElementById("memory-page-token-note").textContent = presentation.tokenNote;
 }
 
 function wireMemoryPage() {
