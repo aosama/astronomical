@@ -25,7 +25,7 @@ fn should_name_sigsegv_and_point_at_the_crash_report() {
 }
 
 #[test]
-fn should_name_sigkill_and_say_no_crash_report_exists() {
+fn should_name_sigkill_and_say_no_crash_record_exists() {
     let description = worker_exit_status_description(killed_by_signal(9));
 
     assert!(description.starts_with("terminated by signal 9 (SIGKILL)"));
@@ -126,4 +126,39 @@ fn should_name_the_process_name_coredumpctl_files_a_linux_core_under() {
         description.contains(&format!("coredumpctl list {worker_process_name}`")),
         "{description}"
     );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn should_keep_the_macos_signal_numbers_and_wording_unchanged() {
+    // Pinned as literals, not through the constants the code shares: the
+    // macOS log lines people search for must not change when the Linux
+    // wording does (issue #2699 changed only "report" to "record").
+    assert_eq!(
+        worker_exit_status_description(killed_by_signal(10)),
+        "terminated by signal 10 (SIGBUS); the faulting stack is in the \
+         astronomical-inference-worker crash report under ~/Library/Logs/DiagnosticReports"
+    );
+    assert_eq!(
+        worker_exit_status_description(killed_by_signal(9)),
+        "terminated by signal 9 (SIGKILL); killed from outside the process (jetsam memory \
+         pressure, the GPU watchdog, or the daemon), so no crash record exists"
+    );
+    assert_eq!(
+        worker_exit_status_description(killed_by_signal(15)),
+        "terminated by signal 15 (SIGTERM)"
+    );
+    for (signal_number, signal_name) in [
+        (4, "SIGILL"),
+        (5, "SIGTRAP"),
+        (6, "SIGABRT"),
+        (8, "SIGFPE"),
+        (11, "SIGSEGV"),
+    ] {
+        assert!(
+            worker_exit_status_description(killed_by_signal(signal_number)).starts_with(&format!(
+                "terminated by signal {signal_number} ({signal_name}); the faulting stack"
+            ))
+        );
+    }
 }
