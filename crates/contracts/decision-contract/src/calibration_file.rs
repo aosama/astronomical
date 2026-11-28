@@ -2,7 +2,8 @@
 //! labelled examples, which replace the ones a checkpoint shipped with.
 //!
 //! The file is family-neutral on purpose. Laya keeps its temperatures in
-//! `config.json`, Kev keeps one in `kev_decision.json`, and Clef ships none,
+//! `config.json`, Kev keeps one in its settings file (`kev_decision.json`, or
+//! `decision.json` in a published build), and Clef ships none,
 //! so a calibration written into each family's own file would need three
 //! writers and three readers, and would change files the checkpoint was
 //! downloaded with. One file that every family reads keeps the checkpoint's

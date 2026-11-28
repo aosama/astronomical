@@ -38,8 +38,12 @@ fn write_safetensors(file_path: &Path, stored_tensors: &[StoredTensor]) {
 }
 
 fn kev_folder(directory: &Path) {
+    kev_folder_with_head_file(directory, "kev_head.safetensors");
+}
+
+fn kev_folder_with_head_file(directory: &Path, head_file_name: &str) {
     write_safetensors(
-        &directory.join("kev_head.safetensors"),
+        &directory.join(head_file_name),
         &[
             ("q.weight", Dtype::F32, vec![2, 3], sequence_values(6, 1)),
             ("q.bias", Dtype::F32, vec![2], vec![0.5, -0.5]),
@@ -177,4 +181,21 @@ fn should_refuse_a_folder_without_the_head_or_with_a_wrong_shape() {
         read_shipped_head(directory.path(), TunableHeadFamily::Laya),
         Err(ShippedHeadError::UnexpectedShape { tensor_name, .. }) if tensor_name == "scorer.layers.3.weight"
     ));
+}
+
+#[test]
+fn should_start_a_published_kev_build_from_its_head_safetensors() {
+    let directory = tempfile::tempdir().unwrap();
+    kev_folder_with_head_file(directory.path(), "head.safetensors");
+
+    let shipped_head = read_shipped_head(directory.path(), TunableHeadFamily::Kev).unwrap();
+
+    assert_eq!(shipped_head.trainable_head.layout().parameter_count, 16);
+}
+
+#[test]
+fn should_refuse_a_kev_folder_without_any_head_file() {
+    let directory = tempfile::tempdir().unwrap();
+
+    assert!(read_shipped_head(directory.path(), TunableHeadFamily::Kev).is_err());
 }

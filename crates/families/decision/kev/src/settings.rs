@@ -1,12 +1,12 @@
-//! `kev_decision.json`: the settings `convert-kev` carried over from Kev's
-//! `head.pt`.
+//! A Kev folder's settings, read from whichever layout the folder uses:
+//! `kev_decision.json` written by `convert-kev`, or the published
+//! `decision.json` (see `decision_contract::kev_folder_layout`).
 
 use std::path::Path;
 
 use decision_contract::DecisionFailure;
+use decision_contract::kev_folder_layout::KevFolderLayout;
 
-/// The settings file that marks a folder as a Kev decision model.
-pub const KEV_SETTINGS_FILE_NAME: &str = "kev_decision.json";
 const MAXIMUM_SETTINGS_BYTES: u64 = 64 * 1024;
 
 /// What the engine needs from the settings.
@@ -16,54 +16,74 @@ pub struct KevSettings {
     pub temperature: f64,
     /// The width of the head's query and key projections.
     pub pointer_dimension: usize,
+    /// The folder's layout, which names its head file.
+    pub layout: KevFolderLayout,
 }
 
 impl KevSettings {
+    /// Reads the settings of the first layout whose settings file marks the
+    /// folder as Kev.
+    ///
+    /// # Errors
+    ///
+    /// Fails when no settings file marks the folder as Kev, or the one that
+    /// does is too large, unreadable, or holds unusable values.
     pub fn read(model_directory: &Path) -> Result<Self, DecisionFailure> {
-        let settings_path = model_directory.join(KEV_SETTINGS_FILE_NAME);
-        let settings_size = std::fs::metadata(&settings_path)
-            .map_err(|_| unreadable_settings("it is missing"))?
-            .len();
-        if settings_size > MAXIMUM_SETTINGS_BYTES {
-            return Err(unreadable_settings("it is too large"));
+        for layout in KevFolderLayout::ALL {
+            let Some(settings_bytes) = read_settings_file(model_directory, layout)? else {
+                continue;
+            };
+            if layout.marks_kev(&settings_bytes) {
+                return Self::from_json_bytes(layout, &settings_bytes);
+            }
         }
-        let settings_bytes =
-            std::fs::read(&settings_path).map_err(|_| unreadable_settings("it cannot be read"))?;
-        Self::from_json_bytes(&settings_bytes)
+        Err(DecisionFailure::fatal_execution(
+            "the folder has no kev_decision.json or decision.json that describes a Kev model",
+        ))
     }
 
-    pub fn from_json_bytes(settings_bytes: &[u8]) -> Result<Self, DecisionFailure> {
-        let settings: serde_json::Value = serde_json::from_slice(settings_bytes)
-            .map_err(|_| unreadable_settings("it is not JSON"))?;
-        if settings
-            .get("model_type")
-            .and_then(serde_json::Value::as_str)
-            != Some("kev")
-        {
-            return Err(unreadable_settings("it does not describe a Kev model"));
+    /// The settings `settings_bytes` holds for `layout`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the settings are not Kev's or hold unusable values.
+    pub fn from_json_bytes(
+        layout: KevFolderLayout,
+        settings_bytes: &[u8],
+    ) -> Result<Self, DecisionFailure> {
+        match layout.read_settings(settings_bytes) {
+            Ok(folder_settings) => Ok(Self {
+                temperature: folder_settings.temperature,
+                pointer_dimension: folder_settings.pointer_dimension,
+                layout,
+            }),
+            Err(reason) => Err(unreadable_settings(layout, &reason)),
         }
-        let temperature = settings
-            .get("temperature")
-            .and_then(serde_json::Value::as_f64)
-            .filter(|temperature| temperature.is_finite() && *temperature > 0.0)
-            .ok_or_else(|| unreadable_settings("its temperature is not a positive number"))?;
-        let pointer_dimension = settings
-            .get("pointer_dimension")
-            .and_then(serde_json::Value::as_u64)
-            .filter(|pointer_dimension| *pointer_dimension > 0)
-            .ok_or_else(|| {
-                unreadable_settings("its pointer_dimension is not a positive whole number")
-            })?;
-        Ok(Self {
-            temperature,
-            pointer_dimension: pointer_dimension as usize,
-        })
     }
 }
 
-fn unreadable_settings(reason: &str) -> DecisionFailure {
+/// The bytes of `layout`'s settings file, or `None` when the folder has none.
+fn read_settings_file(
+    model_directory: &Path,
+    layout: KevFolderLayout,
+) -> Result<Option<Vec<u8>>, DecisionFailure> {
+    let settings_path = model_directory.join(layout.settings_file_name());
+    let Ok(settings_metadata) = std::fs::metadata(&settings_path) else {
+        return Ok(None);
+    };
+    if settings_metadata.len() > MAXIMUM_SETTINGS_BYTES {
+        return Err(unreadable_settings(layout, "it is too large"));
+    }
+    match std::fs::read(&settings_path) {
+        Ok(settings_bytes) => Ok(Some(settings_bytes)),
+        Err(_) => Err(unreadable_settings(layout, "it cannot be read")),
+    }
+}
+
+fn unreadable_settings(layout: KevFolderLayout, reason: &str) -> DecisionFailure {
     DecisionFailure::fatal_execution(&format!(
-        "{KEV_SETTINGS_FILE_NAME} cannot be used: {reason}"
+        "{} cannot be used: {reason}",
+        layout.settings_file_name()
     ))
 }
 
