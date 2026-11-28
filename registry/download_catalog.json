@@ -72,6 +72,31 @@
             "upstream_license": "Apache-2.0"
         },
         {
+            "huggingface_id": "AbstractFramework/kev-0.8b-mlx-8bit",
+            "revision": "ea2212f5bc6543a96ed5385bb4ca221257c615c8",
+            "summary": "Answers set questions about long text in a single pass.",
+            "family": "kev",
+            "approximate_size_bytes": 815013737,
+            "approximate_memory_bytes": 2915511786,
+            "role": "decision",
+            "public": true,
+            "description": "Answers set questions about a text - pick an option, rate on a scale, or say yes or no - with a probability for every answer. It writes no text. Reads up to 65,536 tokens of text (about 49,000 words) and up to 8,192 more for each question; a longer text is refused, not cut. Based on Kev, a 0.8B decision model, merged with its Qwen3.5 base and converted for Apple silicon.",
+            "capabilities": {
+                "supports_decisions": true
+            },
+            "included_paths": [
+                "config.json",
+                "decision.json",
+                "head.safetensors",
+                "model.safetensors",
+                "model.safetensors.index.json",
+                "tokenizer.json",
+                "tokenizer_config.json"
+            ],
+            "quantization_label": "8-bit affine (group 64)",
+            "upstream_license": "Apache-2.0"
+        },
+        {
             "huggingface_id": "mlx-community/Qwen3.5-0.8B-MLX-4bit",
             "revision": "5d894f8cc4ef3e6c88537bf3746ed262f549da6a",
             "summary": "A very small, fast model for simple tasks.",

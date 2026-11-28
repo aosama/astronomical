@@ -160,16 +160,9 @@ pub fn build_pinned_native_runtime(
         .arg("-DCMAKE_BUILD_TYPE=Release")
         .args(compiler_configure_arguments(native_target_platform)?);
     remove_uncontrolled_native_environment(&mut configure_command);
-    let compiler_launcher_argument = sccache_compiler_launcher_path()
-        .map_or_else(String::new, |launcher_path| {
-            launcher_path.display().to_string()
-        });
     configure_command
-        .arg(format!(
-            "-DCMAKE_C_COMPILER_LAUNCHER={compiler_launcher_argument}"
-        ))
-        .arg(format!(
-            "-DCMAKE_CXX_COMPILER_LAUNCHER={compiler_launcher_argument}"
+        .args(compiler_launcher_configure_arguments(
+            native_target_platform,
         ))
         .arg(format!(
             "-DASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE={}",
@@ -341,6 +334,32 @@ fn astro_native_build_cache_dependencies_directory() -> Option<PathBuf> {
         })
 }
 
+/// The compiler-launcher arguments: sccache, when it is installed, wraps
+/// every compiler the recipe uses; an empty launcher otherwise, so a stale
+/// launcher in a reused build tree is cleared.
+///
+/// Only the Linux CUDA recipe has a CUDA compiler to wrap; elsewhere CMake
+/// would warn that the variable went unused. sccache wraps nvcc as it wraps
+/// cc.
+fn compiler_launcher_configure_arguments(
+    native_target_platform: NativeTargetPlatform,
+) -> Vec<String> {
+    let compiler_launcher_argument = match sccache_compiler_launcher_path() {
+        Some(launcher_path) => launcher_path.display().to_string(),
+        None => String::new(),
+    };
+    let mut launcher_arguments = vec![
+        format!("-DCMAKE_C_COMPILER_LAUNCHER={compiler_launcher_argument}"),
+        format!("-DCMAKE_CXX_COMPILER_LAUNCHER={compiler_launcher_argument}"),
+    ];
+    if native_target_platform == NativeTargetPlatform::LinuxCuda {
+        launcher_arguments.push(format!(
+            "-DCMAKE_CUDA_COMPILER_LAUNCHER={compiler_launcher_argument}"
+        ));
+    }
+    launcher_arguments
+}
+
 /// Strips ambient compiler/toolchain variables from a CMake invocation.
 ///
 /// These variables change native output bytes without changing anything the
@@ -358,10 +377,20 @@ fn remove_uncontrolled_native_environment(command: &mut Command) {
         "CMAKE_OSX_SYSROOT",
         "CMAKE_TOOLCHAIN_FILE",
         "CPPFLAGS",
+        // CMake seeds its CUDA flags, host compiler and architectures from
+        // these, and nvcc reads its NVCC_* variables itself, so each would
+        // change the CUDA recipe's kernels (`-G` debug code, say) under an
+        // unchanged identity.
+        "CUDAARCHS",
+        "CUDAFLAGS",
+        "CUDAHOSTCXX",
         "CXX",
         "CXXFLAGS",
         "LDFLAGS",
         "MACOSX_DEPLOYMENT_TARGET",
+        "NVCC_APPEND_FLAGS",
+        "NVCC_CCBIN",
+        "NVCC_PREPEND_FLAGS",
         "SDKROOT",
     ] {
         command.env_remove(environment_variable);

@@ -15,7 +15,6 @@ use safetensors::{Dtype, SafeTensors};
 
 use crate::decision_models::head_tuning::check_tuned_shape;
 
-pub const KEV_HEAD_FILE_NAME: &str = "kev_head.safetensors";
 /// The head is two 256-wide projections; anything near this size is not one.
 const MAXIMUM_HEAD_FILE_BYTES: u64 = 256 * 1024 * 1024;
 
@@ -36,8 +35,14 @@ pub struct KevPointerHead {
 }
 
 impl KevPointerHead {
-    pub fn read(model_directory: &Path, pointer_dimension: usize) -> Result<Self, DecisionFailure> {
-        let head_path = model_directory.join(KEV_HEAD_FILE_NAME);
+    /// Reads the head from `head_file_name`, the file the folder's layout
+    /// names (`kev_head.safetensors` or `head.safetensors`).
+    pub fn read(
+        model_directory: &Path,
+        head_file_name: &str,
+        pointer_dimension: usize,
+    ) -> Result<Self, DecisionFailure> {
+        let head_path = model_directory.join(head_file_name);
         let head_size = std::fs::metadata(&head_path)
             .map_err(|_| unreadable_head("it is missing"))?
             .len();
@@ -200,7 +205,7 @@ fn float32_tensor(
 }
 
 fn unreadable_head(reason: &str) -> DecisionFailure {
-    DecisionFailure::fatal_execution(&format!("{KEV_HEAD_FILE_NAME} cannot be used: {reason}"))
+    DecisionFailure::fatal_execution(&format!("Kev's pointer head cannot be used: {reason}"))
 }
 
 #[cfg(test)]

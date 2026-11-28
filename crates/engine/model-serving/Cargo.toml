@@ -20,6 +20,8 @@ workspace = true
 [features]
 default = []
 direct-mlx = ["decision-models/direct-mlx", "qwen35/direct-mlx", "artifact-validation/direct-mlx", "engine-core/direct-mlx", "image-generation/direct-mlx", "flux2-klein/direct-mlx", "qwen-image-21/direct-mlx", "model-primitives/direct-mlx", "speech/direct-mlx", "kokoro/direct-mlx", "phonon/direct-mlx", "laya/direct-mlx", "kev/direct-mlx", "clef/direct-mlx", "modernbert/direct-mlx", "dep:runtime-integration"]
+# The decision models' gradient check, for the acceptance journeys only.
+gradient-check = ["direct-mlx", "decision-models/gradient-check"]
 
 # The worker and the wiring between model families (issue #2340). Every crate
 # below is consumed one way; `cargo xtask check-architecture` holds each of

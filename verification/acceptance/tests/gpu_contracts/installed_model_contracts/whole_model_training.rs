@@ -24,6 +24,7 @@
 //! or `cargo test-clef-whole-model-training`.
 
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use decision_contract::decision_adapters_file::DecisionAdapters;
 use decision_contract::decision_training_job::{
@@ -46,8 +47,8 @@ mod romeo_and_juliet;
 
 /// Enough for Clef's 9B backbone at 8 bits, its training graph and the
 /// `mlx_buffer_cache`; Laya and Kev use a fraction of it.
-const TEST_MLX_MEMORY_CEILING_BYTES: usize = 20 * 1024 * 1024 * 1024;
-const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
+pub(super) const TEST_MLX_MEMORY_CEILING_BYTES: usize = 20 * 1024 * 1024 * 1024;
+pub(super) const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 /// Enough states for every role to hold several: of each six, four train,
 /// one chooses the stopping point and one is judged.
 const EXAMPLE_COUNT: usize = 36;
@@ -122,14 +123,18 @@ fn training_job() -> DecisionTrainingJob {
     }
 }
 
-fn train_to_completion(
+/// Trains `job` on `decision_engine` to the end, printing `label`'s progress
+/// as it goes: every five seconds, and at each stage's end, with the share
+/// done and the time left.
+pub(super) fn train_to_completion(
     decision_engine: &mut dyn DecisionEngine,
     job: DecisionTrainingJob,
+    label: &str,
 ) -> DecisionTrainingOutcome {
     decision_engine
         .start_training(job)
-        .expect("Laya's whole model should be trainable");
-    let mut last_progress_line = String::new();
+        .expect("the whole model should be trainable");
+    let mut progress_printer = TrainingProgressPrinter::new(label);
     loop {
         match decision_engine
             .advance_training()
@@ -139,15 +144,52 @@ fn train_to_completion(
                 stage,
                 completed,
                 total,
-            } => {
-                let progress_line = format!("[whole-model] {stage:?} {completed}/{total}");
-                if progress_line != last_progress_line {
-                    eprintln!("{progress_line}");
-                    last_progress_line = progress_line;
-                }
-            }
+            } => progress_printer.print(&format!("{stage:?}"), completed, total),
             DecisionTrainingStep::Completed(outcome) => return *outcome,
         }
+    }
+}
+
+/// How often a training's progress is printed.
+const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Prints a training's progress with the time left, each stage timed from
+/// its own start so one stage's estimate never counts another's time.
+struct TrainingProgressPrinter<'label> {
+    label: &'label str,
+    stage: String,
+    stage_started_at: Instant,
+    last_printed_at: Instant,
+}
+
+impl<'label> TrainingProgressPrinter<'label> {
+    fn new(label: &'label str) -> Self {
+        Self {
+            label,
+            stage: String::new(),
+            stage_started_at: Instant::now(),
+            last_printed_at: Instant::now(),
+        }
+    }
+
+    fn print(&mut self, stage: &str, completed: u64, total: u64) {
+        if self.stage != stage {
+            self.stage = stage.to_owned();
+            self.stage_started_at = Instant::now();
+        }
+        let is_stage_end = completed == total;
+        if !is_stage_end && self.last_printed_at.elapsed() < PROGRESS_INTERVAL {
+            return;
+        }
+        self.last_printed_at = Instant::now();
+        let elapsed_seconds = self.stage_started_at.elapsed().as_secs_f64();
+        let remaining_seconds =
+            elapsed_seconds / completed.max(1) as f64 * total.saturating_sub(completed) as f64;
+        eprintln!(
+            "[{}] {stage} {completed}/{total} progress_percent={:.1} elapsed_seconds={elapsed_seconds:.0} eta_seconds={remaining_seconds:.0}",
+            self.label,
+            100.0 * completed as f64 / total.max(1) as f64
+        );
     }
 }
 
@@ -228,7 +270,7 @@ async fn prove_whole_model_training(family: TunableHeadFamily) {
 
     let mut shipped_engine = loaded_engine(family, &model_directory);
     let shipped_logits = served_judging_logits(shipped_engine.as_mut(), &job);
-    let training_outcome = train_to_completion(shipped_engine.as_mut(), job.clone());
+    let training_outcome = train_to_completion(shipped_engine.as_mut(), job.clone(), "whole-model");
     drop(shipped_engine);
     eprintln!(
         "[whole-model] family={family:?} largest_parity_gap={} add_on_tensors={}",

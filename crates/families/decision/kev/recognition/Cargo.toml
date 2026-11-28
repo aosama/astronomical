@@ -20,4 +20,5 @@ workspace = true
 # the rules every family shares in model-discovery and never links MLX.
 [dependencies]
 model-discovery = { path = "../../../../foundation/model-discovery" }
+decision-contract = { path = "../../../../contracts/decision-contract" }
 serde_json.workspace = true

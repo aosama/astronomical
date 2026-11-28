@@ -54,3 +54,48 @@ fn should_not_mistake_a_triple_that_only_mentions_darwin_for_macos() {
         })
     );
 }
+
+// --- the Linux GPU backend (issue #2699) ---
+
+#[test]
+fn should_promote_a_linux_target_to_cuda_when_the_host_can_build_it() {
+    assert_eq!(
+        NativeTargetPlatform::Linux.with_gpu_backend(true),
+        NativeTargetPlatform::LinuxCuda
+    );
+}
+
+#[test]
+fn should_keep_the_cpu_recipe_on_a_linux_host_without_cuda() {
+    assert_eq!(
+        NativeTargetPlatform::Linux.with_gpu_backend(false),
+        NativeTargetPlatform::Linux
+    );
+}
+
+#[test]
+fn should_never_promote_macos_and_treat_both_linux_recipes_as_linux() {
+    assert_eq!(
+        NativeTargetPlatform::MacOs.with_gpu_backend(true),
+        NativeTargetPlatform::MacOs
+    );
+    assert!(NativeTargetPlatform::Linux.is_linux());
+    assert!(NativeTargetPlatform::LinuxCuda.is_linux());
+    assert!(!NativeTargetPlatform::MacOs.is_linux());
+}
+
+#[test]
+fn should_keep_macos_and_an_already_promoted_recipe_through_the_host_gpu_check() {
+    assert_eq!(
+        NativeTargetPlatform::MacOs.with_host_gpu_backend(),
+        NativeTargetPlatform::MacOs
+    );
+    assert_eq!(
+        NativeTargetPlatform::LinuxCuda.with_host_gpu_backend(),
+        NativeTargetPlatform::LinuxCuda
+    );
+    assert_eq!(
+        NativeTargetPlatform::for_build("aarch64-apple-darwin"),
+        Ok(NativeTargetPlatform::MacOs)
+    );
+}

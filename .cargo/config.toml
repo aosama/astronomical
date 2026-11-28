@@ -204,6 +204,9 @@ measure-flash-next-sampled-forward-speed = "run -p xtask -- test-run --package a
 # compares every component against vectors recorded before the trunk was
 # restructured; pass `--configuration PATH` naming a JSON file whose
 # `model_directory` is the nomicai-modernbert-embed-base-8bit folder.
+# It holds Metal, where the vectors were recorded, to 1e-4 per component
+# and other backends to 2e-3 with a cosine of at least 0.99999: the spread
+# measured between MLX's CPU, CUDA and Metal backends (issue #2699).
 test-modernbert = "test -p decision-models --features direct-mlx --lib modernbert"
 test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_reproduce_the_embedding_vectors_recorded_before_the_trunk_was_restructured"
 
@@ -231,7 +234,28 @@ test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronom
 # `test-kev-whole-model-positive-control` (and the Clef and Laya aliases)
 # trains the whole model on 140 coded lines whose code alone decides the
 # answer and requires 90% right on 30 unseen ones: about a minute and a half
-# on Kev, fifteen on Clef.
+# on Kev, fifteen on Clef, about four on Laya (its own recipe, issue #2705,
+# which is why its aliases carry a longer case budget). It prints the
+# accuracy on the choosing and unseen lines, each run's summary and the
+# largest trained add-on value, so a run that stopped early reads differently
+# from one that never moved. `test-laya-whole-model-positive-control-balanced`
+# repeats it with half the lines on each option, from another stretch of the
+# play, so nothing the control's own layout fixed is what is learned.
+# `test-laya-whole-model-gradient` proves the backend's backward pass on the
+# real Laya checkpoint before any weight moves: every trainable array's
+# gradient against a central difference of the loss, over one batch of the
+# positive control's lines. It needs the same `--configuration PATH` and
+# takes about five minutes (two forward passes for each of about 250
+# arrays, beside reading 200 lines), hence its 900-second case budget; it
+# prints progress with the time left (issue #2699).
+# `test-laya-whole-model-check-set-training` trains Laya's whole model on a
+# job of the makeup `astronomical decision train --whole-model` sends (the
+# positive control's 200 coded lines plus the command's 120-question check
+# set) and requires the code learned on unseen lines, at least 90% of the
+# check-set answers kept, and at least one pass to clear the MLX buffer cache. On CUDA
+# a graph launch after such a clear crashed until the patch
+# `mlx-0.32.5-cuda-graph-cache-before-pool-trim` (issue #2699); it runs in
+# release, as the worker does, in about seven minutes at Laya's recipe.
 # `test-kev-whole-model-training-speed` (and the Clef and Laya aliases) times
 # a few gradient steps and the scoring on a small job, about twenty seconds,
 # and prints milliseconds per question: the loop to iterate training speed on.
@@ -249,9 +273,12 @@ test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acc
 test-laya-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_laya"
 test-kev-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_kev"
 test-clef-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_clef"
-test-kev-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_kev"
-test-clef-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_clef"
-test-laya-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_laya"
+test-kev-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --case-budget-seconds 900 --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_kev"
+test-clef-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --case-budget-seconds 3600 --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_clef"
+test-laya-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --case-budget-seconds 1800 --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_laya"
+test-laya-whole-model-positive-control-balanced = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --case-budget-seconds 1800 --filter whole_model_positive_control::should_learn_a_balanced_code_from_another_passage_on_laya"
+test-laya-whole-model-gradient = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --case-budget-seconds 900 --filter whole_model_gradient::should_give_every_laya_array_the_gradient_of_its_loss"
+test-laya-whole-model-check-set-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 1800 --filter whole_model_check_set_training::should_train_laya_as_a_whole_on_labelled_lines_with_the_commands_check_set"
 test-kev-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_kev_whole_model_training_speed"
 test-clef-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_clef_whole_model_training_speed"
 test-laya-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_laya_whole_model_training_speed"
@@ -452,9 +479,12 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # steps).
 # `cargo xtask prewarm-native-build --profile core` builds the pinned native
 # MLX runtime into the machine-wide store before Cargo compiles anything. On
-# Linux it builds MLX's CPU backend instead of Metal (issue #2424); then
+# Linux it builds MLX's CPU backend instead of Metal (issue #2424), plus
+# MLX's CUDA backend when `nvcc` 12+ is on PATH and `nvidia-smi` reports a GPU
+# of compute capability 7.5+ (issue #2699); then
 # `cargo build -p runtime-integration --features mlx` links against it (see
-# docs/development.md, "Building and testing on Linux").
+# docs/development.md, "Building and testing on Linux" and "With an NVIDIA
+# GPU").
 # `cargo xtask native-fingerprint --profile core [--target TRIPLE] [--explain]`
 # prints that build's identity; `--cache-environment` prints it with its store
 # entry directory as `$GITHUB_ENV` lines for workflows that save the entry to the `github_actions_cache`.

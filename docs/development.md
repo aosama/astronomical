@@ -106,6 +106,22 @@ What runs differently on Linux:
 - **The worker reads physical memory from `/proc/meminfo`.** It claims no wired residency, because that is a Metal claim, and serves from ordinary pageable memory.
 - **Run tests with `--show-output`** to see which contracts were skipped and why.
 
+### With an NVIDIA GPU
+
+On a Linux machine with an NVIDIA GPU, the native build compiles MLX's CUDA backend beside its CPU backend ([#2699](https://github.com/aosama/astronomical/issues/2699)). Nothing selects it: the build uses it when `nvcc` 12 or later is on `PATH` and `nvidia-smi` reports a GPU of compute capability 7.5 or later, and keeps the CPU backend otherwise, older toolkits and GPUs included. You also need cuDNN 9, which MLX's configure finds next to the toolkit or in the system's include and library folders.
+
+What changes in the build:
+
+- **The native build identity records the CUDA build.** It hashes `nvcc --version`, the GPU architectures it compiles for (from `nvidia-smi`, such as `86`), the toolkit search settings (`CUDA_PATH`, `CUDAToolkit_ROOT`, `CUDACXX`) and the installed cuDNN version. The build script does not watch `PATH`, the GPU or the cuDNN install, so after upgrading the toolkit or cuDNN, or moving to another GPU, run `cargo clean -p runtime-integration` (or any change that reruns the build script) and the next build keys and builds a new native runtime. Ambient CUDA compiler flags (`CUDAFLAGS`, `NVCC_APPEND_FLAGS` and the like) are removed from the build, as `CFLAGS` is.
+- **The four sources MLX's CUDA backend needs are pinned.** CCCL, NVTX, the cuDNN frontend and CUTLASS are provisioned by `bootstrap-native-dependencies` like MLX itself, so configure fetches nothing.
+- **The CUDA and cuDNN libraries are linked by path.** MLX's package names them only as CMake targets, so the build writes the files CMake found into the store entry (`share/astronomical/cuda-link-libraries.txt`), and the link reads them from there. The driver library is linked by name, so the loader finds the driver's own copy.
+- **MLX's run-time CUDA compiler gets its headers from the store entry.** MLX compiles some kernels at run time (its quantized matrix multiplies among them) and looks for their headers beside its own binary, which in a statically linked worker is wrong. The store entry carries them (`share/mlx/cuda-jit-headers`), and the runtime names that folder and the toolkit's headers to MLX at start-up (patch `mlx-0.32.5-cuda-jit-header-directories`).
+- **MLX's limits are capped at the GPU's memory.** MLX's CUDA allocator does not refuse an allocation past its limit, so work sized from a limit larger than the GPU runs out of GPU memory. The runtime hands MLX its memory limit and its MLX buffer cache limit capped at 95% of the GPU's memory (MLX's own default) and at what was free when the runtime started; training sizes its micro-batches from that. The admission ceiling and some engines still size from the machine's memory ([#2706](https://github.com/aosama/astronomical/issues/2706)).
+- **TF32 is off.** MLX's CUDA backend would run float32 matrix multiplies on TF32 tensor cores, which keep a 10-bit mantissa; the runtime turns that off at start-up, so float32 stays float32. Start-up also checks that the store entry's header folders still exist, and refuses to start without them.
+- **The first build compiles MLX's CUDA kernels**, which takes several times longer than the CPU build. `sccache` caches the CUDA compiles too.
+
+What runs differently with CUDA: MLX computes on the GPU stream, so the float32-on-CPU routes stay unused (`mlx_computes_on_cpu()` is false), and every model runs MLX's own CUDA kernels. Astronomical's custom Metal kernels stay demoted, as on the CPU build.
+
 ## Running a model on Linux
 
 The daemon and worker serve chat models on Linux with MLX's CPU backend. Build them optimized, because the CPU spends its time in MLX and in the worker's own loops, and debug builds of the latter are many times slower:
@@ -114,7 +130,7 @@ The daemon and worker serve chat models on Linux with MLX's CPU backend. Build t
 
 Put a model in its own folder under a models directory, named as the model is (for example `Qwen3.5-0.8B-MLX-4bit`, the smallest chat model in `registry/download_catalog.json`), and point an instance at that directory. A state directory holds the instance's `config.json`:
 
-    {"schema_version":1,"runtime":{"model_directories":["/path/to/models"],"maximum_mlx_memory_gb":6}}
+    {"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":["/path/to/models"],"maximum_mlx_memory_gb":6}}
 
 Start the daemon, and send a chat request to the address it prints:
 

@@ -23,14 +23,16 @@ use decision_contract::head_tuning_file::TunableHeadFamily;
 use decision_contract::{DecisionFailure, HeadInputRequest, OrderedJsonValue, QuestionOutcome};
 use decision_training::head_parameters::ParameterLayout;
 use decision_training::shipped_head::{ShippedHead, read_shipped_head};
-use decision_training::training_settings::{
-    FINAL_LAYERS_TRAINING_SETTINGS, WHOLE_MODEL_TRAINING_SETTINGS,
-};
+use decision_training::training_settings::training_settings;
 use runtime_integration::MlxRuntime;
 
 use crate::decision_engine::DecisionTrainingStep;
 use mlx_bridge::MlxArray;
 
+#[cfg(feature = "gradient-check")]
+use super::directional_gradient_check::{
+    ArrayGradientCheck, GradientCheckProgress, GradientCheckStage, directional_gradient_checks,
+};
 use super::gpu_math::GpuMath;
 use super::gpu_training::GpuTrainingSet;
 use super::gpu_upload::{gpu_head_family, upload_head_inputs, upload_parameters};
@@ -153,10 +155,58 @@ impl DecisionTrainingSession {
         })
     }
 
+    #[cfg(feature = "gradient-check")]
+    /// Reads every example, prepares the training as [`Self::advance`]
+    /// would, and checks the gradient of the batch of the first
+    /// `checked_row_count` training rows against the loss's own slope at the
+    /// starting parameters, array by array (see `directional_gradient_check`).
+    /// Nothing is trained.
+    ///
+    /// # Errors
+    ///
+    /// Returns the failure of reading, preparing or any pass.
+    pub fn check_starting_gradient(
+        &mut self,
+        host: &mut dyn DecisionTrainingHost,
+        checked_row_count: usize,
+        progress: &mut dyn GradientCheckProgress,
+    ) -> Result<Vec<ArrayGradientCheck>, DecisionFailure> {
+        let example_count = self.job.examples.len();
+        while self.read_examples.len() < example_count {
+            self.read_next_example(host)?;
+            progress.report(
+                GradientCheckStage::Reading,
+                self.read_examples.len(),
+                example_count,
+            );
+        }
+        let prepared_training = self.prepared_training(host)?;
+        let training_rows = &prepared_training.training_set.training_rows;
+        let checked_rows = &training_rows[..checked_row_count.min(training_rows.len())];
+        directional_gradient_checks(
+            GpuMath {
+                runtime: host.mlx_runtime()?,
+            },
+            &prepared_training.training_set,
+            &prepared_training.starting_parameters,
+            checked_rows,
+            progress,
+        )
+        .map_err(gpu_failure)
+    }
+
     fn prepare_training(
         &self,
         host: &mut dyn DecisionTrainingHost,
     ) -> Result<TrainingPhase, DecisionFailure> {
+        let prepared_training = self.prepared_training(host)?;
+        TrainingPhase::new(prepared_training, host.mlx_runtime()?)
+    }
+
+    fn prepared_training(
+        &self,
+        host: &mut dyn DecisionTrainingHost,
+    ) -> Result<PreparedTraining, DecisionFailure> {
         let family = host.tunable_family();
         let shipped_head = match read_shipped_head(host.model_directory(), family) {
             Ok(shipped_head) => shipped_head,
@@ -175,29 +225,23 @@ impl DecisionTrainingSession {
                 whole_model_scorer(host, &self.job.examples, &shipped_head, &selection)?
             }
         };
-        let settings = match self.job.scope {
-            TrainingScope::FinalLayers => FINAL_LAYERS_TRAINING_SETTINGS,
-            TrainingScope::WholeModel => WHOLE_MODEL_TRAINING_SETTINGS,
-        };
-        TrainingPhase::new(
-            PreparedTraining {
-                trained_layout: prepared_scorer.trained_layout,
-                training_set: GpuTrainingSet {
-                    scorer: prepared_scorer.scorer,
-                    option_layout: prepared_scorer.option_layout,
-                    rows: selection.rows,
-                    training_rows: selection.training_rows,
-                    choosing_rows: selection.choosing_rows,
-                    check_rows: selection.check_rows,
-                },
-                starting_parameters: prepared_scorer.starting_parameters,
-                served_logits: selection.served_logits,
-                question_rows: selection.question_rows,
-                indistinguishable_question_count: selection.indistinguishable_question_count,
-                settings,
+        let settings = training_settings(self.job.scope, family);
+        Ok(PreparedTraining {
+            trained_layout: prepared_scorer.trained_layout,
+            training_set: GpuTrainingSet {
+                scorer: prepared_scorer.scorer,
+                option_layout: prepared_scorer.option_layout,
+                rows: selection.rows,
+                training_rows: selection.training_rows,
+                choosing_rows: selection.choosing_rows,
+                check_rows: selection.check_rows,
             },
-            host.mlx_runtime()?,
-        )
+            starting_parameters: prepared_scorer.starting_parameters,
+            served_logits: selection.served_logits,
+            question_rows: selection.question_rows,
+            indistinguishable_question_count: selection.indistinguishable_question_count,
+            settings,
+        })
     }
 }
 

@@ -1,5 +1,6 @@
 //! Shallow discovery contracts for Kev decision-model folders: a Qwen3.5
-//! backbone whose `kev_decision.json` marks it as a decision model.
+//! backbone whose `kev_decision.json`, or a published build's Kev
+//! `decision.json`, marks it as a decision model.
 
 use std::fs;
 use std::path::Path;
@@ -133,6 +134,60 @@ fn should_skip_a_kev_folder_whose_marker_is_not_json() {
         &temporary_directory.path().join("kev-0.8b-astronomical"),
         "not json",
     );
+
+    assert!(
+        discovered_models_in(&temporary_directory)
+            .iter()
+            .all(|discovered_model| discovered_model.model_family != config::KEV_MODEL_FAMILY)
+    );
+}
+
+const PUBLISHED_KEV_SETTINGS_JSON: &str = r#"{"format":"abstractcore-decision/1","kind":"kev","head_dim":256,"temperature":2.35,"head_file":"head.safetensors","backbone":"merged"}"#;
+
+/// Writes the files a published Kev build (`decision.json`,
+/// `head.safetensors`) carries, with fictional bytes.
+fn write_published_kev_folder(model_directory: &Path) {
+    write_kev_folder(model_directory, KEV_SETTINGS_JSON);
+    fs::rename(
+        model_directory.join("kev_decision.json"),
+        model_directory.join("decision.json"),
+    )
+    .expect("settings should be renamed");
+    fs::write(
+        model_directory.join("decision.json"),
+        PUBLISHED_KEV_SETTINGS_JSON,
+    )
+    .expect("published settings should be written");
+    fs::rename(
+        model_directory.join("kev_head.safetensors"),
+        model_directory.join("head.safetensors"),
+    )
+    .expect("head should be renamed");
+}
+
+#[test]
+fn should_discover_a_published_kev_build_as_a_decision_model() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    write_published_kev_folder(&temporary_directory.path().join("kev-0.8b-mlx-8bit"));
+
+    let discovered_models = discovered_models_in(&temporary_directory);
+
+    assert_eq!(discovered_models.len(), 1, "Kev must be discovered once");
+    assert_eq!(discovered_models[0].model_family, config::KEV_MODEL_FAMILY);
+    assert_eq!(
+        discovered_models[0].capabilities,
+        ModelCapabilities::Decisions(DecisionModelCapabilities {
+            maximum_tokens_per_question: 73_728,
+        })
+    );
+}
+
+#[test]
+fn should_skip_a_published_kev_build_without_its_head() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("kev-0.8b-mlx-8bit");
+    write_published_kev_folder(&model_directory);
+    fs::remove_file(model_directory.join("head.safetensors")).expect("head should be removable");
 
     assert!(
         discovered_models_in(&temporary_directory)

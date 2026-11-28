@@ -7,11 +7,14 @@
 //! here as a library consumed in-process (build-dependency) and through the
 //! `cargo xtask native-fingerprint` CLI everywhere else (issue #1250).
 
+pub mod linux_gpu_backend;
 pub mod probes;
 pub mod target_platform;
 
 #[cfg(test)]
 mod lib_tests;
+#[cfg(test)]
+mod linux_gpu_backend_tests;
 #[cfg(test)]
 mod probes_tests;
 #[cfg(test)]

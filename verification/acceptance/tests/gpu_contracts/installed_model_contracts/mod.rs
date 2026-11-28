@@ -84,6 +84,10 @@ mod tokenizer;
 mod validate;
 mod weights;
 #[cfg(feature = "direct-mlx")]
+mod whole_model_check_set_training;
+#[cfg(feature = "direct-mlx")]
+mod whole_model_gradient;
+#[cfg(feature = "direct-mlx")]
 mod whole_model_layer_recomputation;
 #[cfg(feature = "direct-mlx")]
 mod whole_model_pass_memory;

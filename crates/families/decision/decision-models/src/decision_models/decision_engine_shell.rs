@@ -21,6 +21,10 @@ use runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use crate::decision_engine::{
     DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionTrainingStep,
 };
+#[cfg(feature = "gradient-check")]
+use crate::decision_models::training::directional_gradient_check::{
+    ArrayGradientCheck, GradientCheckProgress,
+};
 use crate::decision_models::training::question_selection::RowSource;
 use crate::decision_models::training::training_session::{
     DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
@@ -155,6 +159,27 @@ impl<Family: DecisionFamily> DecisionEngineShell<Family> {
             self.effective_mlx_memory_ceiling_bytes as u64,
             self.resident_weight_bytes,
         ))
+    }
+
+    #[cfg(feature = "gradient-check")]
+    /// Checks, without training, that `job`'s gradient at the starting
+    /// parameters is the loss's own slope for every trainable array, over
+    /// the batch of its first `checked_row_count` training rows. A backend
+    /// whose backward pass is wrong passes the parity check yet fails this
+    /// one (issue #2699).
+    ///
+    /// # Errors
+    ///
+    /// Returns the failure of loading, reading, preparing or any pass.
+    pub fn check_starting_gradient(
+        &mut self,
+        job: DecisionTrainingJob,
+        checked_row_count: usize,
+        progress: &mut dyn GradientCheckProgress,
+    ) -> Result<Vec<ArrayGradientCheck>, DecisionFailure> {
+        self.loaded_for_training()?;
+        let mut session = DecisionTrainingSession::new(job)?;
+        session.check_starting_gradient(self, checked_row_count, progress)
     }
 
     fn loaded_for_training(&self) -> Result<&Rc<Family::LoadedState>, DecisionFailure> {

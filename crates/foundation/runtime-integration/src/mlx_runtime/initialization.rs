@@ -13,9 +13,15 @@
 //!    bindings context exists, so the context's first graphics-processor
 //!    touch already sees the pinned kernel archive. Linux builds MLX's CPU
 //!    backend, which has no kernel archive.
-//! 3. The **memory policy** is applied before any allocation can happen, so
-//!    no transient allocation can escape the ceiling the worker promised.
-//! 4. Only then is the **bindings context** created.
+//! 3. On a Linux CUDA build, the **CUDA run-time settings** (the header
+//!    folders of MLX's run-time CUDA compiler, and TF32 off) are applied
+//!    before MLX can compile a kernel or run a matrix multiply
+//!    (`cuda_runtime_settings`).
+//! 4. The **memory policy** is applied before any allocation can happen, so
+//!    no transient allocation can escape the ceiling the worker promised. On
+//!    a CUDA build it first reads the GPU's memory, and MLX holds the limits
+//!    capped at it (`cuda_device_memory`).
+//! 5. Only then is the **bindings context** created.
 //!
 //! Reversing any pair would open a window where MLX runs with default policy
 //! — which is exactly what the once-per-process statics in `memory_policy`
@@ -29,7 +35,7 @@ use mlx_bridge::MlxBindingsContext;
 
 #[cfg(target_os = "macos")]
 use super::metallib;
-use super::{MlxRuntime, memory_policy};
+use super::{MlxRuntime, cuda_runtime_settings, memory_policy};
 
 impl MlxRuntime {
     /// Installs the non-terminating error handler before any fallible MLX call
@@ -47,7 +53,7 @@ impl MlxRuntime {
         let metallib_path = metallib::configured_metallib_path()?;
         #[cfg(target_os = "macos")]
         metallib::configure_metallib_path(&metallib_path)?;
-        memory_policy::configure_runtime_memory_limits(memory_limits)?;
+        configure_process_settings(memory_limits)?;
         let context = create_bindings_context_for_admitted_limits()?;
         Ok(Self {
             context,
@@ -66,7 +72,10 @@ impl MlxRuntime {
         self.context.version()
     }
 
-    /// Returns the memory policy applied during initialization.
+    /// Returns the memory policy applied during initialization, as
+    /// requested. On a CUDA build MLX holds these limits capped at the GPU's
+    /// memory; [`MlxRuntime::configured_memory_limit_bytes`](super::memory_policy::MlxRuntime::configured_memory_limit_bytes)
+    /// reports what MLX holds (issue #2706).
     ///
     /// This is the policy *this instance* was built with; live updates go
     /// through [`MlxRuntime::update_memory_limits`](super::memory_policy::MlxRuntime::update_memory_limits),
@@ -82,6 +91,14 @@ impl MlxRuntime {
     pub fn metallib_path(&self) -> &Path {
         &self.metallib_path
     }
+}
+
+/// The process-wide settings a runtime needs before its bindings context:
+/// MLX's CUDA run-time settings (nothing without the CUDA backend), then this
+/// runtime's memory limits, admitted and counted.
+fn configure_process_settings(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeError> {
+    cuda_runtime_settings::configure_cuda_runtime_settings()?;
+    memory_policy::configure_runtime_memory_limits(memory_limits)
 }
 
 /// Creates the bindings context after the memory limits were admitted and

@@ -37,11 +37,11 @@ mlx-memory-contract-probe = ["mlx"]
 unsafe_code = "allow"
 unused_must_use = "deny"
 
-# mlx-c-fork is consumed only by the mlx-feature coverage
-# contract (the feature enables the crate; the contract test target carries
-# required-features). Cargo cannot express an optional dev-dependency, so
-# the manifest lint stays allowed here rather than dragging the
-# graphics-processor build into the integration lane.
+# mlx-c-fork is an optional dependency behind the mlx feature, used by the
+# runtime's CUDA settings and by the coverage contract (whose test target
+# carries required-features). Builds without the feature never touch it, and
+# Cargo's unused-dependency lint cannot see through the feature gate, so the
+# manifest lint stays allowed here.
 [lints.cargo]
 unused_dependencies = "allow"
 
@@ -55,8 +55,8 @@ lowercase-hex = { path = "../lowercase-hex", optional = true }
 # The published stock MLX-C bindings (operations, types, raw FFI surface).
 mlx-bridge = { workspace = true, optional = true }
 # The Astronomical fork delta over the stock surface (the patched native
-# symbols, currently exactly one: mlx_array_detach). Kept separate from the
-# stock crate so the stock crate stays vanilla and publishable.
+# symbols: mlx_array_detach and the CUDA run-time settings). Kept separate
+# from the stock crate so the stock crate stays vanilla and publishable.
 mlx-c-fork = { path = "../mlx-c-fork", optional = true }
 libc = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
