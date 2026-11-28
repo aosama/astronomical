@@ -1,5 +1,6 @@
-//! Drafting reply tokens with Flash-Next's multi-token-prediction head and
-//! checking them on the streamed target in one forward.
+//! Drafting reply tokens with the model's multi-token-prediction head
+//! (Flash-Next's, or a dense pack's) and checking them on the target in one
+//! forward.
 //!
 //! A plain reply token costs one target forward: every layer is built once
 //! and its missing experts are read from storage. A round here builds every
@@ -10,9 +11,9 @@
 //! exactly the target's own; a refused draft only costs the storage reads
 //! its row caused.
 //!
-//! The head sees every reply token with the target's real lanes: after a
+//! The head sees every reply token with the target's real rows: after a
 //! round its rows are cut back to where the round began and the kept tokens
-//! are run again with the lanes the verify forward produced.
+//! are run again with the rows the verify forward produced.
 
 use engine_core::speculative_decoding::keyed_sampling::keyed_sample;
 use engine_core::speculative_decoding::verification_decision::TargetDistribution;
@@ -57,13 +58,15 @@ impl TargetTokenChoice {
     }
 }
 
-/// The head's first guess for the next round and the lanes it continues from.
+/// The head's first guess for the next round and the state it continues
+/// from.
 struct NextDraft {
     /// `[1, 1, vocabulary]`, lazy: the head's logits for the token after
     /// the one the target last chose.
     head_logits: MlxArray,
-    /// `[1, 1, lanes * hidden]`: the head's lanes at that position.
-    head_lanes: MlxArray,
+    /// `[1, 1, width]`: the head's state at that position, Flash-Next's
+    /// lanes or a dense head's normalized hidden state.
+    head_states: MlxArray,
 }
 
 /// One reply's drafting state.
@@ -99,14 +102,16 @@ pub struct MtpRoundOutcome {
 }
 
 impl Qwen3_5Model {
-    /// Starts drafting for a reply: runs the head over the prompt with the
-    /// target's lanes (`prompt_lanes`, `[1, prompt tokens, lanes * hidden]`)
-    /// so its attention has seen what the target has. `first_reply_token_id`
-    /// is the token the target chose after the prompt.
+    /// Starts drafting for a reply: runs the head over `prompt_token_ids`
+    /// with the target's rows for them (`prompt_rows`, `[1, tokens, width]`,
+    /// before the final norm) so its attention has seen them.
+    /// `first_reply_token_id` is the token the target chose after the last
+    /// of them. The engine passes only the reply's first token, so the
+    /// head's attention starts at the reply rather than at the prompt.
     pub fn begin_mtp_drafting(
         &self,
         prompt_token_ids: &[u32],
-        prompt_lanes: &MlxArray,
+        prompt_rows: &MlxArray,
         first_reply_token_id: u32,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MtpDraftingSession, TextExecutionError> {
@@ -122,13 +127,13 @@ impl Qwen3_5Model {
             accepted_draft_count: 0,
             round_count: 0,
         };
-        // Each prompt token's lanes pair with the token after it.
+        // Each prompt token's row pairs with the token after it.
         let mut following_token_ids = prompt_token_ids[1..].to_vec();
         following_token_ids.push(first_reply_token_id);
         self.run_head_over_kept_tokens(
             &mut session,
             &following_token_ids,
-            prompt_lanes,
+            prompt_rows,
             performance_attribution,
         )?;
         Ok(session)
@@ -182,7 +187,7 @@ impl Qwen3_5Model {
         session.drafted_token_count += draft_token_ids.len() as u64;
         session.accepted_draft_count += accepted_draft_count as u64;
         let kept_row_count = accepted_draft_count + 1;
-        let kept_lanes = self.runtime.slice(
+        let kept_target_rows = self.runtime.slice(
             &verification.lanes,
             &[0, 0, 0],
             &[1, kept_row_count as i32, verification.lanes.shape()[2]],
@@ -190,7 +195,7 @@ impl Qwen3_5Model {
         )?;
         self.keep_drafted_rows(verification, kept_row_count, request_decoder_state)?;
         // The head's own draft rows give way to the kept tokens with the
-        // target's lanes.
+        // target's rows.
         session.head_state.truncate_rows(
             head_row_count_before_round,
             self.config
@@ -200,7 +205,7 @@ impl Qwen3_5Model {
         self.run_head_over_kept_tokens(
             session,
             &reply_token_ids,
-            &kept_lanes,
+            &kept_target_rows,
             performance_attribution,
         )?;
         self.reply_measurement.stage_tally.record_draft_round(
@@ -290,47 +295,61 @@ impl Qwen3_5Model {
     }
 
     /// Runs the head over tokens the reply keeps, each with the target's
-    /// lanes at the position before it, and leaves its guess for the token
+    /// row at the position before it, and leaves its guess for the token
     /// after the last one as the next round's first draft.
     fn run_head_over_kept_tokens(
         &self,
         session: &mut MtpDraftingSession,
         kept_token_ids: &[u32],
-        preceding_target_lanes: &MlxArray,
+        preceding_target_rows: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), TextExecutionError> {
         let head = self.mtp_head().ok_or(TextExecutionError::InvalidInput {
             description: "this checkpoint ships no multi-token-prediction head",
         })?;
         let token_count = kept_token_ids.len() as i32;
-        let signed_token_ids: Vec<i32> = kept_token_ids
-            .iter()
-            .map(|token_id| *token_id as i32)
-            .collect();
-        let token_indices = self
-            .runtime
-            .array_from_i32(&signed_token_ids, &[1, token_count])?;
+        let token_indices = self.reply_token_indices(kept_token_ids)?;
+        let head_input_rows = self.target_rows_for_head(head, preceding_target_rows)?;
         let head_output = self.forward_mtp_head(
             head,
             &token_indices,
-            preceding_target_lanes,
+            &head_input_rows,
             &mut session.head_state,
             performance_attribution,
         )?;
-        let lane_width = head_output.lanes.shape()[2];
-        let last_row_lanes = self.runtime.slice(
-            &head_output.lanes,
+        session.next_draft = Some(self.next_draft_from_last_row(&head_output, token_count)?);
+        Ok(())
+    }
+
+    /// The head's guess after the last of `token_count` rows, and its state
+    /// there, which the next round's first draft continues from.
+    fn next_draft_from_last_row(
+        &self,
+        head_output: &super::mtp_head::MtpHeadOutput,
+        token_count: i32,
+    ) -> Result<NextDraft, TextExecutionError> {
+        let lane_width = head_output.states.shape()[2];
+        let last_row_states = self.runtime.slice(
+            &head_output.states,
             &[0, token_count - 1, 0],
             &[1, token_count, lane_width],
             &[1, 1, 1],
         )?;
-        let last_row_logits =
-            self.verified_row_logits(&head_output.logits, kept_token_ids.len() - 1)?;
-        session.next_draft = Some(NextDraft {
-            head_logits: last_row_logits,
-            head_lanes: last_row_lanes,
-        });
-        Ok(())
+        Ok(NextDraft {
+            head_logits: self.verified_row_logits(&head_output.logits, token_count as usize - 1)?,
+            head_states: last_row_states,
+        })
+    }
+
+    /// `[1, tokens]` int32 indices of reply tokens, as the head reads them.
+    fn reply_token_indices(&self, token_ids: &[u32]) -> Result<MlxArray, TextExecutionError> {
+        let mut signed_token_ids = Vec::with_capacity(token_ids.len());
+        for token_id in token_ids {
+            signed_token_ids.push(*token_id as i32);
+        }
+        Ok(self
+            .runtime
+            .array_from_i32(&signed_token_ids, &[1, token_ids.len() as i32])?)
     }
 
     /// The head's drafts for this round. Each draft is chosen from the
@@ -340,7 +359,7 @@ impl Qwen3_5Model {
     /// with the target whenever the two distributions are close; drafting
     /// the head's top token instead was kept only 52% of the time at
     /// temperature 1.0. Each further draft feeds the head its previous draft
-    /// and its own lanes.
+    /// and its own state.
     fn draft_reply_tokens(
         &self,
         session: &mut MtpDraftingSession,
@@ -363,7 +382,7 @@ impl Qwen3_5Model {
             });
         }
         let mut head_logits = next_draft.head_logits;
-        let mut head_lanes = next_draft.head_lanes;
+        let mut head_states = next_draft.head_states;
         let mut draft_token_ids = Vec::with_capacity(round_start.maximum_draft_count);
         loop {
             // The draft stands where the target's choice after the row
@@ -383,12 +402,12 @@ impl Qwen3_5Model {
             let head_output = self.forward_mtp_head(
                 head,
                 &draft_token_index,
-                &head_lanes,
+                &head_states,
                 &mut session.head_state,
                 performance_attribution,
             )?;
             head_logits = head_output.logits;
-            head_lanes = head_output.lanes;
+            head_states = head_output.states;
         }
     }
 }

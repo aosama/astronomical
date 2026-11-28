@@ -301,7 +301,7 @@ async fn should_keep_worker_and_logging_fields_unchanged_when_application_restar
     write_config_file(
         &config_home_directory,
         r#"{
-            "chunking": { "fixed_prompt_processing_chunk_size_tokens": 4096 },
+            "chunking": { "prompt_processing_chunk_size_tokens": 4096 },
             "diagnostics": { "log_level": "info" }
         }"#,
     );

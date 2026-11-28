@@ -5,9 +5,11 @@
 //! flags — so those rules are pinned here with plain values, no worker or
 //! model runtime needed.
 
+use ipc_protocol::{PromptProcessingChunkReason, PromptProcessingChunkReport};
+
 use super::{
-    ConfigurationValue, NullableConfigurationValue, reported_chunking_configuration_value,
-    reported_nullable_chunking_configuration_value,
+    ConfigurationValue, NullableConfigurationValue, in_memory_chunk_in_use,
+    reported_chunking_configuration_value, reported_nullable_chunking_configuration_value,
 };
 
 #[test]
@@ -98,4 +100,32 @@ fn should_type_check_the_value_builders_as_pure_constructors() {
     assert_eq!(first_configured, second_configured);
     assert_eq!(first_default, second_default);
     assert_eq!(first_effective, second_effective);
+}
+
+#[test]
+fn should_report_the_in_memory_chunk_the_loaded_model_settled_on() {
+    let expert_model_on_m5 = PromptProcessingChunkReport {
+        chunk_tokens: 4_096,
+        reason: PromptProcessingChunkReason::ExpertModelOnM5OrNewer,
+    };
+
+    assert_eq!(
+        in_memory_chunk_in_use(Some(expert_model_on_m5)),
+        Some(4_096)
+    );
+}
+
+#[test]
+fn should_report_no_in_memory_chunk_while_the_ssd_streaming_chunk_is_in_use() {
+    let streaming = PromptProcessingChunkReport {
+        chunk_tokens: 4_096,
+        reason: PromptProcessingChunkReason::SsdStreaming,
+    };
+
+    assert_eq!(in_memory_chunk_in_use(Some(streaming)), None);
+}
+
+#[test]
+fn should_report_no_in_memory_chunk_before_a_model_reports_one() {
+    assert_eq!(in_memory_chunk_in_use(None), None);
 }

@@ -54,7 +54,7 @@ impl Qwen3_5EngineState {
         loaded_model.base.chunking = loaded_model
             .base
             .chunking
-            .with_multi_token_prediction_draft_tokens(draft_tokens);
+            .with_multi_token_prediction_draft_tokens(Some(draft_tokens));
         // The head's weights enter or leave the ledger's core weights.
         loaded_model.open_memory_governor();
         Ok(())
@@ -195,6 +195,20 @@ impl Qwen3_5EngineState {
         expert_pager.remove_resident_expert_source_files_for_tests();
         Ok(())
     }
+
+    fn refuse_next_reply_page_once_for_tests(&self) -> Result<(), InferenceEngineError> {
+        let loaded_model = self
+            .core
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot refuse a reply page before loading"))?;
+        let expert_pager = loaded_model
+            .expert_pager
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("a dense model streams no reply pages to refuse"))?;
+        expert_pager.refuse_next_reply_page_once_for_tests();
+        Ok(())
+    }
 }
 
 /// The engine's test controls: expert reads, route samples,
@@ -308,6 +322,10 @@ pub trait Qwen3_5TextEngineTestControls {
         layer_index: usize,
         span_index: usize,
     ) -> Result<(), InferenceEngineError>;
+
+    /// Has the next expert page a reply streams refused for room once, the
+    /// way admission refuses a page that does not fit.
+    async fn refuse_next_reply_page_once_for_tests(&self) -> Result<(), InferenceEngineError>;
 
     /// Steps that hit the memory limit and redo attempts made since the
     /// model loaded, in that order.
@@ -531,6 +549,13 @@ impl Qwen3_5TextEngineTestControls for MlxInferenceEngine<Qwen3_5InferenceExecut
             qwen_inference_execution.prompt_span_to_fail_once_for_tests =
                 Some((layer_index, span_index));
             Ok(())
+        })
+        .await
+    }
+
+    async fn refuse_next_reply_page_once_for_tests(&self) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(|qwen_inference_execution| {
+            qwen_inference_execution.refuse_next_reply_page_once_for_tests()
         })
         .await
     }

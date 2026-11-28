@@ -16,7 +16,7 @@ fn should_resolve_every_user_configured_chunking_boundary() {
         temporary_home_directory.path(),
         r#"{
           "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 1024,
+            "prompt_processing_chunk_size_tokens": 1024,
             "full_attention_key_value_growth_tokens": 192,
             "prefill_graph_submission_layer_interval": 2,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
@@ -39,7 +39,7 @@ fn should_resolve_every_user_configured_chunking_boundary() {
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
         0
     );
-    assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 1_024);
+    assert_eq!(chunking.prompt_processing_chunk_size_tokens(), Some(1_024));
     assert_eq!(chunking.ssd_prompt_cache_block_tokens(), Some(1_024));
     assert_eq!(chunking.ssd_prompt_cache_common_prefix_stride_blocks(), 6);
 
@@ -104,7 +104,7 @@ fn should_load_a_saved_file_that_still_names_the_retired_ssd_prefill_interval() 
         temporary_home_directory.path(),
         r#"{
           "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 2048,
+            "prompt_processing_chunk_size_tokens": 2048,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2048,
             "prefill_graph_submission_layer_interval": 0,
             "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
@@ -229,7 +229,7 @@ fn should_load_a_config_holding_settings_retired_after_0_2_90() {
           "schema_version": 1,
           "runtime": {"model_directories": []},
           "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 6144,
+            "prompt_processing_chunk_size_tokens": 6144,
             "experimental_quantized_kv_cache_enabled": true,
             "experimental_fused_moe_decode_enabled": true
           },
@@ -255,8 +255,8 @@ fn should_load_a_config_holding_settings_retired_after_0_2_90() {
     assert_eq!(
         model_config
             .chunking()
-            .fixed_prompt_processing_chunk_size_tokens(),
-        6144,
+            .prompt_processing_chunk_size_tokens(),
+        Some(6144),
         "the settings beside the retired ones must survive"
     );
     assert_eq!(
@@ -289,7 +289,7 @@ fn should_load_a_config_holding_the_retired_stage_attribution_settings() {
           "schema_version": 1,
           "runtime": {"model_directories": []},
           "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 6144,
+            "prompt_processing_chunk_size_tokens": 6144,
             "experimental_decode_stage_attribution_enabled": true
           },
           "models": {
@@ -309,8 +309,8 @@ fn should_load_a_config_holding_the_retired_stage_attribution_settings() {
             .resolved_model_config("target", 65_536)
             .expect("the model policy should resolve")
             .chunking()
-            .fixed_prompt_processing_chunk_size_tokens(),
-        6144,
+            .prompt_processing_chunk_size_tokens(),
+        Some(6144),
         "the setting beside a retired one must survive"
     );
     let rewritten_config = std::fs::read_to_string(

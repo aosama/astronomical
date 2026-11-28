@@ -64,6 +64,7 @@ tracing.workspace = true
 metal-kernel-declarations = { path = "../../../foundation/metal-kernel-declarations" }
 
 [dev-dependencies]
+ipc-protocol = { path = "../../../contracts/ipc-protocol", features = ["test-support"] }
 text-generation = { path = "../text-generation", features = ["test-support"] }
 model-primitives = { path = "../../../engine/model-primitives", features = ["test-support"] }
 test-harness = { path = "../../../foundation/test-harness", features = ["test-fixtures"] }

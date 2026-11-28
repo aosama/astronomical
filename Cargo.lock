@@ -39,7 +39,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "artifact-validation"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "config",
  "libc",
@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-acceptance"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "astronomical-cli",
  "astronomical-daemon",
@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-cli"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "config",
  "decision-contract",
@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-daemon"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-e2e"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "astronomical-daemon",
  "base64 0.23.1",
@@ -177,7 +177,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-inference-worker"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "astronomical-daemon",
  "config",
@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-neural-engine-research"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "cc",
  "mlx-bridge",
@@ -413,7 +413,7 @@ dependencies = [
 
 [[package]]
 name = "clef"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "decision-contract",
  "decision-models",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "clef-recognition"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "model-discovery",
  "serde_json",
@@ -463,7 +463,7 @@ dependencies = [
 
 [[package]]
 name = "config"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "libc",
  "lowercase-hex",
@@ -613,7 +613,7 @@ dependencies = [
 
 [[package]]
 name = "decision-contract"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "base64 0.23.1",
  "safetensors",
@@ -624,7 +624,7 @@ dependencies = [
 
 [[package]]
 name = "decision-models"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "decision-contract",
  "decision-training",
@@ -646,7 +646,7 @@ dependencies = [
 
 [[package]]
 name = "decision-training"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "decision-contract",
  "safetensors",
@@ -705,7 +705,7 @@ dependencies = [
 
 [[package]]
 name = "download-catalog"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "config",
  "lowercase-hex",
@@ -723,7 +723,7 @@ checksum = "9e5e8f6c15a24b9a3ee5efec809ccd006d3b30e8b3bb63c39af737c7f87daa1d"
 
 [[package]]
 name = "engine-core"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "ipc-protocol",
  "jangtq2-qwen35",
@@ -747,11 +747,11 @@ dependencies = [
 
 [[package]]
 name = "english-number-words"
-version = "0.2.137"
+version = "0.2.138"
 
 [[package]]
 name = "english-phonemes"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "english-number-words",
  "serde_json",
@@ -781,7 +781,7 @@ checksum = "d817e038c30374a4bcb22f94d0a8a0e216958d4c3dcde369b1439fec4bdda6e6"
 
 [[package]]
 name = "expert-atlas"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "libc",
  "lowercase-hex",
@@ -794,7 +794,7 @@ dependencies = [
 
 [[package]]
 name = "expert-record-reader"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "cc",
  "libc",
@@ -846,7 +846,7 @@ dependencies = [
 
 [[package]]
 name = "flux2-klein"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "artifact-validation",
  "flux2-klein-recognition",
@@ -871,7 +871,7 @@ dependencies = [
 
 [[package]]
 name = "flux2-klein-recognition"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "model-discovery",
  "serde",
@@ -1033,7 +1033,7 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "graph-host-step"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "cc",
  "mlx-bridge",
@@ -1230,7 +1230,7 @@ dependencies = [
 
 [[package]]
 name = "image-generation"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "ipc-protocol",
  "memory-policy",
@@ -1260,7 +1260,7 @@ dependencies = [
 
 [[package]]
 name = "ipc-protocol"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -1301,7 +1301,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jangtq2-qwen35"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "metal-kernel-declarations",
  "mlx-bridge",
@@ -1377,7 +1377,7 @@ dependencies = [
 
 [[package]]
 name = "kev"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "decision-contract",
  "decision-models",
@@ -1393,7 +1393,7 @@ dependencies = [
 
 [[package]]
 name = "kev-recognition"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "decision-contract",
  "model-discovery",
@@ -1402,7 +1402,7 @@ dependencies = [
 
 [[package]]
 name = "kokoro"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "config",
  "english-phonemes",
@@ -1421,7 +1421,7 @@ dependencies = [
 
 [[package]]
 name = "kokoro-recognition"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "model-discovery",
  "serde_json",
@@ -1430,7 +1430,7 @@ dependencies = [
 
 [[package]]
 name = "laya"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "decision-contract",
  "decision-models",
@@ -1448,7 +1448,7 @@ dependencies = [
 
 [[package]]
 name = "laya-recognition"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "model-discovery",
  "serde_json",
@@ -1499,7 +1499,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "lowercase-hex"
-version = "0.2.137"
+version = "0.2.138"
 
 [[package]]
 name = "macro_rules_attribute"
@@ -1540,7 +1540,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "memory-policy"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "ipc-protocol",
  "serde",
@@ -1551,7 +1551,7 @@ dependencies = [
 
 [[package]]
 name = "metal-kernel-declarations"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "tempfile",
 ]
@@ -1613,14 +1613,14 @@ dependencies = [
 
 [[package]]
 name = "mlx-c-fork"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "mlx-bridge",
 ]
 
 [[package]]
 name = "mlx-performance-profiler"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "cc",
  "mlx-bridge",
@@ -1634,7 +1634,7 @@ dependencies = [
 
 [[package]]
 name = "model-discovery"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "lowercase-hex",
  "serde",
@@ -1648,7 +1648,7 @@ dependencies = [
 
 [[package]]
 name = "model-family-registry"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "clef-recognition",
  "flux2-klein-recognition",
@@ -1665,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "model-primitives"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "decision-contract",
  "libc",
@@ -1684,7 +1684,7 @@ dependencies = [
 
 [[package]]
 name = "model-serving"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "artifact-validation",
  "clef",
@@ -1720,7 +1720,7 @@ dependencies = [
 
 [[package]]
 name = "modernbert"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "decision-models",
  "engine-core",
@@ -1737,7 +1737,7 @@ dependencies = [
 
 [[package]]
 name = "modernbert-recognition"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "model-discovery",
  "serde_json",
@@ -1777,7 +1777,7 @@ dependencies = [
 
 [[package]]
 name = "native-build-orchestration"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "fs4",
  "native-identity",
@@ -1788,21 +1788,21 @@ dependencies = [
 
 [[package]]
 name = "native-build-tool"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "native-build-orchestration",
 ]
 
 [[package]]
 name = "native-identity"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "neural-engine"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "cc",
  "mlx-bridge",
@@ -1900,7 +1900,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "phonon"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "config",
  "english-phonemes",
@@ -1919,7 +1919,7 @@ dependencies = [
 
 [[package]]
 name = "phonon-recognition"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "model-discovery",
  "serde_json",
@@ -1993,7 +1993,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "quantization"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "minijinja",
  "mlx-bridge",
@@ -2025,7 +2025,7 @@ dependencies = [
 
 [[package]]
 name = "qwen-image-21"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "artifact-validation",
  "image",
@@ -2050,7 +2050,7 @@ dependencies = [
 
 [[package]]
 name = "qwen-image-21-recognition"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "model-discovery",
  "serde",
@@ -2060,7 +2060,7 @@ dependencies = [
 
 [[package]]
 name = "qwen35"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "artifact-validation",
  "config",
@@ -2096,7 +2096,7 @@ dependencies = [
 
 [[package]]
 name = "qwen35-quantization-probe"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "mlx-bridge",
  "quantization",
@@ -2108,7 +2108,7 @@ dependencies = [
 
 [[package]]
 name = "qwen35-recognition"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "expert-atlas",
  "model-discovery",
@@ -2264,7 +2264,7 @@ dependencies = [
 
 [[package]]
 name = "rest-contract"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "base64 0.23.1",
  "regex-automata",
@@ -2290,7 +2290,7 @@ dependencies = [
 
 [[package]]
 name = "runtime-integration"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "libc",
  "lowercase-hex",
@@ -2681,7 +2681,7 @@ dependencies = [
 
 [[package]]
 name = "speech"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "config",
  "english-phonemes",
@@ -2699,7 +2699,7 @@ dependencies = [
 
 [[package]]
 name = "speech-contract"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "serde",
  "serde_json",
@@ -2788,7 +2788,7 @@ dependencies = [
 
 [[package]]
 name = "test-harness"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "base64 0.23.1",
  "image",
@@ -2802,7 +2802,7 @@ dependencies = [
 
 [[package]]
 name = "text-generation"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "artifact-validation",
  "engine-core",
@@ -3197,7 +3197,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vision-tower"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "lowercase-hex",
  "reqwest",
@@ -3459,7 +3459,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "xtask"
-version = "0.2.137"
+version = "0.2.138"
 dependencies = [
  "libc",
  "lowercase-hex",

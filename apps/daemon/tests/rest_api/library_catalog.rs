@@ -57,17 +57,7 @@ const VALID_CATALOG_JSON: &str = r#"{
             "role": "chat",
             "public": true,
             "build_of": "example-qwen",
-            "build_difference": "more_detail",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 72,
-                    "essay_long_prompt": 66,
-                    "code_short_prompt": 72,
-                    "code_long_prompt": 67
-                }
-            }
+            "build_difference": "more_detail"
         }
     ]
 }"#;
@@ -189,16 +179,6 @@ fn expected_qwen_6bit_entry() -> serde_json::Value {
         "download_state": null,
         "build_of": "example-qwen",
         "build_difference": "more_detail",
-        "measured_speed": {
-            "measured_on": "Mac with an M5 Pro and 48 GB",
-            "astronomical_version": "0.2.129",
-            "tokens_per_second": {
-                "essay_short_prompt": 72,
-                "essay_long_prompt": 66,
-                "code_short_prompt": 72,
-                "code_long_prompt": 67
-            }
-        },
         "capabilities": capabilities_with(&[])
     })
 }

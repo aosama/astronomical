@@ -22,6 +22,7 @@ use crate::{
     PerformanceAttributionLog, PersistentVisualEmbeddingModelContract,
     build_astro_ssd_prompt_cache_stats_event,
 };
+use engine_core::astro_ssd_prompt_cache::AstroSsdPromptCachePublicationQueue;
 use engine_core::astro_ssd_prompt_cache::counters::AstroSsdPromptCacheCounters;
 
 use super::generation_request_validation::TextGenerationRequestLimits;
@@ -54,6 +55,9 @@ pub struct TextExecutionCore<Model, RequestExtension, Artifact> {
     pub model_loading_performance_attribution: Option<PerformanceAttribution>,
     pub performance_attribution_log: PerformanceAttributionLog,
     pub astro_ssd_prompt_cache: Option<Arc<AstroSsdPromptCacheDiskStore>>,
+    /// The background writer for `astro_ssd_prompt_cache` blocks; dropping it
+    /// (a model unload or reload) writes what is still queued first.
+    pub astro_ssd_prompt_cache_publication_queue: Option<AstroSsdPromptCachePublicationQueue>,
     pub astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
     pub astro_ssd_prompt_cache_counters: AstroSsdPromptCacheCounters,
     pub astro_ssd_prompt_cache_model_contract: Option<AstroSsdPromptCacheModelContract>,
@@ -194,6 +198,7 @@ impl<Model, RequestExtension, Artifact: TextServingArtifact>
             ),
             performance_attribution_log: settings.performance_attribution_log,
             astro_ssd_prompt_cache: None,
+            astro_ssd_prompt_cache_publication_queue: None,
             astro_ssd_prompt_cache_disk_store_config: settings
                 .astro_ssd_prompt_cache_disk_store_config,
             astro_ssd_prompt_cache_counters: AstroSsdPromptCacheCounters::default(),

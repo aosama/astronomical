@@ -4,6 +4,15 @@
 .LSOverride
 ._*
 
+# Claude Code's per-machine folders. Only the shared parts of .claude are
+# committed (settings.json, launch.json, skills); plans and worktrees are
+# made on each Mac, and a worktree is a whole checkout of the repository.
+# A local exclude used to keep them out on one Mac only, so any other clone
+# could commit them.
+/.claude/plans/
+/.claude/worktrees/
+/.claude/settings.local.json
+
 # Editor and IDE local state
 .idea/
 .vscode/

@@ -430,6 +430,7 @@ impl Qwen3_5Model {
         } else {
             None
         };
+        let mut state_before_exact_rerun = None;
         loop {
             if state_before_in_graph_attempt.is_some() {
                 self.begin_in_graph_forward(reply_row_count);
@@ -439,6 +440,14 @@ impl Qwen3_5Model {
                 .record_forward(reply_row_count);
             let attempt = forward_reply_rows(request_decoder_state);
             self.end_in_graph_forward();
+            // A forward refused room for a page comes back as one whose
+            // outputs cannot be used, with the state to run it again from.
+            let attempt = self.reply_rows_or_room_to_redo(
+                attempt,
+                request_decoder_state,
+                &mut state_before_in_graph_attempt,
+                &mut state_before_exact_rerun,
+            );
             if let Some(forward_output) = attempt? {
                 return Ok(forward_output);
             }
@@ -447,7 +456,8 @@ impl Qwen3_5Model {
                     description: "an exact forward of reply rows reported experts missing from memory",
                 });
             };
-            request_decoder_state.restore_checkpoint(state_before)?;
+            state_before_exact_rerun =
+                self.restore_for_exact_rerun(request_decoder_state, state_before)?;
         }
     }
 

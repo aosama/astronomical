@@ -4,17 +4,17 @@
 .doc { padding-block: 72px 112px; }
 .doc-body { max-width: 720px; margin-inline: auto; }
 .doc-body h1,
-.doc-body h2 { font-family: var(--display); font-weight: 400; letter-spacing: -0.02em; font-variation-settings: "opsz" 72; }
+.doc-body h2 { font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; }
 .doc-body h1 { font-size: clamp(2.5rem, 5vw, 3.5rem); line-height: 1.05; margin: 0 0 16px; }
 .doc-body h2 { font-size: 2rem; line-height: 1.15; margin-block: 48px 10px; }
-.doc-body h3 { font-size: 1.1875rem; font-weight: 600; margin-block: 28px 6px; color: var(--silver); }
-.doc-body p, .doc-body li { color: var(--silver-dim); font-size: 1.0625rem; line-height: 1.65; }
+.doc-body h3 { font-size: 1.1875rem; font-weight: 600; margin-block: 28px 6px; color: var(--ink); }
+.doc-body p, .doc-body li { color: var(--ink-soft); font-size: 1.0625rem; line-height: 1.65; }
 .doc-body ul, .doc-body ol { padding-left: 20px; }
-.doc-body strong { color: var(--silver); }
-.doc-body code { color: var(--silver); }
-.doc-body a:not(.button) { color: var(--nebula-bright); }
-.doc-body a:not(.button):hover { color: var(--silver); }
-.doc-meta { color: var(--mist); font-size: 1rem; }
+.doc-body strong { color: var(--ink); }
+.doc-body code { color: var(--ink); }
+.doc-body a:not(.button) { color: var(--accent); }
+.doc-body a:not(.button):hover { color: var(--ink); }
+.doc-meta { color: var(--muted); font-size: 1rem; }
 
 /* A snippet is one selectable block that a reader copies wholesale, so it keeps
    its own scroll area instead of wrapping and silently changing what is copied. */
@@ -26,7 +26,7 @@
   border-radius: 10px;
   background: var(--ground-raised);
 }
-.doc-snippet:focus-visible { outline: 2px solid var(--nebula-bright); outline-offset: 2px; }
+.doc-snippet:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .doc-snippet code {
   font-family: var(--mono);
   font-size: 0.9375rem;

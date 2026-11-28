@@ -41,8 +41,7 @@ lower limit leaves more room for the rest of the Mac.
 Some models carry a draft model: a small helper that guesses the next few
 words, which the main model checks all at once. Replies arrive sooner, most
 of all for code, and every word is still the main model's own. Their names
-contain `DFLASH` or `DFLASH2`; the listing's measured speeds say how much each
-gains.
+contain `DFLASH` or `DFLASH2`.
 
 - **It needs an M5-family Mac.** A Mac without an M5 chip runs the model
   without the helper, at its normal speed.
@@ -52,7 +51,9 @@ gains.
   room, the model runs at its normal speed and `astronomical status` says so.
 - **Some models predict ahead by themselves.** A model with its own
   prediction head, such as Qwen3.8-Flash-Next, guesses one word ahead by
-  default, with no separate draft model.
+  default, with no separate draft model. Ternary Bonsai 2 9B ships a head
+  too, but it is off by default because it does not speed that model up;
+  setting `chunking.multi_token_prediction_draft_tokens` turns it on.
 - **Some requests never use it:** a picture in the prompt, structured output
   and a repetition penalty all decode one word at a time.
 - **`astronomical status` shows what it is doing.** The `drafter:` line says

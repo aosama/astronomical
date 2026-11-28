@@ -13,13 +13,13 @@ pub(crate) fn create_attributed_engine(
     model_directory: &Path,
     performance_attribution_log_path: &Path,
     mlx_memory_limits: &runtime_integration::MlxMemoryLimits,
-    fixed_prompt_processing_chunk_size_tokens: u32,
+    prompt_processing_chunk_size_tokens: u32,
 ) -> (Qwen3_5TextEngine, Vec<u32>) {
     create_attributed_engine_with_ssd_streaming_prefill(
         model_directory,
         performance_attribution_log_path,
         mlx_memory_limits,
-        fixed_prompt_processing_chunk_size_tokens,
+        prompt_processing_chunk_size_tokens,
     )
 }
 

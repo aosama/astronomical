@@ -8,8 +8,7 @@
 //! The section is printed, never written: the release procedure pastes it
 //! where it belongs, and nothing in it is typed by hand.
 //!
-//! `cargo xtask release-speed-table --check-catalog` fails, listing each
-//! figure, when the catalog's measured speeds differ from the newest ledger's.
+//! The catalog does not publish these figures.
 
 #[path = "release_speed/speed_comparison.rs"]
 mod speed_comparison;
@@ -18,14 +17,11 @@ pub(crate) mod speed_ledger;
 
 use std::path::{Path, PathBuf};
 
-use crate::measure_speed::speed_catalog::catalog_disagreements_with_ledger;
-
-const USAGE: &str = "usage: cargo xtask release-speed-table [--previous VERSION|FILE --current VERSION|FILE] | --check-catalog";
-const CATALOG_PATH: &str = "registry/download_catalog.json";
+const USAGE: &str =
+    "usage: cargo xtask release-speed-table [--previous VERSION|FILE --current VERSION|FILE]";
 
 #[derive(Debug, Eq, PartialEq)]
 enum ReleaseSpeedCommand {
-    CheckCatalog,
     /// Both references, or neither for the two newest ledgers.
     Table {
         ledger_references: Option<(String, String)>,
@@ -34,7 +30,6 @@ enum ReleaseSpeedCommand {
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     match parse_command(arguments)? {
-        ReleaseSpeedCommand::CheckCatalog => check_catalog(repository_root),
         ReleaseSpeedCommand::Table { ledger_references } => {
             let (previous_reference, current_reference) = match ledger_references {
                 Some(ledger_references) => ledger_references,
@@ -54,9 +49,6 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
 }
 
 fn parse_command(arguments: &[String]) -> Result<ReleaseSpeedCommand, String> {
-    if arguments == ["--check-catalog"] {
-        return Ok(ReleaseSpeedCommand::CheckCatalog);
-    }
     let mut previous_reference = None;
     let mut current_reference = None;
     let mut remaining_arguments = arguments.iter();
@@ -93,30 +85,6 @@ fn two_newest_versions(repository_root: &Path) -> Result<(String, String), Strin
             "two release speed ledgers are needed to compare; measure a release first".to_owned(),
         ),
     }
-}
-
-/// The catalog shows the newest release's figures, or this fails listing
-/// each one that differs.
-fn check_catalog(repository_root: &Path) -> Result<(), String> {
-    let Some(newest_ledger) = speed_ledger::newest_ledger(repository_root)? else {
-        println!("[release-speed] status=success reason=no-ledger-yet");
-        return Ok(());
-    };
-    let catalog_file = repository_root.join(CATALOG_PATH);
-    let catalog_text = std::fs::read_to_string(&catalog_file)
-        .map_err(|read_error| format!("could not read {}: {read_error}", catalog_file.display()))?;
-    let disagreements = catalog_disagreements_with_ledger(&catalog_text, &newest_ledger)?;
-    if disagreements.is_empty() {
-        println!(
-            "[release-speed] status=success catalog_matches={}",
-            newest_ledger.astronomical_version
-        );
-        return Ok(());
-    }
-    Err(format!(
-        "[release-speed] status=failed reason=catalog-differs-from-ledger\n{}\nrun `cargo xtask measure-speed --reference-set --write-ledger --write-catalog`",
-        disagreements.join("\n")
-    ))
 }
 
 fn ledger_file(repository_root: &Path, ledger_reference: &str) -> PathBuf {

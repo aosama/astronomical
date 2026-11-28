@@ -119,6 +119,32 @@ pub const fn should_complete_partial_layer_on_prefill_read(
         && matches!(layer_state, super::ExpertLayerState::Kept)
 }
 
+/// Whether a multi-token read may finish a partly held layer in the phase the
+/// engine is really in.
+///
+/// Only while a prompt is read. A drafted reply forward also routes several
+/// tokens through the same read, but writing a reply reserves room for one
+/// routed page, not a layer's remaining experts: on the 35B-A3B at an 8 GiB
+/// limit a four-row draft check extended its read to 240 experts (about
+/// 420 MB) and the reply failed mid-sentence. A reply's tables grow from what
+/// its tokens route instead.
+#[must_use]
+pub const fn should_complete_partial_layer_in_phase(
+    memory_phase: crate::phase::MemoryPhase,
+    production_default_paging: bool,
+    layer_state: super::ExpertLayerState,
+    resident_expert_count: usize,
+    expert_capacity: usize,
+) -> bool {
+    matches!(memory_phase, crate::phase::MemoryPhase::Prefill)
+        && should_complete_partial_layer_on_prefill_read(
+            production_default_paging,
+            layer_state,
+            resident_expert_count,
+            expert_capacity,
+        )
+}
+
 /// Structural slot cap for one decode warm table (hot-expert holding).
 ///
 /// Issue #514: a history-length multiplier (`experts_per_token * 8`) left

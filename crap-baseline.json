@@ -103990,7 +103990,7 @@
     },
     {
       "file": "crates/foundation/config/src/chunking_config.rs",
-      "function": "ChunkingConfig::fixed_prompt_processing_chunk_size_tokens",
+      "function": "ChunkingConfig::prompt_processing_chunk_size_tokens",
       "line": 404,
       "cyclomatic": 1.0,
       "coverage": null,

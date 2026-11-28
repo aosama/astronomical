@@ -1,27 +1,42 @@
-import { makeButton, makeElement } from "./AstroDom";
+import { makeElement } from "./AstroDom";
 import type { AstroLibrary } from "./AstroLibrary";
-import { AstroMoment, HOME_IDEAS, astroLine } from "./AstroLines";
+import { AstroMoment, HomeIdeaKind, astroLine, homeIdeasFor } from "./AstroLines";
 import type { HomeIdea } from "./AstroLines";
 import type { AstroProfile } from "./AstroProfile";
 import { ChatModelDownloadPanel } from "./ChatModelDownloadPanel";
 import { ImageModelOffer } from "./ImageModelOffer";
 import { SkillCardKind, skillCard } from "./SkillCard";
-import { buildSkillShelf } from "./SkillShelf";
+import { SKILL_GLYPH_PATHS } from "./SkillGlyphs";
 
 /** Prefix for home's control ids, distinct from the get-started journey's "astro". */
 const ID_PREFIX = "astro-home";
 
+/** The line under the ideas. It is the reason people install Astronomical,
+ * so it sits where they type rather than in Settings alone. */
+const PRIVACY_LINE = "Runs on this Mac. Nothing you type leaves it.";
+
+/** Each idea is drawn with the glyph of the message-field button that does
+ * the same thing, so trying an idea also teaches where that button is. */
+const GLYPH_BY_IDEA_KIND: Readonly<Record<HomeIdeaKind, SkillCardKind>> = {
+  [HomeIdeaKind.WRITE]: SkillCardKind.CHAT,
+  [HomeIdeaKind.PICTURES]: SkillCardKind.PICTURES,
+  [HomeIdeaKind.LOOK]: SkillCardKind.LOOK,
+  [HomeIdeaKind.READ]: SkillCardKind.READ,
+};
+
 /**
  * Astro's home: what an empty conversation looks like once Astro is shown.
- * It greets the person, offers a few ideas and the skill cards, and every
- * one of them only fills the message field, so the person always sends.
  *
- * It lives inside Thin Talk's empty-state section, whose visibility the
- * transcript already manages; the classic title and subtitle are hidden while
- * Astro is shown and come back with the Focus switch.
+ * The greeting sits in Thin Talk's empty-state section, above the message
+ * field; the ideas, the follow-up area and the privacy line sit in the slot
+ * below the field. While home shows, the stylesheet lifts the field to the
+ * middle of the window between the two (astro.css), so the eye goes from the
+ * greeting straight to where the person types. Every idea only fills the
+ * message field, so the person always sends.
  */
 export class AstroHomeView {
   private readonly emptyState: HTMLElement;
+  private readonly belowComposer: HTMLElement;
   private readonly document: Document;
   private readonly library: AstroLibrary;
   private readonly onStarterPrompt: (prompt: string) => void;
@@ -34,8 +49,9 @@ export class AstroHomeView {
   /** The download panel in the follow-up area, stopped when it is replaced. */
   private followUpPanel: { dispose(): void } | null = null;
 
-  public constructor(init: { emptyState: HTMLElement; library: AstroLibrary; onStarterPrompt: (prompt: string) => void }) {
+  public constructor(init: { emptyState: HTMLElement; belowComposer: HTMLElement; library: AstroLibrary; onStarterPrompt: (prompt: string) => void }) {
     this.emptyState = init.emptyState;
+    this.belowComposer = init.belowComposer;
     this.document = init.emptyState.ownerDocument;
     this.library = init.library;
     this.onStarterPrompt = init.onStarterPrompt;
@@ -45,19 +61,25 @@ export class AstroHomeView {
     this.greeting = makeElement(this.document, "h1", "astro-home__greeting");
     this.prompt = makeElement(this.document, "p", "astro-home__prompt");
     this.ideas = makeElement(this.document, "div", "astro-home__ideas");
+    this.ideas.setAttribute("role", "group");
+    this.ideas.setAttribute("aria-label", "Ideas to try");
     this.followUp = makeElement(this.document, "div", "astro-home__follow-up");
     this.followUp.setAttribute("role", "status");
-    this.home.append(this.header(), this.ideas, this.shelf(), this.followUp);
+    this.home.append(this.greeting, this.prompt);
     this.emptyState.prepend(this.home);
-    this.renderIdeas();
+    const privacyNote = makeElement(this.document, "p", "astro-home__privacy", PRIVACY_LINE);
+    this.belowComposer.replaceChildren(this.ideas, this.followUp, privacyNote);
+    this.belowComposer.hidden = true;
   }
 
   public show(profile: AstroProfile): void {
     this.profile = profile;
     this.emptyState.classList.add("empty-state--astro");
     this.home.hidden = false;
+    this.belowComposer.hidden = false;
     this.greeting.textContent = astroLine(AstroMoment.HOME_GREETING, profile.nickname);
     this.prompt.textContent = astroLine(AstroMoment.HOME_PROMPT, profile.nickname);
+    this.renderIdeas(homeIdeasFor(new Date()));
     this.replaceFollowUp(null);
     void this.offerChatModelIfMissing(profile);
   }
@@ -67,6 +89,7 @@ export class AstroHomeView {
     this.replaceFollowUp(null);
     this.emptyState.classList.remove("empty-state--astro");
     this.home.hidden = true;
+    this.belowComposer.hidden = true;
   }
 
   /** Puts new content in the follow-up area, stopping the panel it replaces.
@@ -80,33 +103,29 @@ export class AstroHomeView {
     this.emptyState.classList.toggle("empty-state--astro-offers-chat-model", panel instanceof ChatModelDownloadPanel);
   }
 
-  private header(): HTMLElement {
-    const header = makeElement(this.document, "div", "astro-home__header");
-    const words = makeElement(this.document, "div", "astro-home__words");
-    words.append(this.greeting, this.prompt);
-    header.append(words);
-    return header;
+  private renderIdeas(ideas: readonly HomeIdea[]): void {
+    this.ideas.replaceChildren(...ideas.map((idea) => this.ideaChip(idea)));
   }
 
-  private shelf(): HTMLElement {
-    return buildSkillShelf(this.document, ID_PREFIX, {
-      onChoose: (kind) => void this.chooseSkill(kind),
-    });
-  }
-
-  private renderIdeas(): void {
-    for (const [ideaPosition, idea] of HOME_IDEAS.entries()) {
-      const ideaChip = makeButton(this.document, `${ID_PREFIX}-idea-${ideaPosition}`, idea.prompt, true);
-      ideaChip.classList.add("astro-chip");
-      ideaChip.addEventListener("click", () => void this.chooseIdea(idea));
-      this.ideas.append(ideaChip);
-    }
+  /** A quiet chip: the kind's glyph in the secondary ink, then the request in
+   * plain words. The glyph path is a constant from SKILL_GLYPH_PATHS, never
+   * model or user text, and the words go in through textContent. */
+  private ideaChip(idea: HomeIdea): HTMLButtonElement {
+    const testID = `${ID_PREFIX}-idea-${idea.kind}`;
+    const chip = makeElement(this.document, "button", "astro-idea");
+    chip.type = "button";
+    chip.id = testID;
+    chip.dataset.testid = testID;
+    chip.dataset.prompt = idea.prompt;
+    chip.innerHTML = `<svg class="astro-idea__glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="${SKILL_GLYPH_PATHS[GLYPH_BY_IDEA_KIND[idea.kind]]}"/></svg>`;
+    chip.append(makeElement(this.document, "span", "astro-idea__words", idea.prompt));
+    chip.addEventListener("click", () => void this.chooseIdea(idea));
+    return chip;
   }
 
   /** Fills the message field with the idea, unless it asks for a picture on
    * a Mac with no image model: sent as it is, that prompt ends in a failed
-   * drawing, so the chip offers the image model the way the Pictures card
-   * does. */
+   * drawing, so the chip offers the image model instead. */
   private async chooseIdea(idea: HomeIdea): Promise<void> {
     const profile = this.profile;
     if (profile !== null && idea.needsImageModel && !(await this.library.hasImageModel())) {
@@ -116,8 +135,8 @@ export class AstroHomeView {
     this.onStarterPrompt(idea.prompt);
   }
 
-  /** Chooses a skill as its card would: the Draw button uses it to offer the
-   * image model in a fresh chat when none is installed. */
+  /** Chooses a skill as the message field's buttons would: the Draw button
+   * uses it to offer the image model in a fresh chat when none is installed. */
   public async chooseSkill(kind: SkillCardKind): Promise<void> {
     const profile = this.profile;
     if (profile === null) {

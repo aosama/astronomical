@@ -151,17 +151,7 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
-            "upstream_license": "Apache-2.0",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 70,
-                    "essay_long_prompt": 68,
-                    "code_short_prompt": 71,
-                    "code_long_prompt": 66
-                }
-            }
+            "upstream_license": "Apache-2.0"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-MLX-4bit-vision",
@@ -182,17 +172,7 @@
                 "context_window": 262144
             },
             "quantization_label": "MLX 4-bit (affine, group 64), vision tower at bf16",
-            "upstream_license": "MIT",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.137",
-                "tokens_per_second": {
-                    "essay_short_prompt": 51,
-                    "essay_long_prompt": 50,
-                    "code_short_prompt": 50,
-                    "code_long_prompt": 51
-                }
-            }
+            "upstream_license": "MIT"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-MLX-6bit-vision",
@@ -214,17 +194,7 @@
             "quantization_label": "MLX 6-bit (affine, group 64), vision tower at bf16",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-9B-MLX-4bit-vision",
-            "build_difference": "more_detail",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 36,
-                    "essay_long_prompt": 35,
-                    "code_short_prompt": 36,
-                    "code_long_prompt": 35
-                }
-            }
+            "build_difference": "more_detail"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
@@ -246,17 +216,7 @@
             "quantization_label": "OptiQ static 4/5/8-bit, 4.6 bits avg (affine, group 64)",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-9B-MLX-4bit-vision",
-            "build_difference": "more_detail",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 45,
-                    "essay_long_prompt": 42,
-                    "code_short_prompt": 45,
-                    "code_long_prompt": 42
-                }
-            }
+            "build_difference": "more_detail"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision",
@@ -278,29 +238,19 @@
             "quantization_label": "MLX 6-bit (affine, group 64), 8-bit routers, bf16 vision tower",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "more_detail",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 71,
-                    "essay_long_prompt": 66,
-                    "code_short_prompt": 72,
-                    "code_long_prompt": 67
-                }
-            }
+            "build_difference": "more_detail"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH2",
             "revision": "0af05d417d9e886cf7ae5b85cc0f2417ff994f50",
-            "summary": "The large Ornith with its original vision and a draft model built in: code about a tenth quicker.",
+            "summary": "The large Ornith with its original vision and a draft model built in.",
             "family": "qwen3_5",
             "approximate_size_bytes": 30134581820,
             "approximate_memory_bytes": 31462544230,
             "minimum_memory_bytes": 3670688512,
             "role": "chat",
             "public": true,
-            "description": "The same model as Ornith-1.5-35B-A3B-MLX-6bit-vision, with a small draft model packed in. On an M5 Mac with room for the whole model, the draft model guesses the next few words and the large model checks them all in one step, so code arrives about a tenth sooner while essays arrive about 7% later (measured on an M5 Pro Mac), and every word is still the large model's own choice. On other Macs, or with less memory, it runs just like the 6-bit vision build.",
+            "description": "The same model as Ornith-1.5-35B-A3B-MLX-6bit-vision, with a small draft model packed in. On a Mac with room for the whole model, the draft model guesses the next few words and the large model checks them all in one step, and every word is still the large model's own choice. On other Macs, or with less memory, it runs just like the 6-bit vision build.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -310,29 +260,19 @@
             "quantization_label": "MLX 6-bit (affine, group 64), bf16 vision, DFlash2 draft model",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "draft_model",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 67,
-                    "essay_long_prompt": 61,
-                    "code_short_prompt": 80,
-                    "code_long_prompt": 72
-                }
-            }
+            "build_difference": "draft_model"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-4bit-vision-DFLASH",
             "revision": "f7747af757d30a8841f383e33c0d8d8f60680769",
-            "summary": "Ornith's 4-bit build with vision and its own draft model: the quickest Ornith 35B build for writing and code.",
+            "summary": "Ornith's 4-bit build with vision and its own draft model.",
             "family": "qwen3_5",
             "approximate_size_bytes": 21194272957,
             "approximate_memory_bytes": 22522235367,
             "minimum_memory_bytes": 4451287808,
             "role": "chat",
             "public": true,
-            "description": "The Ornith team's 4-bit Ornith 1.5 35B-A3B with its original vision put back, so it reads pictures, and their own draft model packed in. On an M5 Mac with room for the whole model, the draft model guesses the next few words and the large model checks them in one step: it was the quickest Ornith 35B build measured on an M5 Pro Mac, at about 95 tokens a second for essays and 111 for code. Every word is still the large model's own. On other Macs it runs without the draft model.",
+            "description": "The Ornith team's 4-bit Ornith 1.5 35B-A3B with its original vision put back, so it reads pictures, and their own draft model packed in. On a Mac with room for the whole model, the draft model guesses the next few words and the large model checks them all in one step, and every word is still the large model's own. On other Macs it runs without the draft model.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -342,29 +282,19 @@
             "quantization_label": "MLX 4-bit (affine, group 64), bf16 vision, DFlash draft model",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "draft_model",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 95,
-                    "essay_long_prompt": 78,
-                    "code_short_prompt": 111,
-                    "code_long_prompt": 94
-                }
-            }
+            "build_difference": "draft_model"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision-DFLASH",
             "revision": "5778d8e773408341acde6e7b5b59e4868d8762a0",
-            "summary": "Ornith's 6-bit build with vision and its own draft model: code about a fifth quicker.",
+            "summary": "Ornith's 6-bit build with vision and its own draft model.",
             "family": "qwen3_5",
             "approximate_size_bytes": 29853872497,
             "approximate_memory_bytes": 31181834907,
             "minimum_memory_bytes": 3670688512,
             "role": "chat",
             "public": true,
-            "description": "The Ornith team's 6-bit Ornith 1.5 35B-A3B with its original vision put back, so it reads pictures, and their own draft model packed in. On an M5 Mac with room for the whole model, the draft model guesses the next few words and the large model checks them in one step: code arrives about a fifth sooner and essays at about the same pace (measured on an M5 Pro Mac). Every word is still the large model's own. On other Macs it runs without the draft model.",
+            "description": "The Ornith team's 6-bit Ornith 1.5 35B-A3B with its original vision put back, so it reads pictures, and their own draft model packed in. On a Mac with room for the whole model, the draft model guesses the next few words and the large model checks them all in one step, and every word is still the large model's own. On other Macs it runs without the draft model.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -374,17 +304,7 @@
             "quantization_label": "MLX 6-bit (affine, group 64), bf16 vision, DFlash draft model",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "draft_model",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 74,
-                    "essay_long_prompt": 65,
-                    "code_short_prompt": 88,
-                    "code_long_prompt": 80
-                }
-            }
+            "build_difference": "draft_model"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision",
@@ -406,17 +326,7 @@
             "quantization_label": "MLX 8-bit (affine, group 64), vision tower at bf16",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "more_detail",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 52,
-                    "essay_long_prompt": 41,
-                    "code_short_prompt": 63,
-                    "code_long_prompt": 47
-                }
-            }
+            "build_difference": "more_detail"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision-astro-atlas-streaming",
@@ -555,30 +465,22 @@
                 "context_window": 262144
             },
             "quantization_label": "OptiQ mixed-precision 4/8-bit (affine, group 64)",
-            "upstream_license": "MIT",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 71,
-                    "essay_long_prompt": 66,
-                    "code_short_prompt": 70,
-                    "code_long_prompt": 65
-                }
-            }
+            "upstream_license": "MIT"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH2",
-            "former_huggingface_ids": ["ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit"],
+            "former_huggingface_ids": [
+                "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit"
+            ],
             "revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
-            "summary": "The heavy thinker with its draft model built in: writing about a fifth quicker, code about 40% quicker.",
+            "summary": "The heavy thinker with its draft model built in.",
             "family": "qwen3_5",
             "approximate_size_bytes": 24618514377,
             "approximate_memory_bytes": 25748620290,
             "minimum_memory_bytes": 4451287808,
             "role": "coding",
             "public": true,
-            "description": "The same large model as Ornith-1.5-35B-A3B-OptiQ-4bit, with a small draft model packed in. On an M5 Mac the draft model guesses the next few words and the large model checks them all in one step, so essays arrive about a fifth sooner and code about 40% sooner (measured on an M5 Pro Mac), and every word is still the large model's own choice. On other Macs, or with less memory, it runs just like the OptiQ build.",
+            "description": "The same large model as Ornith-1.5-35B-A3B-OptiQ-4bit, with a small draft model packed in. The draft model guesses the next few words and the large model checks them all in one step, and every word is still the large model's own choice. On other Macs, or with less memory, it runs just like the OptiQ build.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -588,29 +490,19 @@
             "quantization_label": "OptiQ 4/8-bit (affine, group 64) with a DFlash2 draft model",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "draft_model",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.137",
-                "tokens_per_second": {
-                    "essay_short_prompt": 86,
-                    "essay_long_prompt": 76,
-                    "code_short_prompt": 97,
-                    "code_long_prompt": 92
-                }
-            }
+            "build_difference": "draft_model"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-4bit-vision-DFLASH",
             "revision": "d58c7ee9e214252d0cef485868cd86cdbd3a6214",
-            "summary": "The heavy thinker with Ornith's own draft model: code about a third quicker, on less disk.",
+            "summary": "The heavy thinker with Ornith's own draft model, on less disk.",
             "family": "qwen3_5",
             "approximate_size_bytes": 23850350514,
             "approximate_memory_bytes": 24980456427,
             "minimum_memory_bytes": 4451287808,
             "role": "coding",
             "public": true,
-            "description": "The same large model as Ornith-1.5-35B-A3B-OptiQ-4bit, with the Ornith team's own draft model packed in. On an M5 Mac the draft model guesses the next few words and the large model checks them in one step, so code arrives about a third sooner and essays about a tenth sooner (measured on an M5 Pro Mac), and every word is still the large model's own. The DFlash2 build is quicker; this one takes about 0.7 GB less disk. On other Macs it runs like the OptiQ build.",
+            "description": "The Ornith team's 4-bit Ornith 1.5 35B-A3B with its original vision put back, so it reads pictures, and their own draft model packed in. On a Mac with room for the whole model, the draft model guesses the next few words and the large model checks them in one step, and every word is still the large model's own. On other Macs it runs without the draft model.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -620,17 +512,7 @@
             "quantization_label": "OptiQ 4/8-bit (affine, group 64) with a DFlash draft model",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "draft_model",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.134",
-                "tokens_per_second": {
-                    "essay_short_prompt": 81,
-                    "essay_long_prompt": 65,
-                    "code_short_prompt": 89,
-                    "code_long_prompt": 75
-                }
-            }
+            "build_difference": "draft_model"
         },
         {
             "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-static-5.5bpw",
@@ -652,17 +534,7 @@
             "quantization_label": "OptiQ static 4/8-bit, 5.5 bits avg (affine, group 64)",
             "upstream_license": "MIT",
             "build_of": "Ornith-1.5-35B-A3B-OptiQ-4bit",
-            "build_difference": "more_detail",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.129",
-                "tokens_per_second": {
-                    "essay_short_prompt": 68,
-                    "essay_long_prompt": 63,
-                    "code_short_prompt": 67,
-                    "code_long_prompt": 63
-                }
-            }
+            "build_difference": "more_detail"
         },
         {
             "huggingface_id": "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e",
@@ -682,17 +554,7 @@
                 "context_window": 262144
             },
             "quantization_label": "oQ6e mixed-precision 6/8-bit (affine, group 64/128)",
-            "upstream_license": "MIT",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.130",
-                "tokens_per_second": {
-                    "essay_short_prompt": 64,
-                    "essay_long_prompt": 60,
-                    "code_short_prompt": 64,
-                    "code_long_prompt": 59
-                }
-            }
+            "upstream_license": "MIT"
         },
         {
             "huggingface_id": "peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-MLX-oQ6e",
@@ -731,54 +593,6 @@
                 "context_window": 262144
             },
             "quantization_label": "4-bit affine (group 64), bf16 vision tower, DFlash2 draft model",
-            "upstream_license": "Apache-2.0",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.137",
-                "tokens_per_second": {
-                    "essay_short_prompt": 53,
-                    "essay_long_prompt": 55,
-                    "code_short_prompt": 57,
-                    "code_long_prompt": 54
-                }
-            }
-        },
-        {
-            "huggingface_id": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
-            "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
-            "summary": "A 27B model squeezed into 8 GB that reads pictures.",
-            "family": "prism_hadamard_qwen35",
-            "approximate_size_bytes": 8595477990,
-            "approximate_memory_bytes": 9771050562,
-            "role": "chat",
-            "public": true,
-            "description": "A 27B dense ternary model folded into a 2-bit pack, with its float16 vision tower, so it reads pictures as well as text. Every rotated projection applies its Hadamard transform at run time, so the compressed weights serve full-precision-quality chat with 48 gated-delta layers and 16 full-attention layers.",
-            "capabilities": {
-                "supports_reasoning": true,
-                "supports_vision": true,
-                "supports_tool_calls": true,
-                "context_window": 262144
-            },
-            "quantization_label": "2-bit ternary affine (group 128) with folded Hadamard transforms",
-            "upstream_license": "Apache-2.0"
-        },
-        {
-            "huggingface_id": "nathansutton/Qwen3.8-27B-Ternary-Bonsai-2-DFlash2-MLX",
-            "revision": "234cc925d77cd94683e47b1493bd964917aaf43b",
-            "summary": "The same squeezed model, with its draft model built in. Text only.",
-            "family": "prism_hadamard_qwen35",
-            "approximate_size_bytes": 8840805938,
-            "approximate_memory_bytes": 9985798926,
-            "role": "chat",
-            "public": true,
-            "description": "A 27B dense ternary model folded into a 2-bit Hadamard pack, with a DFlash2 draft model of about 1.1 GB packed in. While the large model writes, the draft model guesses the next few words and the large model checks them all in one step, and every word is still the large model's own. Text only, built on Qwen 3.8 27B.",
-
-            "capabilities": {
-                "supports_reasoning": true,
-                "supports_tool_calls": true,
-                "context_window": 262144
-            },
-            "quantization_label": "2-bit ternary affine (group 128) with folded Hadamard transforms",
             "upstream_license": "Apache-2.0"
         },
         {
@@ -798,17 +612,108 @@
                 "context_window": 262144
             },
             "quantization_label": "2-bit ternary (group 128), f16 vision, 4-bit DFlash2 draft model",
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+            "revision": "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+            "summary": "A tiny model in about 1 GB that reads pictures.",
+            "family": "prism_hadamard_qwen35",
+            "approximate_size_bytes": 1213282532,
+            "approximate_memory_bytes": 1379218815,
+            "role": "chat",
+            "public": true,
+            "description": "Prism ML's Ternary Bonsai 2 2B, a Qwen 3.5 2B trained to work with three values in each weight, folded into a 2-bit pack with its vision tower. It reads pictures and text, reasons before answering, and calls tools. It fits on any Mac and answers very quickly; as a very small model it suits simple tasks, and on harder questions it can go back and forth before it answers.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "2-bit ternary (group 128) with Hadamard transforms, f16 vision",
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "prism-ml/Ternary-Bonsai-2-4B-mlx-2bit",
+            "revision": "dff2caaa23fa8706164c44c10f1b58feb405f76a",
+            "summary": "A 4B model in under 2 GB that reads pictures.",
+            "family": "prism_hadamard_qwen35",
+            "approximate_size_bytes": 1952309102,
+            "approximate_memory_bytes": 2142176508,
+            "role": "chat",
+            "public": true,
+            "description": "Prism ML's Ternary Bonsai 2 4B, a Qwen 3.5 4B trained to work with three values in each weight, folded into a 2-bit pack with its vision tower. It reads pictures and text, reasons before answering, and calls tools. It also ships a small prediction head that can guess the next word while the model writes; it is off by default because on general chat it does not speed this model up.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "2-bit ternary (group 128) with Hadamard transforms, f16 vision",
             "upstream_license": "Apache-2.0",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.135",
-                "tokens_per_second": {
-                    "essay_short_prompt": 35,
-                    "essay_long_prompt": 25,
-                    "code_short_prompt": 45,
-                    "code_long_prompt": 34
-                }
-            }
+            "included_paths": [
+                "LICENSE",
+                "NOTICE.txt",
+                "PACK-RUNTIME.md",
+                "README.md",
+                "MTP.md",
+                "chat_template.jinja",
+                "config.json",
+                "files.json",
+                "generation_config.json",
+                "hadamard.json",
+                "model.safetensors",
+                "mtp/",
+                "preprocessor_config.json",
+                "quickstart.py",
+                "reload-validation.json",
+                "runtime/",
+                "tokenizer-validation.json",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "video_preprocessor_config.json"
+            ]
+        },
+        {
+            "huggingface_id": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+            "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+            "summary": "A 9B model in under 4 GB that reads pictures.",
+            "family": "prism_hadamard_qwen35",
+            "approximate_size_bytes": 3612121878,
+            "approximate_memory_bytes": 3950528933,
+            "role": "chat",
+            "public": true,
+            "description": "Prism ML's Ternary Bonsai 2 9B, a Qwen 3.5 9B trained to work with three values in each weight, folded into a 2-bit pack with its vision tower. It reads pictures and text, reasons before answering, and calls tools, and it fits on a Mac with 8 GB of memory. It also ships a small prediction head that can guess the next word while the model writes; it is off by default because it does not speed this model up.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "2-bit ternary (group 128) with Hadamard transforms, f16 vision",
+            "upstream_license": "Apache-2.0",
+            "included_paths": [
+                "LICENSE",
+                "NOTICE.txt",
+                "PACK-RUNTIME.md",
+                "README.md",
+                "MTP.md",
+                "chat_template.jinja",
+                "config.json",
+                "files.json",
+                "generation_config.json",
+                "hadamard.json",
+                "model.safetensors",
+                "mtp/",
+                "preprocessor_config.json",
+                "quickstart.py",
+                "reload-validation.json",
+                "runtime/",
+                "tokenizer-validation.json",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "video_preprocessor_config.json"
+            ]
         },
         {
             "huggingface_id": "araysuter/Ornith-1.5-122B-MLX-mixed-2bit",
@@ -840,24 +745,14 @@
             "role": "chat",
             "public": true,
             "experimental": true,
-            "description": "Qwen 3.8 Flash-Next in a 4-bit build. It is far larger than a Mac's memory (about 105 GB on disk), so Astronomical keeps the parts in use in memory and reads the rest from the SSD as it works; it needs a fast internal SSD with that much room. It reasons before answering and calls tools. Text only for now: it does not read pictures yet, and its built-in draft model is not used yet. On an M5 Pro Mac with 48 GB and a 34 GB memory limit it wrote about 13 to 16 tokens a second.",
+            "description": "Qwen 3.8 Flash-Next in a 4-bit build. It is far larger than a Mac's memory (about 105 GB on disk), so Astronomical keeps the parts in use in memory and reads the rest from the SSD as it works; it needs a fast internal SSD with that much room. It reasons before answering and calls tools. Text only for now: it does not read pictures yet. Its built-in draft model guesses one word ahead while it writes.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
                 "context_window": 262144
             },
             "quantization_label": "4-bit affine (group 32)",
-            "upstream_license": "Other (see the Qwen/Qwen3.8-Flash-Next model card)",
-            "measured_speed": {
-                "measured_on": "Mac with an M5 Pro and 48 GB",
-                "astronomical_version": "0.2.134",
-                "tokens_per_second": {
-                    "essay_short_prompt": 15,
-                    "essay_long_prompt": 13,
-                    "code_short_prompt": 16,
-                    "code_long_prompt": 14
-                }
-            }
+            "upstream_license": "Other (see the Qwen/Qwen3.8-Flash-Next model card)"
         },
         {
             "huggingface_id": "mlx-community/Kokoro-82M-bf16",

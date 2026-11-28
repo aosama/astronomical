@@ -113,6 +113,12 @@
           </div>
         </footer>
         <!--
+          Astro's home continues below the message field: the ideas, the
+          follow-up area for model offers, and the privacy line
+          (src/astro/AstroHomeView.ts). Shown only while home is.
+        -->
+        <section id="astro-home-below" class="astro-home-below" data-testid="astro-home-below" hidden></section>
+        <!--
           Shown in place of the composer while messages are being picked for an
           export (src/MessagePicker.ts): how many are ticked, and the way back
           to the export sheet.

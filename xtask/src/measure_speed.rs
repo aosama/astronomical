@@ -1,6 +1,6 @@
 //! `cargo xtask measure-speed [--base-url URL] [--temperature T]
-//! [--measured-on TEXT] [--reference-set] [--write-ledger] [--write-catalog]
-//! [MODEL_ID...]` — measures how fast models reply on this Mac.
+//! [--reference-set] [--write-ledger] [MODEL_ID...]` — measures how fast
+//! models reply on this Mac.
 //!
 //! Each case loads its model with a warm-up request (about 500 tokens in, 50
 //! out), then measures four tasks (an essay and code, after a short prompt
@@ -13,8 +13,7 @@
 //! `registry/release_speed/reference_set.json`, setting each case's memory
 //! limit and restoring the engine's own afterwards. `--write-ledger` writes
 //! them into the release speed ledger of the engine's version, the one
-//! durable record of release speed; `--write-catalog` writes the cases
-//! measured at the Mac's own limit into `registry/download_catalog.json`.
+//! durable record of release speed. The catalog does not copy those figures.
 //!
 //! It runs against Development, never Stable, and refuses to start unless
 //! that engine has the `astro_ssd_prompt_cache` and the skill declaration
@@ -55,12 +54,12 @@ use engine_setup::{
     EngineBuild, engine_build_from_status, refuse_dirty_build_for_ledger,
     refuse_unless_set_up_for_measuring,
 };
-use measure_speed_options::{MeasureSpeedOptions, this_mac, this_mac_description};
+use measure_speed_options::{MeasureSpeedOptions, this_mac};
 use measured_case::MeasuredCase;
 use measurement_cases::{
     MeasurementCase, MemoryLimitRequest, measurement_cases, refuse_unless_served_as_requested,
 };
-use speed_catalog::{MeasurementPlace, catalog_identity, write_measured_speed};
+use speed_catalog::catalog_identity;
 use speed_progress::SpeedProgress;
 use speed_prompts::{SpeedPrompts, SpeedTask};
 use speed_rounds::ModelSpeedRounds;
@@ -342,31 +341,17 @@ fn write_results(
     engine_build: &EngineBuild,
     measured_cases: &[MeasuredCase],
 ) -> Result<(), String> {
+    if !measure_speed_options.should_write_ledger {
+        return Ok(());
+    }
     let catalog_path = repository_root.join(CATALOG_PATH);
     let catalog_text = std::fs::read_to_string(&catalog_path)
         .map_err(|read_error| format!("could not read {}: {read_error}", catalog_path.display()))?;
-    if measure_speed_options.should_write_ledger {
-        let ledger_file = write_ledger(
-            repository_root,
-            release_ledger(engine_build, measured_cases, &catalog_text),
-        )?;
-        println!("{STATUS_PREFIX} wrote ledger={}", ledger_file.display());
-    }
-    if measure_speed_options.should_write_catalog {
-        let measured_on = measure_speed_options
-            .measured_on
-            .clone()
-            .unwrap_or_else(this_mac_description);
-        let measurement_place = MeasurementPlace {
-            measured_on: &measured_on,
-            astronomical_version: &engine_build.version,
-        };
-        let updated_catalog_text =
-            catalog_with_measured_speeds(catalog_text, measured_cases, &measurement_place)?;
-        std::fs::write(&catalog_path, updated_catalog_text).map_err(|write_error| {
-            format!("could not write {}: {write_error}", catalog_path.display())
-        })?;
-    }
+    let ledger_file = write_ledger(
+        repository_root,
+        release_ledger(engine_build, measured_cases, &catalog_text),
+    )?;
+    println!("{STATUS_PREFIX} wrote ledger={}", ledger_file.display());
     Ok(())
 }
 
@@ -388,45 +373,6 @@ fn release_ledger(
         machine: this_mac(),
         measurements: ledger_measurements,
     }
-}
-
-/// Writes every case measured at the Mac's own memory limit with all four
-/// tasks; a case under a lowered limit, a model the catalog does not list, or
-/// one missing rounds is reported and skipped.
-fn catalog_with_measured_speeds(
-    mut catalog_text: String,
-    measured_cases: &[MeasuredCase],
-    measurement_place: &MeasurementPlace<'_>,
-) -> Result<String, String> {
-    for measured_case in measured_cases {
-        let model_id = &measured_case.model_id;
-        if measured_case
-            .served_conditions
-            .maximum_mlx_memory_gb
-            .is_some()
-        {
-            println!(
-                "{STATUS_PREFIX} skipped-catalog model={model_id} reason=lowered-memory-limit"
-            );
-            continue;
-        }
-        let Some(task_medians) = measured_case.speed_rounds.medians() else {
-            println!("{STATUS_PREFIX} skipped-catalog model={model_id} reason=missing-rounds");
-            continue;
-        };
-        let Some(catalog_identity) = catalog_identity(&catalog_text, model_id) else {
-            println!("{STATUS_PREFIX} skipped-catalog model={model_id} reason=not-in-catalog");
-            continue;
-        };
-        catalog_text = write_measured_speed(
-            &catalog_text,
-            &catalog_identity.huggingface_id,
-            &task_medians,
-            measurement_place,
-        )?;
-        println!("{STATUS_PREFIX} wrote-catalog model={model_id}");
-    }
-    Ok(catalog_text)
 }
 
 /// Today's date in UTC, as `2026-11-26`.

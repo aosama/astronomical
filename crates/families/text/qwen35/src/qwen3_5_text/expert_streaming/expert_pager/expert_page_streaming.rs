@@ -52,10 +52,16 @@ impl Qwen3_5ExpertPager {
             request_shape.route_token_count,
             self.decode_tokens_multiply_packed_pages(),
         )?;
+        let page_admission_label = streamed_page_admission_label(
+            layer_index,
+            expert_ids.len(),
+            request_shape.route_token_count,
+            serving_phase,
+        );
         require_streamed_page_admission(
             runtime,
             self,
-            layer_index,
+            (&page_admission_label, serving_phase),
             pending_page_allocation_bytes,
             performance_attribution,
         )?;
@@ -103,6 +109,33 @@ impl Qwen3_5ExpertPager {
             page_manifest.payload_byte_count,
         );
         Ok((streamed_weights, page_manifest))
+    }
+
+    /// Refuses this page once when a test armed the refusal and a reply is
+    /// being written. Worded as admission words a page one byte short, so
+    /// the engine treats it as it treats the real refusal.
+    fn refuse_armed_reply_page_once(
+        &self,
+        serving_phase: SessionStreamingPhase,
+        page_admission_label: &str,
+        pending_page_allocation_bytes: u64,
+    ) -> Result<(), ExpertPagingError> {
+        if !matches!(serving_phase, SessionStreamingPhase::Decode)
+            || !self.reply_page_refusal_armed_for_tests.replace(false)
+        {
+            return Ok(());
+        }
+        let active_memory_ceiling_bytes = self.memory_budget.active_memory_ceiling_bytes();
+        Err(ExpertPagingError::MemoryBudget(
+            crate::MlxAllocationAdmissionError::Rejected {
+                stage: format!("{page_admission_label} refused by a test"),
+                boundary: engine_core::memory::MemoryBoundary::AllocationProjection,
+                shortfall_bytes: 1,
+                active_memory_bytes: active_memory_ceiling_bytes,
+                pending_allocation_bytes: pending_page_allocation_bytes,
+                active_memory_ceiling_bytes,
+            },
+        ))
     }
 
     /// Records one loaded page in both ledgers and in the phase-scoped
@@ -212,14 +245,52 @@ fn pending_streamed_page_allocation_bytes(
     })
 }
 
+/// Pure: names a streamed page in its admission decision. A refusal reads
+/// "rust_streamed_expert_layer_9 (126 experts, 4 routed tokens, Decode)", so
+/// the page that did not fit can be told apart from a single token's page
+/// without rerunning the request under a debugger.
+pub(crate) fn streamed_page_admission_label(
+    layer_index: usize,
+    page_expert_count: usize,
+    route_token_count: i32,
+    serving_phase: SessionStreamingPhase,
+) -> String {
+    format!(
+        "rust_streamed_expert_layer_{layer_index} ({page_expert_count} experts, {route_token_count} routed tokens, {serving_phase:?})"
+    )
+}
+
+/// Admits one streamed page, after the refusal a test may have armed for
+/// the next page of a reply.
+fn require_streamed_page_admission(
+    runtime: &runtime_integration::MlxRuntime,
+    expert_pager: &Qwen3_5ExpertPager,
+    (page_admission_label, serving_phase): (&str, SessionStreamingPhase),
+    pending_page_allocation_bytes: u64,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<(), ExpertPagingError> {
+    expert_pager.refuse_armed_reply_page_once(
+        serving_phase,
+        page_admission_label,
+        pending_page_allocation_bytes,
+    )?;
+    require_page_fits_live_memory(
+        runtime,
+        expert_pager,
+        page_admission_label,
+        pending_page_allocation_bytes,
+        performance_attribution,
+    )
+}
+
 /// Admission must happen before opening/loading source ranges. It checks the
 /// exact payload against current active memory and the shared ceiling; forward
 /// admission has already reclaimed experts for persistent and transient
 /// growth. Loading first would spend I/O on an unusable page.
-fn require_streamed_page_admission(
+fn require_page_fits_live_memory(
     runtime: &runtime_integration::MlxRuntime,
     expert_pager: &Qwen3_5ExpertPager,
-    layer_index: usize,
+    page_admission_label: &str,
     pending_page_allocation_bytes: u64,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(), ExpertPagingError> {
@@ -228,7 +299,7 @@ fn require_streamed_page_admission(
         |_performance_attribution| {
             expert_pager.memory_budget.require_admission(
                 runtime,
-                &format!("rust_streamed_expert_layer_{layer_index}"),
+                page_admission_label,
                 pending_page_allocation_bytes,
             )
         },
@@ -247,7 +318,7 @@ fn require_streamed_page_admission(
         |_performance_attribution| {
             expert_pager.memory_budget.require_admission(
                 runtime,
-                &format!("rust_streamed_expert_layer_{layer_index}_after_cleanup"),
+                &format!("{page_admission_label} after cleanup"),
                 pending_page_allocation_bytes,
             )
         },

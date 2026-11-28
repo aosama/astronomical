@@ -4,10 +4,9 @@ use crate::protocol_round_trip_test_support::assert_command_round_trips;
 use std::path::PathBuf;
 
 use crate::{
-    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerCommand,
-    WorkerDecodeAstroExpertCachePolicy, WorkerImageGenerationModelConfiguration,
-    WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel, WorkerModelConfiguration,
-    WorkerStartupConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerCommand, WorkerDecodeAstroExpertCachePolicy,
+    WorkerImageGenerationModelConfiguration, WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel,
+    WorkerModelConfiguration, WorkerStartupConfiguration,
 };
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -58,18 +57,10 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
                 model_id: "organization/target".to_owned(),
                 maximum_context_tokens: 32_768,
                 maximum_output_tokens: 4_096,
-                chunking: WorkerChunkingConfiguration {
-                    fixed_prompt_processing_chunk_size_tokens: 4_096,
-                    fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
-                    full_attention_key_value_growth_tokens: 256,
-                    prefill_graph_submission_layer_interval: 0,
-                    experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-                    ssd_prompt_cache_block_tokens: None,
-                    ssd_prompt_cache_common_prefix_stride_blocks: 4,
-                    experimental_in_memory_prefix_adoption_enabled: false,
-                    experimental_neural_engine_prefill_enabled: false,
-                    multi_token_prediction_draft_tokens: None,
-                },
+                chunking: crate::worker_chunking_test_support::worker_chunking_with_prompt_chunks(
+                    Some(4_096),
+                    256,
+                ),
             },
         ),
     };
@@ -83,18 +74,10 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
             model_id: "organization/target".to_owned(),
             maximum_context_tokens: 32_768,
             maximum_output_tokens: 4_096,
-            chunking: WorkerChunkingConfiguration {
-                fixed_prompt_processing_chunk_size_tokens: 4_096,
-                fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
-                full_attention_key_value_growth_tokens: 256,
-                prefill_graph_submission_layer_interval: 0,
-                experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-                ssd_prompt_cache_block_tokens: None,
-                ssd_prompt_cache_common_prefix_stride_blocks: 4,
-                experimental_in_memory_prefix_adoption_enabled: false,
-                experimental_neural_engine_prefill_enabled: false,
-                multi_token_prediction_draft_tokens: None,
-            },
+            chunking: crate::worker_chunking_test_support::worker_chunking_with_prompt_chunks(
+                Some(4_096),
+                2_048,
+            ),
         });
 
     let serialized_configuration =
@@ -109,7 +92,7 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
                 "maximum_context_tokens": 32_768,
                 "maximum_output_tokens": 4_096,
                 "chunking": {
-                    "fixed_prompt_processing_chunk_size_tokens": 4_096,
+                    "prompt_processing_chunk_size_tokens": 4_096,
                     "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2_048,
                     "full_attention_key_value_growth_tokens": 256,
                     "prefill_graph_submission_layer_interval": 0,

@@ -5,6 +5,9 @@ mod artifact_inventory;
 mod artifact_public_reason_tests;
 pub mod atlas_artifact;
 pub mod atlas_expert_layer_plans;
+pub mod dense_mtp_head_sidecar;
+#[cfg(test)]
+pub(crate) mod dense_mtp_head_test_support;
 #[cfg(feature = "direct-mlx")]
 pub mod expert_gate_up_fusion_plan;
 mod folded_ternary_artifact;

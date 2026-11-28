@@ -35,20 +35,13 @@ const FLUX_STATUS_FIXTURE: &str = include_str!(
 );
 
 /// The prompt chunk defaults of the Metal build, which the menu app's fixtures
-/// record. Non-macOS builds default to smaller chunks (see
-/// `config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS`).
-const METAL_BUILD_CHUNK_DEFAULTS: [(&str, u32, u32); 2] = [
-    (
-        "fixed_prompt_processing_chunk_size_tokens",
-        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-        2_048,
-    ),
-    (
-        "fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
-        config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-        4_096,
-    ),
-];
+/// record. Non-macOS builds default to a smaller SSD streaming chunk; the
+/// in-memory chunk has no fixed default, because the engine picks it.
+const METAL_BUILD_CHUNK_DEFAULTS: [(&str, u32, u32); 1] = [(
+    "fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
+    config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+    4_096,
+)];
 
 /// The macOS defaults are the Metal build's, which the fixtures record; a
 /// change to either fails here and in the contracts below.

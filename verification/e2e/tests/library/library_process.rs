@@ -227,7 +227,7 @@ fn write_instance_config_with_performance_attribution(state_directory: &Path) {
     // lifecycle assertion budget.
     std::fs::write(
         state_directory.join("config.json"),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"maximum_mlx_memory_gb":2},"chunking":{"fixed_prompt_processing_chunk_size_tokens":2048},"diagnostics":{"performance_attribution_enabled":true}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"maximum_mlx_memory_gb":2},"chunking":{"prompt_processing_chunk_size_tokens":2048},"diagnostics":{"performance_attribution_enabled":true}}"#,
     )
     .expect("instance config with performance attribution should be written");
 }

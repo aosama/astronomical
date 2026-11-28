@@ -11,11 +11,8 @@
 //! Reordering those steps can expose half-written state, break ancestry, or
 //! delete the only restorable boundary during an interrupted publication.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use runtime_integration::MlxRuntime;
 
 use model_primitives::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
@@ -33,17 +30,16 @@ use super::disk_store_file::{
     save_direct_safetensors_file_with_name, synchronize_directory,
 };
 use super::disk_store_index::{TrackedAstroSsdPromptCacheBlock, TrackedAstroSsdPromptCacheFile};
+use super::host_state_tensor::AstroSsdPromptCacheHostTensors;
 use super::retention_policy;
-use mlx_bridge::MlxArray;
 
 impl AstroSsdPromptCacheDiskStore {
     pub(super) fn publish_new_block_transaction(
         &self,
-        runtime: &MlxRuntime,
         block_key: &AstroSsdPromptCacheBlockKey,
         parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
-        sequence_state_tensors: &HashMap<String, MlxArray>,
-        boundary_state_tensors: &HashMap<String, MlxArray>,
+        sequence_state_tensors: &AstroSsdPromptCacheHostTensors,
+        boundary_state_tensors: &AstroSsdPromptCacheHostTensors,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
         // The final name is deterministic, but staging must be unique so a
@@ -54,7 +50,6 @@ impl AstroSsdPromptCacheDiskStore {
             unique_staging_block_directory(&self.blocks_directory, &block_directory_name);
 
         let staged_files = self.stage_and_admit_block(
-            runtime,
             block_key,
             parent_block_key,
             sequence_state_tensors,
@@ -106,18 +101,16 @@ impl AstroSsdPromptCacheDiskStore {
     #[allow(clippy::too_many_arguments)]
     fn stage_and_admit_block(
         &self,
-        runtime: &MlxRuntime,
         block_key: &AstroSsdPromptCacheBlockKey,
         parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
-        sequence_state_tensors: &HashMap<String, MlxArray>,
-        boundary_state_tensors: &HashMap<String, MlxArray>,
+        sequence_state_tensors: &AstroSsdPromptCacheHostTensors,
+        boundary_state_tensors: &AstroSsdPromptCacheHostTensors,
         performance_attribution: &mut PerformanceAttribution,
         staging_block_directory: &Path,
         final_block_directory: &Path,
     ) -> Result<StagedBlockFiles, AstroSsdPromptCacheDiskStoreError> {
         create_staging_directory(staging_block_directory)?;
         let staged_files = match self.stage_complete_block(
-            runtime,
             block_key,
             parent_block_key,
             sequence_state_tensors,
@@ -225,11 +218,10 @@ impl AstroSsdPromptCacheDiskStore {
     #[allow(clippy::too_many_arguments)]
     fn stage_complete_block(
         &self,
-        runtime: &MlxRuntime,
         block_key: &AstroSsdPromptCacheBlockKey,
         parent_block_key: Option<&AstroSsdPromptCacheBlockKey>,
-        sequence_state_tensors: &HashMap<String, MlxArray>,
-        boundary_state_tensors: &HashMap<String, MlxArray>,
+        sequence_state_tensors: &AstroSsdPromptCacheHostTensors,
+        boundary_state_tensors: &AstroSsdPromptCacheHostTensors,
         performance_attribution: &mut PerformanceAttribution,
         staging_block_directory: &Path,
     ) -> Result<StagedBlockFiles, AstroSsdPromptCacheDiskStoreError> {
@@ -238,7 +230,6 @@ impl AstroSsdPromptCacheDiskStore {
         // complete while carrying no restorable model state.
         let sequence_state_file = if self.model_contract.has_sequence_state() {
             let staged_sequence_state = save_direct_safetensors_file_with_name(
-                runtime,
                 staging_block_directory,
                 SEQUENCE_STATE_FILE_NAME,
                 sequence_state_tensors,
@@ -257,7 +248,6 @@ impl AstroSsdPromptCacheDiskStore {
         };
         let boundary_state_file = if self.model_contract.has_boundary_state() {
             let staged_boundary_state = save_direct_safetensors_file_with_name(
-                runtime,
                 staging_block_directory,
                 BOUNDARY_STATE_FILE_NAME,
                 boundary_state_tensors,

@@ -57,6 +57,7 @@ pub struct HadamardContract {
     rotated_tensor_names: BTreeSet<String>,
     inverse_tensor_names: BTreeSet<String>,
     sign_vectors_by_width: BTreeMap<u32, Vec<i8>>,
+    has_tied_output: bool,
 }
 
 impl HadamardContract {
@@ -138,7 +139,15 @@ impl HadamardContract {
             rotated_tensor_names,
             inverse_tensor_names,
             sign_vectors_by_width,
+            has_tied_output: document.tied_output,
         })
+    }
+
+    /// Whether the sign table says the output head is the embedding table,
+    /// whose codes then also serve the head with the hidden width's
+    /// forward rotation.
+    pub const fn has_tied_output(&self) -> bool {
+        self.has_tied_output
     }
 
     /// The validated Hadamard block size in activation elements.
@@ -379,4 +388,8 @@ struct HadamardContractDocument {
     sign_values: Vec<serde_json::Number>,
     #[serde(rename = "prism.hadamard.gdn_v_grouped")]
     gdn_v_grouped: bool,
+    // Written only by packs whose head is the embedding table; absence
+    // means a head of its own.
+    #[serde(rename = "prism.hadamard.tied_output", default)]
+    tied_output: bool,
 }

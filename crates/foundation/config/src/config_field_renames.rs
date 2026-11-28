@@ -38,6 +38,8 @@ pub(crate) fn rename_renamed_config_fields(config_json: &mut Value) -> bool {
             &mut renamed_field_names,
         );
         rename_chunking_fields(root_object, "chunking", &mut renamed_field_names);
+        renamed_field_names
+            .extend(crate::in_memory_chunk_setting_move::move_in_memory_chunk_setting(root_object));
         if let Some(models) = root_object.get_mut("models").and_then(Value::as_object_mut) {
             for (model_id, model_config) in models.iter_mut() {
                 if let Some(model_object) = model_config.as_object_mut() {

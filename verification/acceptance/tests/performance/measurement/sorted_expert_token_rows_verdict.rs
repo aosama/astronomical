@@ -35,12 +35,11 @@ use serial_test::serial;
 
 use super::k_row_verify_cost::initialize_runtime;
 use super::sorted_expert_matmul_verdict::{
-    EXPERTS_A_TOKEN, PROMPT_TOKENS, QUANTIZATION_BITS, QuantizedExperts, quantized_experts,
-    routed_expert_ids,
+    EXPERTS_A_TOKEN, PROMPT_TOKENS, QuantizedExperts, quantized_experts, routed_expert_ids,
 };
 use super::verdict_text::metric_text;
 use crate::sorted_expert_fixtures::{
-    QUANTIZATION_GROUP_SIZE, mismatched_values, stable_expert_sort,
+    mismatched_values, mlx_sorted_gather_qmm, uploaded_stable_routing,
 };
 
 const INPUT_WIDTH: i32 = 2_048;
@@ -123,20 +122,12 @@ impl TokenRowsFixture<'_> {
         sorted_rows: &MlxArray,
         experts: &QuantizedExperts,
     ) -> Result<MlxArray, String> {
-        self.runtime
-            .gather_quantized_matmul_affine(
-                sorted_rows,
-                &experts.0,
-                &experts.1,
-                &experts.2,
-                None,
-                Some(&self.sorted_expert_ids),
-                true,
-                QUANTIZATION_GROUP_SIZE,
-                QUANTIZATION_BITS,
-                true,
-            )
-            .map_err(|gather_error| gather_error.to_string())
+        Ok(mlx_sorted_gather_qmm(
+            self.runtime,
+            sorted_rows,
+            experts,
+            (&self.sorted_expert_ids, 4),
+        ))
     }
 
     fn token_rows_projection(&self, experts: &QuantizedExperts) -> Result<MlxArray, String> {
@@ -239,19 +230,7 @@ fn token_rows_fixture<'fixture>(
 /// order of the flat expert ids, each sorted assignment's token, and its
 /// expert.
 fn sorted_routing(runtime: &MlxRuntime) -> (MlxArray, MlxArray, MlxArray) {
-    let (sorted_order, sorted_token_indices, sorted_expert_ids) =
-        stable_expert_sort(&routed_expert_ids(), EXPERTS_A_TOKEN);
-    let assignment_count = sorted_order.len() as i32;
-    let upload = |values: &[i32]| {
-        runtime
-            .array_from_i32(values, &[assignment_count])
-            .expect("the routing uploads")
-    };
-    let routing = (
-        upload(&sorted_order),
-        upload(&sorted_token_indices),
-        upload(&sorted_expert_ids),
-    );
+    let routing = uploaded_stable_routing(runtime, &routed_expert_ids(), EXPERTS_A_TOKEN);
     runtime
         .evaluate_arrays(&[&routing.0, &routing.1, &routing.2])
         .expect("the routing evaluates");

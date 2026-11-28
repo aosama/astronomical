@@ -23,6 +23,7 @@ mod dense_layer_register_order;
 mod dense_layer_residency;
 #[cfg(feature = "direct-mlx")]
 pub mod dense_layer_streamer;
+mod dense_mtp_head;
 #[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
@@ -38,6 +39,7 @@ mod expert_reuse_union_offer;
 #[cfg(feature = "direct-mlx")]
 mod expert_storage_streaming;
 mod expert_streaming_stats;
+mod flash_next_mtp_head;
 #[cfg(feature = "direct-mlx")]
 mod forward_layer_weights;
 mod lane_mixing_decoder_layer;
@@ -57,9 +59,11 @@ pub mod layer_probe_shape;
 pub mod layer_submission;
 pub mod memory_governance;
 mod mlx_buffer_cache_bound;
+mod model_memory_shape;
 pub mod mtp_drafting;
 pub mod mtp_head;
 mod neural_engine_host;
+mod reply_forward_memory_redo;
 mod tree_verification_forward;
 // Holds one streamed layer for every span of a layer-at-a-time prompt.
 pub mod held_prompt_expert_layer;
@@ -125,6 +129,7 @@ mod seat_planned_complete_layers;
 mod streamed_expert_assignment_steps;
 pub mod streaming_model;
 mod system_wired_governance;
+mod tiled_routed_experts;
 mod token_row_gate_up;
 mod whole_model_holding;
 

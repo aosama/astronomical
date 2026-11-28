@@ -1,11 +1,7 @@
-use crate::astro_decoder_state_cache::{
-    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
-    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
-};
-
 use super::AstroSsdPromptCacheBlockKey;
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::astro_ssd_prompt_cache::model_contract::AstroSsdPromptCacheModelContract;
+use crate::astro_ssd_prompt_cache::synthetic_contract_test_support::synthetic_attention_model_contract;
 
 #[test]
 fn should_chain_blocks_under_the_resolved_storage_contract() {
@@ -121,33 +117,5 @@ fn synthetic_model_contract(
     model_revision: &str,
     attention_capacity_growth_tokens: usize,
 ) -> AstroSsdPromptCacheModelContract {
-    let astro_decoder_state_cache_layout = AstroDecoderStateCacheLayout::new(vec![
-        AstroDecoderStateCacheLayerLayout::append_only_attention(
-            AstroDecoderStateCacheTensorLayout::sequence(
-                "attention.keys",
-                AstroDecoderStateCacheTensorDtype::Float16,
-                vec![1, 0, 2],
-                1,
-            ),
-            AstroDecoderStateCacheTensorLayout::sequence(
-                "attention.values",
-                AstroDecoderStateCacheTensorDtype::Float16,
-                vec![1, 0, 2],
-                1,
-            ),
-            attention_capacity_growth_tokens,
-        ),
-    ])
-    .expect("the synthetic sequence layout should be valid");
-    AstroSsdPromptCacheModelContract::resolve(
-        model_id.to_owned(),
-        model_revision.to_owned(),
-        astro_decoder_state_cache_layout,
-        128,
-        1_000_000,
-        1_000_000,
-        None,
-        4,
-    )
-    .expect("the synthetic storage contract should resolve")
+    synthetic_attention_model_contract(model_id, model_revision, attention_capacity_growth_tokens)
 }

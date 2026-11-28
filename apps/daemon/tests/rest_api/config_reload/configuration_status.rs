@@ -129,7 +129,7 @@ fn configured_policy_catalog(
             configured_maximum_context_tokens: Some(16_384),
             default_maximum_context_tokens: 32_768,
             configured_chunking_fields: config::ConfiguredChunkingFields {
-                fixed_prompt_processing_chunk_size_tokens: true,
+                prompt_processing_chunk_size_tokens: true,
                 ..Default::default()
             },
             worker_model_configuration: configured_worker_model_configuration,
@@ -145,7 +145,7 @@ fn assert_ready_model_summary_separates_configured_from_default_values(
         0.7
     );
     assert_eq!(
-        status_document["configuration"]["ready_model"]["chunking"]["fixed_prompt_processing_chunk_size_tokens"]
+        status_document["configuration"]["ready_model"]["chunking"]["prompt_processing_chunk_size_tokens"]
             ["configured"],
         2_048
     );
@@ -167,7 +167,7 @@ fn worker_model_configuration() -> WorkerModelConfiguration {
         maximum_context_tokens: 16_384,
         maximum_output_tokens: 4_096,
         chunking: WorkerChunkingConfiguration {
-            fixed_prompt_processing_chunk_size_tokens: 2_048,
+            prompt_processing_chunk_size_tokens: Some(2_048),
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
             full_attention_key_value_growth_tokens: 256,
             prefill_graph_submission_layer_interval: 0,

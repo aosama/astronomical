@@ -79,6 +79,15 @@ fn should_list_the_same_links_in_the_header_and_the_footer() {
 }
 
 #[test]
+fn should_offer_the_download_in_the_header_and_not_in_the_footer() {
+    let header_markup = render_site_header("reports/opencode-plugin/index.html", "");
+    let footer_markup = render_site_footer("reports/opencode-plugin/index.html", "");
+    assert_eq!(header_markup.matches("data-latest-disk-image").count(), 1);
+    assert!(header_markup.contains("https://github.com/aosama/astronomical/releases/latest"));
+    assert!(!footer_markup.contains("data-latest-disk-image"));
+}
+
+#[test]
 fn should_point_site_links_up_two_folders_from_a_page_two_folders_deep() {
     let report_header = render_site_header("reports/memory-ceiling-throughput/index.html", "");
     assert!(report_header.contains("href=\"../../models.html\""));

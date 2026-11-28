@@ -203,6 +203,34 @@ test("should_describe_each_neural_engine_state_in_words", () => {
         /Enabled but not running: only dense models are supported/);
 });
 
+test("should_say_which_prompt_chunk_is_in_use_and_why", () => {
+    assert.equal(call("promptProcessingChunkStatusMessage", null), "");
+    assert.equal(call("promptProcessingChunkStatusMessage",
+        { chunk_tokens: 4096, reason: "expert_model_on_m5_or_newer" }),
+        "In use now: 4,096 tokens, Automatic picked it because this model has experts and this Mac has an M5 chip or newer.");
+    assert.match(call("promptProcessingChunkStatusMessage", { chunk_tokens: 1024, reason: "configured" }),
+        /^In use now: 1,024 tokens, the size set here\.$/);
+    assert.match(call("promptProcessingChunkStatusMessage", { chunk_tokens: 2048, reason: "model_without_experts" }),
+        /2,048 tokens.*models without experts/);
+    assert.match(call("promptProcessingChunkStatusMessage", { chunk_tokens: 2048, reason: "gpu_older_than_m5" }),
+        /2,048 tokens.*M5 chip or newer/);
+    assert.match(call("promptProcessingChunkStatusMessage", { chunk_tokens: 4096, reason: "ssd_streaming" }),
+        /^Not in use now: .*SSD.*4,096 tokens/);
+});
+
+test("should_fall_back_to_plain_words_for_a_prompt_chunk_reason_it_does_not_know", () => {
+    assert.equal(call("promptProcessingChunkStatusMessage", { chunk_tokens: 512, reason: "something_new" }),
+        "In use now: 512 tokens, the engine picked it.");
+});
+
+test("should_offer_the_prompt_chunk_as_automatic_or_a_number_with_the_m5_advice", () => {
+    const chunkDescriptor = descriptorAt(["chunking", "prompt_processing_chunk_size_tokens"]);
+    assert.equal(chunkDescriptor.kind, "nullable_integer");
+    assert.equal(chunkDescriptor.defaultValue, null);
+    assert.equal(chunkDescriptor.minimum, 1);
+    assert.match(chunkDescriptor.advice, /M5 chip or newer, keep this at 4,096/);
+});
+
 test("should_never_write_markup_from_configuration_values", () => {
     for (const scriptName of ["configuration.js", "configuration-controls.js", "configuration-pages.js", "configuration-layout.js"]) {
         const pageScript = fs.readFileSync(path.join(__dirname, scriptName), "utf8");

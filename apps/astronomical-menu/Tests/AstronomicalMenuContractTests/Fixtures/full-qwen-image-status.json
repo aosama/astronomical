@@ -37,9 +37,10 @@
           "default": 3,
           "effective": null
         },
-        "fixed_prompt_processing_chunk_size_tokens": {
+        "prompt_processing_chunk_size_tokens": {
+          "is_configured": false,
           "configured": null,
-          "default": 2048,
+          "default": null,
           "effective": null
         },
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": {

@@ -151,48 +151,12 @@ struct LibraryCatalogEntryResponse {
     build_of: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     build_difference: Option<&'static str>,
-    /// Reply speeds measured on a named Mac; absent for an unmeasured entry.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    measured_speed: Option<LibraryCatalogMeasuredSpeedResponse>,
     /// `dflash` or `dflash2` when the copy on this Mac carries a draft model
     /// in its own `drafter` folder; read from the folder, so a copy without
     /// one says nothing even when the catalog entry ships one.
     #[serde(skip_serializing_if = "Option::is_none")]
     bundled_drafter: Option<ipc_protocol::DraftModelGeneration>,
     capabilities: LibraryCatalogCapabilitiesResponse,
-}
-
-#[derive(Debug, Serialize)]
-struct LibraryCatalogMeasuredSpeedResponse {
-    measured_on: String,
-    astronomical_version: String,
-    tokens_per_second: LibraryCatalogTaskSpeedsResponse,
-}
-
-#[derive(Debug, Serialize)]
-struct LibraryCatalogTaskSpeedsResponse {
-    essay_short_prompt: u16,
-    essay_long_prompt: u16,
-    code_short_prompt: u16,
-    code_long_prompt: u16,
-}
-
-impl LibraryCatalogMeasuredSpeedResponse {
-    fn from_measured_speed(
-        measured_speed: &download_catalog::DownloadCatalogMeasuredSpeed,
-    ) -> Self {
-        let task_speeds = measured_speed.tokens_per_second();
-        Self {
-            measured_on: measured_speed.measured_on().to_owned(),
-            astronomical_version: measured_speed.astronomical_version().to_owned(),
-            tokens_per_second: LibraryCatalogTaskSpeedsResponse {
-                essay_short_prompt: task_speeds.essay_short_prompt,
-                essay_long_prompt: task_speeds.essay_long_prompt,
-                code_short_prompt: task_speeds.code_short_prompt,
-                code_long_prompt: task_speeds.code_long_prompt,
-            },
-        }
-    }
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -243,9 +207,6 @@ impl LibraryCatalogEntryResponse {
             requestable_model_id: projection.requestable_model_id.clone(),
             build_of: build.map(|catalog_build| catalog_build.lead_model_id().to_owned()),
             build_difference: build.map(|catalog_build| catalog_build.difference().as_str()),
-            measured_speed: catalog_entry
-                .measured_speed()
-                .map(LibraryCatalogMeasuredSpeedResponse::from_measured_speed),
             // A metadata call and a read of a few-kilobyte file per model on
             // this Mac, served from the `macos_file_cache`, inline for the same
             // reason `is_removable_from_disk` reads inline: cheaper than a

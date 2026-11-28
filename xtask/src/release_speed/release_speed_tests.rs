@@ -32,7 +32,7 @@ fn should_refuse_a_missing_ledger_a_missing_value_or_an_unknown_argument() {
         vec!["--previous", "0.2.134"],
         vec!["--previous", "0.2.134", "--current"],
         vec!["--previous", "0.2.134", "--current", "0.2.135", "--all"],
-        vec!["--check-catalog", "--previous", "0.2.134"],
+        vec!["--check-catalog"],
     ] {
         assert!(
             parse_command(&arguments(&refused_arguments)).is_err(),
@@ -62,10 +62,6 @@ fn should_compare_the_two_newest_ledgers_when_none_is_named() {
         Ok(ReleaseSpeedCommand::Table {
             ledger_references: None
         })
-    );
-    assert_eq!(
-        parse_command(&arguments(&["--check-catalog"])),
-        Ok(ReleaseSpeedCommand::CheckCatalog)
     );
     let repository_root = tempfile::tempdir().expect("a temporary repository");
     assert!(

@@ -12,8 +12,8 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
           "schema_version":1,
           "runtime":{"model_directories":[],"maximum_mlx_memory_gb":16},
           "ssd_prompt_cache":{"enabled":false,"maximum_size_gb":20},
-          "chunking":{"fixed_prompt_processing_chunk_size_tokens":2048,"full_attention_key_value_growth_tokens":256},
-          "models":{"organization/target":{"limits":{"maximum_context_tokens":32768},"generation_defaults":{"temperature":0.7,"top_p":0.9,"maximum_output_tokens":4096},"chunking":{"fixed_prompt_processing_chunk_size_tokens":4096}}},
+          "chunking":{"prompt_processing_chunk_size_tokens":2048,"full_attention_key_value_growth_tokens":256},
+          "models":{"organization/target":{"limits":{"maximum_context_tokens":32768},"generation_defaults":{"temperature":0.7,"top_p":0.9,"maximum_output_tokens":4096},"chunking":{"prompt_processing_chunk_size_tokens":4096}}},
           "diagnostics":{"performance_attribution_enabled":true,"log_level":"debug","retained_log_files":3}
         }"#,
     );
@@ -32,8 +32,8 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
     assert_eq!(
         model_config
             .chunking()
-            .fixed_prompt_processing_chunk_size_tokens(),
-        4_096
+            .prompt_processing_chunk_size_tokens(),
+        Some(4_096)
     );
     assert_eq!(
         model_config
@@ -70,7 +70,7 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     write_config(
         temporary_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"chunking":{"fixed_prompt_processing_chunk_size_tokens":6144,"ssd_prompt_cache_block_tokens":1024},"models":{"target":{"chunking":{"full_attention_key_value_growth_tokens":512,"ssd_prompt_cache_block_tokens":null}}}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"chunking":{"prompt_processing_chunk_size_tokens":6144,"ssd_prompt_cache_block_tokens":1024},"models":{"target":{"chunking":{"full_attention_key_value_growth_tokens":512,"ssd_prompt_cache_block_tokens":null}}}}"#,
     );
     let astronomical_config =
         AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
@@ -89,8 +89,8 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
     assert_eq!(
         configured_model
             .chunking()
-            .fixed_prompt_processing_chunk_size_tokens(),
-        6_144
+            .prompt_processing_chunk_size_tokens(),
+        Some(6_144)
     );
     assert_eq!(
         configured_model
@@ -298,13 +298,13 @@ fn should_ignore_the_speculative_decoding_block_length_at_both_levels() {
           "runtime":{"model_directories":[],"maximum_mlx_memory_gb":16},
           "chunking": {
             "speculative_decoding_block_length_tokens": 8,
-            "fixed_prompt_processing_chunk_size_tokens": 2048
+            "prompt_processing_chunk_size_tokens": 2048
           },
           "models": {
             "organization/target": {
               "chunking": {
                 "speculative_decoding_block_length_tokens": 4,
-                "fixed_prompt_processing_chunk_size_tokens": 4096
+                "prompt_processing_chunk_size_tokens": 4096
               }
             }
           }
@@ -325,8 +325,8 @@ fn should_ignore_the_speculative_decoding_block_length_at_both_levels() {
     assert_eq!(
         model_config
             .chunking()
-            .fixed_prompt_processing_chunk_size_tokens(),
-        4096,
+            .prompt_processing_chunk_size_tokens(),
+        Some(4096),
         "the per-model chunking override must still win for real fields"
     );
 }

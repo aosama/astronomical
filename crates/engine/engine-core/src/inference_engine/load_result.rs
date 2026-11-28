@@ -1,5 +1,6 @@
 use ipc_protocol::{
     CustomMetalKernelReport, DraftModelStatus, ExpertMemoryMode, NeuralEnginePrefillStatus,
+    PromptProcessingChunkReport,
 };
 
 /// Immutable readiness metadata captured after all engine load transitions.
@@ -15,6 +16,8 @@ pub struct EngineLoadResult {
     draft_model_status: Option<DraftModelStatus>,
     /// `None` for an engine without custom Metal kernels, so it announces nothing.
     custom_metal_kernel_report: Option<CustomMetalKernelReport>,
+    /// `None` for an engine that settles no prompt chunk, so it announces nothing.
+    prompt_processing_chunk_report: Option<PromptProcessingChunkReport>,
 }
 
 impl EngineLoadResult {
@@ -26,6 +29,7 @@ impl EngineLoadResult {
             neural_engine_prefill_status: NeuralEnginePrefillStatus::Off,
             draft_model_status: None,
             custom_metal_kernel_report: None,
+            prompt_processing_chunk_report: None,
         }
     }
 
@@ -135,14 +139,35 @@ impl EngineLoadResult {
             )
     }
 
+    /// Sets the prompt chunk the load settled on and what decided it; `None`
+    /// leaves the load announcing no chunk.
+    #[must_use]
+    pub const fn with_prompt_processing_chunk_report(
+        mut self,
+        prompt_processing_chunk_report: Option<PromptProcessingChunkReport>,
+    ) -> Self {
+        self.prompt_processing_chunk_report = prompt_processing_chunk_report;
+        self
+    }
+
+    /// The event announcing the prompt chunk in use, or `None` for an engine
+    /// that settled none.
+    #[must_use]
+    pub fn prompt_processing_chunk_event(&self) -> Option<ipc_protocol::WorkerEvent> {
+        self.prompt_processing_chunk_report
+            .map(prompt_processing_chunk_changed_event)
+    }
+
     /// Every status event a settled load announces, in the order the worker
-    /// sends them: the Neural Engine prefill, the drafter, the custom kernels.
+    /// sends them: the Neural Engine prefill, the drafter, the custom
+    /// kernels, the prompt chunk.
     #[must_use]
     pub fn engine_status_events(&self) -> Vec<ipc_protocol::WorkerEvent> {
         let mut engine_status_events = Vec::new();
         engine_status_events.extend(self.neural_engine_prefill_event());
         engine_status_events.extend(self.draft_model_event());
         engine_status_events.extend(self.custom_metal_kernels_event());
+        engine_status_events.extend(self.prompt_processing_chunk_event());
         engine_status_events
     }
 
@@ -156,6 +181,15 @@ impl EngineLoadResult {
     #[must_use]
     pub const fn minimum_mlx_memory_ceiling_bytes(&self) -> u64 {
         self.minimum_mlx_memory_ceiling_bytes
+    }
+}
+
+/// The event announcing one prompt chunk report.
+const fn prompt_processing_chunk_changed_event(
+    prompt_processing_chunk: PromptProcessingChunkReport,
+) -> ipc_protocol::WorkerEvent {
+    ipc_protocol::WorkerEvent::PromptProcessingChunkChanged {
+        prompt_processing_chunk,
     }
 }
 

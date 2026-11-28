@@ -20,6 +20,9 @@ use crate::{
 };
 
 use super::astro_ssd_prompt_cache_startup_logging;
+use super::prompt_cache_block_alignment::{
+    PromptCacheContractInputs, PromptChunkSizes, resolve_chunk_aligned_contract,
+};
 
 /// Resolves the validated artifact identity the state fields report after
 /// a successful load; losing either during loading is a fatal engine error.
@@ -65,9 +68,7 @@ pub fn initialize_mlx_runtime_with_cleanup(
 pub fn resolve_model_chunking_configuration(
     chunking: &WorkerChunkingConfiguration,
 ) -> Result<TextModelChunkingConfiguration, InferenceEngineError> {
-    let draft_tokens = chunking
-        .multi_token_prediction_draft_tokens
-        .unwrap_or(AUTOMATIC_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS);
+    let draft_tokens = chunking.multi_token_prediction_draft_tokens;
     TextModelChunkingConfiguration::new(
         chunking.full_attention_key_value_growth_tokens,
         chunking.prefill_graph_submission_layer_interval,
@@ -82,15 +83,6 @@ pub fn resolve_model_chunking_configuration(
         ))
     })
 }
-
-/// The draft count used when the configuration leaves it to the engine.
-/// One drafted token a round was the fastest count on Flash-Next streamed
-/// after a 10,000-token prompt: 26.2 tokens a second against 20.5 with none
-/// at a 34 GB limit and 22.5 against 21.8 at 26 GB, where two drafts read
-/// 18.8 and three 17.8, because each further draft is one more row of
-/// experts to read and compute whether it is kept or not. A model without
-/// a head drafts nothing whatever this says.
-pub const AUTOMATIC_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS: u32 = 1;
 
 /// Sizes a model's persistent `astro_ssd_prompt_cache` contract from its
 /// identity, `astro_decoder_state_cache` layout, position budget, active
@@ -119,19 +111,24 @@ fn resolve_astro_ssd_prompt_cache_model_contract(
     resolved_model_revision: &str,
     contract_resolver: AstroSsdPromptCacheContractResolver,
 ) -> Result<AstroSsdPromptCacheModelContract, InferenceEngineError> {
-    let global_astro_ssd_prompt_cache_maximum_size_bytes =
-        astro_ssd_prompt_cache_disk_store_config.global_astro_ssd_prompt_cache_maximum_size_bytes();
-    contract_resolver(
-        resolved_model_id.to_owned(),
-        resolved_model_revision.to_owned(),
-        model.astro_decoder_state_cache_layout().clone(),
-        model.maximum_position_count() as usize,
-        model.runtime().memory_limits().active_memory_limit_bytes() as u64,
-        global_astro_ssd_prompt_cache_maximum_size_bytes,
+    let contract_inputs = PromptCacheContractInputs {
+        model_id: resolved_model_id.to_owned(),
+        model_revision: resolved_model_revision.to_owned(),
+        astro_decoder_state_cache_layout: model.astro_decoder_state_cache_layout().clone(),
+        maximum_context_token_count: model.maximum_position_count() as usize,
+        active_memory_limit_bytes: model.runtime().memory_limits().active_memory_limit_bytes()
+            as u64,
+        global_quota_bytes: astro_ssd_prompt_cache_disk_store_config
+            .global_astro_ssd_prompt_cache_maximum_size_bytes(),
+        common_prefix_stride_blocks: chunking.ssd_prompt_cache_common_prefix_stride_blocks,
+    };
+    resolve_chunk_aligned_contract(
+        contract_resolver,
+        &contract_inputs,
         chunking
             .ssd_prompt_cache_block_tokens
             .map(|block_token_count| block_token_count as usize),
-        chunking.ssd_prompt_cache_common_prefix_stride_blocks,
+        PromptChunkSizes::of(chunking),
     )
     .map_err(|model_contract_error| {
         fatal_engine_error(format!(

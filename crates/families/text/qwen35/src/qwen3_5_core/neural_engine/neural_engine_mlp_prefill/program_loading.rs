@@ -102,7 +102,11 @@ pub fn plan_neural_engine_mlp_programs(
     if !report_compute_devices().has_neural_engine() {
         return Err(unavailable("this Mac reports no Neural Engine"));
     }
-    let chunk_token_count = chunking.fixed_prompt_processing_chunk_size_tokens;
+    // Startup settles Automatic into a number before any engine loads, so an
+    // unsettled chunk here means a caller skipped startup.
+    let Some(chunk_token_count) = chunking.prompt_processing_chunk_size_tokens else {
+        return Err(unavailable("the prompt-processing chunk was not settled"));
+    };
     let chosen_token_count =
         neural_engine_token_count_override.or(neural_engine_tokens_for_chunk(chunk_token_count));
     let Some(neural_engine_token_count) = chosen_token_count else {

@@ -130,3 +130,32 @@ fn should_announce_the_custom_kernel_report_after_the_drafter() {
         }
     );
 }
+
+#[test]
+fn should_announce_no_prompt_chunk_for_an_engine_that_settled_none() {
+    assert_eq!(
+        EngineLoadResult::new().prompt_processing_chunk_event(),
+        None
+    );
+}
+
+#[test]
+fn should_announce_the_prompt_chunk_last_after_the_other_statuses() {
+    let report = ipc_protocol::PromptProcessingChunkReport {
+        chunk_tokens: 4_096,
+        reason: ipc_protocol::PromptProcessingChunkReason::ExpertModelOnM5OrNewer,
+    };
+
+    let status_events = EngineLoadResult::new()
+        .with_draft_model_status(DraftModelStatus::None)
+        .with_prompt_processing_chunk_report(Some(report))
+        .engine_status_events();
+
+    assert_eq!(
+        status_events.last(),
+        Some(&WorkerEvent::PromptProcessingChunkChanged {
+            prompt_processing_chunk: report
+        })
+    );
+    assert_eq!(status_events.len(), 2);
+}

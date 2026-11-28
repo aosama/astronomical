@@ -260,6 +260,7 @@ export function bootChatClient(): AppShell {
     getStartedOverlay: requireElement<HTMLElement>("#get-started"),
     settingsOverlay: requireElement<HTMLElement>("#settings"),
     emptyState: requireElement<HTMLElement>("#empty-state"),
+    homeBelowComposer: requireElement<HTMLElement>("#astro-home-below"),
     composerField,
     skillLaunchers: requireElement<HTMLElement>("#skill-launchers"),
     startNewChat: () => controller.newChat(),

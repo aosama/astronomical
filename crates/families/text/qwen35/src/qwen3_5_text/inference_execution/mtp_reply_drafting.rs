@@ -108,16 +108,13 @@ impl Qwen3_5EngineState {
             .map(Some)
     }
 
-    /// The most tokens a round drafts: the configured count when the loaded
-    /// model ships a head, otherwise zero.
+    /// The most tokens a round drafts: the configured count, or the head's
+    /// own, when the loaded model ships a head; otherwise zero.
     fn mtp_maximum_draft_count(&self) -> usize {
-        self.core.model.as_ref().map_or(0, |model| {
-            if model.mtp_head().is_some() {
-                model.chunking.multi_token_prediction_draft_tokens as usize
-            } else {
-                0
-            }
-        })
+        self.core
+            .model
+            .as_ref()
+            .map_or(0, |model| model.mtp_draft_token_count() as usize)
     }
 
     /// Emits the next queued token, which already ran through the target.
@@ -302,7 +299,7 @@ fn run_target_step(
             )?;
         let lanes = target_forward_output.pre_final_normalization_hidden_states();
         let next_token_ids = model.target_token_picks(
-            &model.lane_mixed_vocabulary_logits_for_every_row(lanes)?,
+            &model.drafted_row_logits(lanes)?,
             starting_position_tokens,
             drafting.target_token_choice,
         )?;

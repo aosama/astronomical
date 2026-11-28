@@ -7,7 +7,7 @@ use super::{
     CustomMetalKernelProbe, WorkerKernelCapabilities, fused_jangtq2_gathered_projection_probe,
     gated_delta_probes, prism_hadamard_probes, row_batched_matmul_probe,
     sorted_expert_matmul_probe, sorted_expert_shared_combination_probe,
-    sorted_expert_weighted_sum_probe,
+    sorted_expert_tiled_matmul_probe, sorted_expert_weighted_sum_probe,
 };
 use crate::performance_attribution::PerformanceAttribution;
 
@@ -37,5 +37,6 @@ fn qwen3_5_family_probes(runtime: &MlxRuntime) -> Vec<Box<dyn CustomMetalKernelP
     family_probes.extend(prism_hadamard_probes::capability_probes(runtime));
     family_probes.extend(row_batched_matmul_probe::capability_probes(runtime));
     family_probes.extend(sorted_expert_matmul_probe::capability_probes(runtime));
+    family_probes.extend(sorted_expert_tiled_matmul_probe::capability_probes(runtime));
     family_probes
 }

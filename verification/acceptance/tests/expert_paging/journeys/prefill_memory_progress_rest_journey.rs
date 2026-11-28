@@ -335,7 +335,7 @@ fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) 
             "retained_files": 2,
         },
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 2_048,
+            "prompt_processing_chunk_size_tokens": 2_048,
         },
     });
     write_worker_configuration(

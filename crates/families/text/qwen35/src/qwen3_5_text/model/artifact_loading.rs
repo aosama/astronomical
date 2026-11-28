@@ -203,7 +203,10 @@ impl Qwen3_5Model {
                 gdn_decode_prework_kernel: kernel_verdicts.gdn_decode_prework_kernel,
                 optional_accelerators: accelerators_with(
                     expert_kernels.sorted_shared_combination,
-                    expert_kernels.sorted_expert_matmul,
+                    (
+                        expert_kernels.sorted_expert_matmul,
+                        expert_kernels.sorted_expert_tiled,
+                    ),
                     signed_rotation_kernel,
                 ),
                 sorted_expert_weighted_sum_kernel: expert_kernels.sorted_weighted_sum,

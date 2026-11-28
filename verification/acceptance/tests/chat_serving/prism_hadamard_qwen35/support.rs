@@ -68,6 +68,10 @@ fn prism_discovered_model_artifact() -> DiscoveredModel {
 /// Builds one isolated Development home whose model roots hold only the
 /// folded pack's repository tree.
 fn isolated_home_for_pack() -> tempfile::TempDir {
+    isolated_home_for_directory(&pack_hub_directory())
+}
+
+fn isolated_home_for_directory(model_root: &Path) -> tempfile::TempDir {
     let isolated_development_home = crate::support::isolated_development_home_from_user_config();
     let isolated_state_directory = isolated_development_home.path().join(".astronomical-dev");
     let config_path = isolated_state_directory.join("config.json");
@@ -76,11 +80,40 @@ fn isolated_home_for_pack() -> tempfile::TempDir {
     )
     .expect("the isolated config should parse");
     config_document["runtime"]["model_directories"] =
-        serde_json::json!([pack_hub_directory().to_string_lossy()]);
+        serde_json::json!([model_root.to_string_lossy()]);
     config_document["diagnostics"]["performance_attribution_enabled"] = serde_json::json!(true);
     std::fs::write(&config_path, config_document.to_string())
         .expect("the isolated config should be rewritten");
     isolated_development_home
+}
+
+/// The folder name discovery gives a pack that is not stored as a Hub snapshot.
+pub(super) fn public_model_id_of_configured_pack() -> String {
+    pack_snapshot_directory()
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .expect("the configured pack directory has a name")
+}
+
+/// Launches serving for the configured pack directory itself, so discovery
+/// reads that folder and no other model.
+pub(super) async fn launch_configured_pack_rest_server() -> (tempfile::TempDir, ServingRestServer) {
+    let pack_directory = pack_snapshot_directory();
+    let isolated_development_home = isolated_home_for_directory(&pack_directory);
+    eprintln!(
+        "[prism-hadamard] phase=launch model={}",
+        public_model_id_of_configured_pack()
+    );
+    // The isolated home discovers the configured directory. The artifact
+    // argument is unused on that path, so it is not the served identity.
+    let rest_server = launch_serving_rest_server_for_artifact_with_memory_limit(
+        prism_discovered_model_artifact(),
+        Some(isolated_development_home.path()),
+        None,
+        None,
+    )
+    .await;
+    (isolated_development_home, rest_server)
 }
 
 /// Launches the serving REST surface for the folded pack.

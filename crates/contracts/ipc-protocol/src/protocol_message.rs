@@ -386,6 +386,12 @@ pub enum WorkerEvent {
     CustomMetalKernelsChanged {
         custom_metal_kernels: crate::CustomMetalKernelReport,
     },
+    /// Reports the prompt chunk the loaded model reads prompts in, and what
+    /// decided it. Sent once a load settles; absent for engines that read
+    /// prompts some other way.
+    PromptProcessingChunkChanged {
+        prompt_processing_chunk: crate::PromptProcessingChunkReport,
+    },
     /// Says where one prompt chunk ran. A fact about the model's programs rather than
     /// the request, so it stays meaningful if that request has since been cancelled.
     NeuralEngineChunkFinished {
