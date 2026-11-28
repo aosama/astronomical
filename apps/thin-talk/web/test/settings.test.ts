@@ -77,7 +77,7 @@ test("should_change_only_the_name_and_come_back_to_the_page", async () => {
   await waitForStep("page");
   assert.deepEqual(savedProfile(journey), { ...MET_ASTRO_PROFILE, nickname: "Mia" });
   assert.equal(element("settings-nickname-shown").textContent, "Mia");
-  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey, Mia", "home behind the page greets the new name");
+  assert.match(document.querySelector(".astro-home__greeting")?.textContent ?? "", /^Good (morning|afternoon|evening), Mia$/, "home behind the page greets the new name");
 });
 
 test("should_keep_the_saved_name_when_the_change_is_cancelled", async () => {

@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { SkillCardKind } from "../src/astro/SkillCard";
-import { SKILL_GLYPH_PATHS } from "../src/astro/SkillShelf";
+import { SKILL_GLYPH_PATHS } from "../src/astro/SkillGlyphs";
 
 /**
  * Each skill has one glyph: the composer's launcher for a skill must draw the
- * same picture as that skill's card on Astro's home, or a picture would mean
+ * same picture as that skill's idea on Astro's home, or a picture would mean
  * "attach a photo" in one place and "make a picture" in another.
  */
 function launcherGlyphPath(skill: string): string {
