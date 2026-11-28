@@ -31,7 +31,9 @@ const JOURNEY_BUDGET: Duration = Duration::from_secs(120);
 const UNDISTURBED_REQUEST_ID: RequestId = RequestId::new(96_210);
 const REFUSED_PAGE_REQUEST_ID: RequestId = RequestId::new(96_211);
 
-/// One greedy answer to the journey's question.
+/// One answer to the journey's question, drawn with the fixed seed the
+/// journeys share: a seeded draw flips on logit changes far smaller than a
+/// greedy pick ever sees.
 async fn ask(
     qwen3_5_engine: &mut Qwen3_5TextEngine,
     request_id: RequestId,
