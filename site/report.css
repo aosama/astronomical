@@ -109,3 +109,7 @@ blockquote p { margin: 0; font-family: var(--display); font-size: clamp(1.75rem,
 .measure-table td { color: var(--ink-soft); }
 .report-prose ol { margin: 24px 0; padding-left: 22px; color: var(--ink-soft); font-size: 1.0625rem; }
 .report-prose ol li { margin-bottom: 12px; }
+
+/* The lowest and highest of a row's runs, quieter than the middle value they
+   qualify, so the column still reads as one figure a row. */
+.measure-range { color: var(--muted); font-size: 0.875em; white-space: nowrap; }
