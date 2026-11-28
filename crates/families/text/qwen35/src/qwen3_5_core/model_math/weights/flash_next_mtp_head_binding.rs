@@ -23,7 +23,7 @@ use crate::qwen4_exp::hyper_connection::HyperConnectionWeights;
 use crate::qwen4_exp::layer_weights::{
     FlashNextLayerWeights, LayerLaneConnections, SparseAttentionIndexerWeights,
 };
-use crate::qwen4_exp::mtp_head_weights::{MtpHeadShards, MtpHeadWeights};
+use crate::qwen4_exp::mtp_head_weights::{FlashNextMtpHeadWeights, MtpHeadShards};
 
 use super::attention_binding::take_full_attention_weights;
 use super::{
@@ -32,12 +32,12 @@ use super::{
 
 /// The head's weights from its opened shards; `None` when the index names
 /// no `mtp.*` tensor.
-pub fn bind_mtp_head_weights(
+pub fn bind_flash_next_mtp_head_weights(
     runtime: &MlxRuntime,
     qwen3_5_config: &Qwen3_5Config,
     shard_index: &Qwen3_5ShardIndex,
     head_shards: MtpHeadShards,
-) -> Result<Option<MtpHeadWeights>, TextExecutionError> {
+) -> Result<Option<FlashNextMtpHeadWeights>, TextExecutionError> {
     let Some(architecture) = qwen3_5_config.qwen4_exp_architecture() else {
         return Ok(None);
     };
@@ -103,10 +103,10 @@ fn take_mtp_head_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     head_config: &Qwen3_5Config,
     head_shards: MtpHeadShards,
-) -> Result<MtpHeadWeights, TextExecutionError> {
+) -> Result<FlashNextMtpHeadWeights, TextExecutionError> {
     let layer = take_mtp_head_layer_weights(bound_tensors, head_config)?;
     let expert_module_prefix = format!("{MTP_HEAD_LAYER_PREFIX}.mlp.switch_mlp");
-    Ok(MtpHeadWeights {
+    Ok(FlashNextMtpHeadWeights {
         embedding_norm_scale: take_tensor(
             bound_tensors,
             "mtp.pre_fc_norm_embedding.weight".to_owned(),

@@ -1170,8 +1170,10 @@ measure-expert-misses = "run -p xtask -- test-run --package astronomical-accepta
 measure-dropped-tables-while-drafting = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 170 --filter should_count_dropped_tables_while_drafting_as_served"
 measure-expert-misses-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_and_decode_speed"
 
-# Reply speed with and without drafted tokens on a streamed model that ships
-# a multi-token-prediction head (Qwen3.8-Flash-Next, issue #2533). Each case
+# Reply speed with and without drafted tokens on a model that ships a
+# multi-token-prediction head: Qwen3.8-Flash-Next streamed (issue #2533), or
+# a dense pack with an `mtp/` head such as Ternary Bonsai 2 9B, which reads a
+# 2,000-token prompt instead. Each case
 # loads the model under the configured MLX limit through the real streaming
 # engine, sets the draft count before anything is served, serves a 500/50
 # warmup and then one 10,000-token Romeo and Juliet summary; compare the
@@ -1180,6 +1182,12 @@ measure-expert-misses-speed = "run -p xtask -- test-run --package astronomical-a
 # and none and one at 0.7. Pass --configuration PATH as for
 # `measure-expert-misses`. About seventy seconds a case.
 measure-mtp-reply-drafting = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 150 --filter drafted_token"
+# A dense pack's multi-token-prediction head (Ternary Bonsai 2 9B's `mtp/`):
+# one loaded model writes one greedy Romeo and Juliet reply plain, then with
+# one and with three drafted tokens a round, and reports how far each drafted
+# reply agrees with the plain one (`[dense-mtp-proof]` lines). Pass
+# `--configuration PATH` naming the pack's `model_directory`. About a minute.
+test-dense-mtp-reply = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 300 --filter should_write_the_plain_greedy_reply_when_a_dense_head_drafts"
 # A streamed reply whose layers look their routes up inside each token's graph
 # (the qwen35 family's in_graph_table_serving, on by default for a model that
 # streams experts) against the same reply with every route copied to the

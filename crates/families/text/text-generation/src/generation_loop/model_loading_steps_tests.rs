@@ -2,7 +2,7 @@
 //! configuration validation. The load pipeline itself runs under the serial
 //! engine lane against real artifacts.
 
-use super::{AUTOMATIC_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS, resolve_model_chunking_configuration};
+use super::resolve_model_chunking_configuration;
 use ipc_protocol::WorkerChunkingConfiguration;
 use ipc_protocol::worker_chunking_test_support::worker_chunking_with_prompt_chunks;
 
@@ -52,7 +52,7 @@ fn should_reject_a_growth_token_count_beyond_the_int32_range() {
     );
 }
 
-fn resolved_draft_tokens(configured_draft_tokens: Option<u32>) -> u32 {
+fn resolved_draft_tokens(configured_draft_tokens: Option<u32>) -> Option<u32> {
     let mut worker_chunking = worker_chunking_configuration_with(64);
     worker_chunking.multi_token_prediction_draft_tokens = configured_draft_tokens;
     resolve_model_chunking_configuration(&worker_chunking)
@@ -61,19 +61,16 @@ fn resolved_draft_tokens(configured_draft_tokens: Option<u32>) -> u32 {
 }
 
 #[test]
-fn should_draft_the_engine_s_own_count_when_the_configuration_leaves_it_open() {
-    assert_eq!(
-        resolved_draft_tokens(None),
-        AUTOMATIC_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS
-    );
+fn should_leave_the_count_to_the_head_when_the_configuration_leaves_it_open() {
+    assert_eq!(resolved_draft_tokens(None), None);
 }
 
 #[test]
 fn should_draft_nothing_when_the_configuration_says_zero() {
-    assert_eq!(resolved_draft_tokens(Some(0)), 0);
+    assert_eq!(resolved_draft_tokens(Some(0)), Some(0));
 }
 
 #[test]
 fn should_draft_the_configured_count_when_one_is_given() {
-    assert_eq!(resolved_draft_tokens(Some(3)), 3);
+    assert_eq!(resolved_draft_tokens(Some(3)), Some(3));
 }

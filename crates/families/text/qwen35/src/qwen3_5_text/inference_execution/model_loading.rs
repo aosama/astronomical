@@ -98,7 +98,7 @@ fn load_and_materialize_streaming_model(
 ) -> Result<Qwen3_5Model, InferenceEngineError> {
     // The head has a shard of its own, taken before the load consumes the
     // artifact; a failure to load it surfaces once the model itself loaded.
-    let mtp_head_load = crate::qwen4_exp::mtp_head_weights::load_mtp_head_weights(
+    let mtp_head_load = crate::qwen4_exp::mtp_head_weights::load_flash_next_mtp_head_weights(
         &runtime,
         &mut validated_artifact,
     );
@@ -116,7 +116,41 @@ fn load_and_materialize_streaming_model(
         model_directory,
         model_loading_performance_attribution,
     );
+    host_bundled_dense_mtp_head(&mut model, model_directory);
     Ok(model)
+}
+
+/// Hosts the multi-token-prediction head a dense pack ships in its `mtp/`
+/// folder, when the model has no head of its own and hosts no DFlash
+/// drafter: a hosted drafter checks a tree of guesses a round and is the one
+/// that drafts wherever it loads. A head that cannot be used is logged, and
+/// replies are written one token a forward, as without one.
+fn host_bundled_dense_mtp_head(model: &mut Qwen3_5Model, model_directory: &std::path::Path) {
+    use crate::qwen3_5_core::dense::mtp_head_weights::load_dense_mtp_head_weights;
+    use crate::qwen3_5_core::model_math::mtp_head_kind::MtpHead;
+    if model.mtp_head().is_some() || model.base.optional_accelerators.draft_runtime.is_some() {
+        return;
+    }
+    match load_dense_mtp_head_weights(model.runtime(), &model.config, model_directory) {
+        Ok(Some(head)) => {
+            tracing::info!(
+                head_weight_bytes = head.payload_byte_count,
+                "the text engine hosts the pack's multi-token-prediction head"
+            );
+            model.base.optional_accelerators.mtp_head = Some(MtpHead::DenseQwen3_5(Box::new(head)));
+            // The governor planned the kept weights before the head joined
+            // them; a head that drafts is core weights, so it plans again.
+            // One that does not draft stays lazy and takes no memory.
+            if model.mtp_draft_token_count() > 0 {
+                model.open_memory_governor();
+            }
+        }
+        Ok(None) => {}
+        Err(load_error) => tracing::warn!(
+            %load_error,
+            "the pack's multi-token-prediction head cannot be used; replies are written one token a forward"
+        ),
+    }
 }
 
 /// Hosts the DFlash drafter that pairs with `model`, when one is installed
@@ -178,14 +212,16 @@ fn memory_around_a_load(model: &Qwen3_5Model) -> super::hosted_drafter_bytes::Me
 fn finish_streaming_model_load(
     mut model: Qwen3_5Model,
     mtp_head_load: Result<
-        Option<crate::qwen4_exp::mtp_head_weights::MtpHeadWeights>,
+        Option<crate::qwen4_exp::mtp_head_weights::FlashNextMtpHeadWeights>,
         crate::TextExecutionError,
     >,
 ) -> Result<Qwen3_5Model, InferenceEngineError> {
     model
         .bound_mlx_buffer_cache_to_measured_working_buffers()
         .map_err(text_generation::engine_errors::fatal_runtime_error)?;
-    model.base.optional_accelerators.mtp_head = mtp_head_load?.map(Box::new);
+    model.base.optional_accelerators.mtp_head = mtp_head_load?
+        .map(Box::new)
+        .map(crate::qwen3_5_core::model_math::mtp_head_kind::MtpHead::FlashNext);
     if model.base.enable_fused_lane_mixing() {
         tracing::info!("decode path: fused lane-mixing kernels");
     }

@@ -104,6 +104,19 @@ impl Qwen3_5Config {
         }
     }
 
+    /// This configuration with every module quantized one way, for weights
+    /// that ship beside the model in their own file: a multi-token-prediction
+    /// head is quantized apart from the model it drafts for, so none of the
+    /// model's own per-module profiles apply to it.
+    #[must_use]
+    pub fn with_uniform_affine_quantization(&self, bits: u32, group_size: u32) -> Self {
+        let mut uniform_config = self.clone();
+        uniform_config.quantized_module_profiles.clear();
+        uniform_config.default_quantization_bits = bits;
+        uniform_config.default_quantization_group_size = group_size;
+        uniform_config
+    }
+
     /// Returns the default quantization group size for modules not in the override map.
     #[must_use]
     pub const fn default_quantization_group_size(&self) -> u32 {

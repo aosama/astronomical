@@ -52,7 +52,9 @@ gains.
   room, the model runs at its normal speed and `astronomical status` says so.
 - **Some models predict ahead by themselves.** A model with its own
   prediction head, such as Qwen3.8-Flash-Next, guesses one word ahead by
-  default, with no separate draft model.
+  default, with no separate draft model. Ternary Bonsai 2 9B ships a head
+  too, but it is off by default because it does not speed that model up;
+  setting `chunking.multi_token_prediction_draft_tokens` turns it on.
 - **Some requests never use it:** a picture in the prompt, structured output
   and a repetition penalty all decode one word at a time.
 - **`astronomical status` shows what it is doing.** The `drafter:` line says

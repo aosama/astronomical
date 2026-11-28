@@ -68,9 +68,7 @@ pub fn initialize_mlx_runtime_with_cleanup(
 pub fn resolve_model_chunking_configuration(
     chunking: &WorkerChunkingConfiguration,
 ) -> Result<TextModelChunkingConfiguration, InferenceEngineError> {
-    let draft_tokens = chunking
-        .multi_token_prediction_draft_tokens
-        .unwrap_or(AUTOMATIC_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS);
+    let draft_tokens = chunking.multi_token_prediction_draft_tokens;
     TextModelChunkingConfiguration::new(
         chunking.full_attention_key_value_growth_tokens,
         chunking.prefill_graph_submission_layer_interval,
@@ -85,15 +83,6 @@ pub fn resolve_model_chunking_configuration(
         ))
     })
 }
-
-/// The draft count used when the configuration leaves it to the engine.
-/// One drafted token a round was the fastest count on Flash-Next streamed
-/// after a 10,000-token prompt: 26.2 tokens a second against 20.5 with none
-/// at a 34 GB limit and 22.5 against 21.8 at 26 GB, where two drafts read
-/// 18.8 and three 17.8, because each further draft is one more row of
-/// experts to read and compute whether it is kept or not. A model without
-/// a head drafts nothing whatever this says.
-pub const AUTOMATIC_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS: u32 = 1;
 
 /// Sizes a model's persistent `astro_ssd_prompt_cache` contract from its
 /// identity, `astro_decoder_state_cache` layout, position budget, active

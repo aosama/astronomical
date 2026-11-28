@@ -3,6 +3,7 @@ mod cold_macos_file_cache;
 mod compact_prefill;
 mod decode_residency_attribution;
 mod decode_retention;
+mod dense_mtp_reply_exactness;
 mod direct_expert_read_parity;
 mod expert_miss_count;
 mod failed_span_redo;
