@@ -13,6 +13,10 @@ version.workspace = true
 [package.metadata.astronomical]
 test-lanes = ["integration", "integration-and-rest", "nextest"]
 
+[features]
+# A chunking configuration builder other crates' tests share.
+test-support = []
+
 [lints]
 workspace = true
 

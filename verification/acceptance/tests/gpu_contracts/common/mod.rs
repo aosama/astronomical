@@ -87,7 +87,7 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
 pub(crate) fn standard_worker_chunking_configuration() -> ipc_protocol::WorkerChunkingConfiguration
 {
     ipc_protocol::WorkerChunkingConfiguration {
-        fixed_prompt_processing_chunk_size_tokens: 2_048,
+        prompt_processing_chunk_size_tokens: Some(2_048),
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
         full_attention_key_value_growth_tokens: 256,
         prefill_graph_submission_layer_interval: 0,

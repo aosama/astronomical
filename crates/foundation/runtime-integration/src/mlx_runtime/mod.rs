@@ -14,7 +14,7 @@
 //! - `metallib` — resolves, validates, and installs the Ahead-Of-Time Metal
 //!   library path exactly once per process (macOS only).
 //! - `device_info` — reads Metal's advertised recommended working-set size
-//!   through MLX-C (diagnostic surface only; macOS only).
+//!   and the GPU's architecture name through MLX-C (macOS only).
 //! - `safetensors_io` — the runtime-level entry points that hand the custom
 //!   input/output engines under `crate::safetensors` to callers.
 
@@ -53,7 +53,7 @@ pub use array_storage::evaluated_array_storage_mut;
 // macOS only; callers there get a compile error rather than a run-time MLX
 // "no GPU" failure.
 #[cfg(target_os = "macos")]
-pub use device_info::maximum_recommended_gpu_working_set_size_bytes;
+pub use device_info::{gpu_architecture_name, maximum_recommended_gpu_working_set_size_bytes};
 mod array_storage;
 #[cfg(target_os = "macos")]
 mod device_info;

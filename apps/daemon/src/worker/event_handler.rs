@@ -22,7 +22,7 @@ use crate::{
         publish_expert_streaming_stats, publish_latest_mlx_memory_snapshot,
         publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
         publish_model_load_in_flight, publish_neural_engine_prefill,
-        publish_worker_expert_residency,
+        publish_prompt_processing_chunk, publish_worker_expert_residency,
     },
     worker::loop_types::ActiveWorkerRequest,
 };
@@ -48,6 +48,7 @@ pub(super) fn handle_worker_event(
         | WorkerEvent::NeuralEnginePrefillChanged { .. }
         | WorkerEvent::DraftModelChanged { .. }
         | WorkerEvent::CustomMetalKernelsChanged { .. }
+        | WorkerEvent::PromptProcessingChunkChanged { .. }
         | WorkerEvent::NeuralEngineChunkFinished { .. }
         | WorkerEvent::ModelLoadInFlight { .. }
         | WorkerEvent::MlxMemorySample { .. }
@@ -247,11 +248,12 @@ fn apply_model_state_event(
             publish_neural_engine_prefill(health_snapshot, None);
             publish_draft_model(health_snapshot, None);
             publish_custom_metal_kernels(health_snapshot, None);
+            publish_prompt_processing_chunk(health_snapshot, None);
             publish_model_load_in_flight(health_snapshot, Some(model_load_in_flight));
         }
         // `apply_health_publication_event` routes only the model-state events
-        // here, so what remains is the Neural Engine's report, the drafter's or
-        // the custom kernels'.
+        // here, so what remains is the Neural Engine's report, the drafter's,
+        // the custom kernels' or the prompt chunk's.
         engine_status_event => {
             crate::worker::health::publish_engine_status_event(
                 health_snapshot,

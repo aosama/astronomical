@@ -45,6 +45,8 @@
 .configuration-label-cell.is-open .configuration-tip { display: block; }
 .configuration-control-cell { display: flex; justify-content: flex-end; min-width: 0; }
 .configuration-control-cell > * { max-width: 100%; }
+.configuration-row-note { grid-column: 1 / -1; margin: 0; color: var(--ink-3); font-size: var(--text-xs); }
+.configuration-row-note:empty { display: none; }
 .configuration-row-message { grid-column: 2; justify-self: end; margin: 0; color: var(--danger); font-size: var(--text-sm); font-weight: var(--weight-label); }
 .configuration-row-message:empty { display: none; }
 

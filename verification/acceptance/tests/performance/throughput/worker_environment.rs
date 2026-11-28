@@ -60,7 +60,7 @@ fn apply_prompt_chunking(
 ) {
     if prompt_chunking == PromptChunking::MeasurementLane {
         configuration_document["chunking"] = serde_json::json!({
-            "fixed_prompt_processing_chunk_size_tokens": MEASUREMENT_LANE_PROMPT_CHUNK_TOKENS,
+            "prompt_processing_chunk_size_tokens": MEASUREMENT_LANE_PROMPT_CHUNK_TOKENS,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens":
                 MEASUREMENT_LANE_PROMPT_CHUNK_TOKENS,
         });

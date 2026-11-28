@@ -261,7 +261,7 @@ fn write_split_chunk_follow_up_admission_config(
         "runtime": { "model_directories": [model_directory] },
         "ssd_prompt_cache": { "enabled": false, "maximum_size_gb": 50 },
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 2_048,
+            "prompt_processing_chunk_size_tokens": 2_048,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 4_096,
         },
         "models": {

@@ -23,10 +23,18 @@ pub struct PromptChunkSizes {
 }
 
 impl PromptChunkSizes {
+    /// The chunk sizes of a settled configuration. An in-memory chunk still
+    /// Automatic (`None`, which a model's startup never leaves) counts as the
+    /// streaming chunk, so blocks stay whole numbers of the chunk that is
+    /// known.
     #[must_use]
     pub const fn of(chunking: &WorkerChunkingConfiguration) -> Self {
+        let in_memory_chunk_tokens = match chunking.prompt_processing_chunk_size_tokens {
+            Some(in_memory_chunk_tokens) => in_memory_chunk_tokens,
+            None => chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+        };
         Self {
-            resident_token_count: chunking.fixed_prompt_processing_chunk_size_tokens as usize,
+            resident_token_count: in_memory_chunk_tokens as usize,
             ssd_streaming_token_count: chunking
                 .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
                 as usize,

@@ -172,7 +172,7 @@ test("should_attribute_a_model_edit_and_an_all_models_edit_to_the_tuning_page", 
     const modelEdit = { ...baseDocument, models: { "some-model": { generation_defaults: { temperature: 0.7 } } } };
     assert.deepEqual(call("configurationChangeSummary", bundledSchema, baseDocument, modelEdit).editedPages,
         { settings: false, tuning: true });
-    const defaultsEdit = { ...baseDocument, chunking: { fixed_prompt_processing_chunk_size_tokens: 1024 } };
+    const defaultsEdit = { ...baseDocument, chunking: { prompt_processing_chunk_size_tokens: 1024 } };
     assert.deepEqual(call("configurationChangeSummary", bundledSchema, baseDocument, defaultsEdit).editedPages,
         { settings: false, tuning: true });
 });

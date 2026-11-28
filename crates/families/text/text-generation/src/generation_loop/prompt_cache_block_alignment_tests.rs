@@ -4,6 +4,8 @@ use engine_core::{
     AstroSsdPromptCacheModelContract,
 };
 
+use ipc_protocol::worker_chunking_test_support::worker_chunking_with_prompt_chunks;
+
 use super::{
     PromptCacheContractInputs, PromptChunkSizes, chunk_aligned_block_token_count,
     resolve_chunk_aligned_contract,
@@ -167,4 +169,19 @@ fn should_keep_a_block_on_overflow() {
         chunk_aligned_block_token_count(usize::MAX - 1, 2_048, 4_096, usize::MAX),
         None
     );
+}
+
+#[test]
+fn should_take_the_settled_in_memory_chunk_and_the_streaming_chunk() {
+    let chunk_sizes = PromptChunkSizes::of(&worker_chunking_with_prompt_chunks(Some(2_048), 4_096));
+
+    assert_eq!(chunk_sizes.resident_token_count, 2_048);
+    assert_eq!(chunk_sizes.ssd_streaming_token_count, 4_096);
+}
+
+#[test]
+fn should_count_an_unsettled_automatic_chunk_as_the_streaming_chunk() {
+    let chunk_sizes = PromptChunkSizes::of(&worker_chunking_with_prompt_chunks(None, 4_096));
+
+    assert_eq!(chunk_sizes.resident_token_count, 4_096);
 }

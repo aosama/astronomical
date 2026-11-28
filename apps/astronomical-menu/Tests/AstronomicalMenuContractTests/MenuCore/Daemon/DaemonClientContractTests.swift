@@ -65,7 +65,7 @@ final class DaemonClientContractTests: XCTestCase {
               "maximum_context_tokens": 32768,
               "maximum_output_tokens": 4096,
               "chunking": {
-                "fixed_prompt_processing_chunk_size_tokens": 2048,
+                "prompt_processing_chunk_size_tokens": 2048,
                 "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 256,
                 "full_attention_key_value_growth_tokens": 256,
                 "prefill_graph_submission_layer_interval": 0,
@@ -93,7 +93,7 @@ final class DaemonClientContractTests: XCTestCase {
   func test_should_decode_the_speculative_decoding_block_length_from_the_worker_policy() throws {
     let policyWithSpeculation = """
       {
-        "fixed_prompt_processing_chunk_size_tokens": 2048,
+        "prompt_processing_chunk_size_tokens": 2048,
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 256,
         "full_attention_key_value_growth_tokens": 256,
         "prefill_graph_submission_layer_interval": 0,
@@ -107,7 +107,7 @@ final class DaemonClientContractTests: XCTestCase {
       """
     let policyWithoutSpeculation = """
       {
-        "fixed_prompt_processing_chunk_size_tokens": 2048,
+        "prompt_processing_chunk_size_tokens": 2048,
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 256,
         "full_attention_key_value_growth_tokens": 256,
         "prefill_graph_submission_layer_interval": 0,
@@ -133,7 +133,7 @@ final class DaemonClientContractTests: XCTestCase {
   func test_should_reject_a_truly_unknown_worker_policy_field() throws {
     let policyWithAnUnknownField = """
       {
-        "fixed_prompt_processing_chunk_size_tokens": 2048,
+        "prompt_processing_chunk_size_tokens": 2048,
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 256,
         "full_attention_key_value_growth_tokens": 256,
         "prefill_graph_submission_layer_interval": 0,

@@ -240,7 +240,7 @@ pub(crate) fn write_astro_ssd_prompt_cache_pressure_worker_config(
         "prompt_cache_max_size_gb": ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_GB,
         "performance_attribution_enabled": true,
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 2_048,
+            "prompt_processing_chunk_size_tokens": 2_048,
         },
     });
     if let Some(maximum_mlx_memory_bytes) = maximum_mlx_memory_bytes {

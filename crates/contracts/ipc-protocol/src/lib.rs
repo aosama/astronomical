@@ -38,6 +38,7 @@ mod model_load_failure_identity;
 mod model_load_in_flight;
 mod neural_engine_chunk_report;
 mod neural_engine_prefill_status;
+mod prompt_processing_chunk_report;
 #[cfg(test)]
 mod prompt_processing_progress_protocol_tests;
 mod protocol_error;
@@ -54,6 +55,8 @@ mod speech;
 mod worker_chunking_configuration;
 #[cfg(test)]
 mod worker_chunking_configuration_tests;
+#[cfg(any(test, feature = "test-support"))]
+pub mod worker_chunking_test_support;
 mod worker_event_diagnostics;
 mod worker_memory_ledger_snapshot;
 mod worker_model_capabilities;
@@ -121,6 +124,9 @@ pub use model_load_failure_identity::{
 pub use model_load_in_flight::ModelLoadInFlight;
 pub use neural_engine_chunk_report::{NeuralEngineChunkPlacement, NeuralEngineChunkReport};
 pub use neural_engine_prefill_status::NeuralEnginePrefillStatus;
+pub use prompt_processing_chunk_report::{
+    PromptProcessingChunkReason, PromptProcessingChunkReport,
+};
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, RequestId, WorkerCommand,

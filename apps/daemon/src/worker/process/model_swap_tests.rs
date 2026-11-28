@@ -18,7 +18,7 @@ const SAMPLE_CONFIGURATION_GENERATION: &str = "generation-1";
 
 fn sample_chunking_configuration() -> WorkerChunkingConfiguration {
     WorkerChunkingConfiguration {
-        fixed_prompt_processing_chunk_size_tokens: 2_048,
+        prompt_processing_chunk_size_tokens: Some(2_048),
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
         full_attention_key_value_growth_tokens: 256,
         prefill_graph_submission_layer_interval: 0,

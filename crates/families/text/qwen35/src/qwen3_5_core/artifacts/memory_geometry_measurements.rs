@@ -87,6 +87,10 @@ fn measured_layer_payloads(
 /// the model serves (about 1.5 GB of margin, working buffers and buffer room
 /// in that run, before the room for macOS's wired limit), so near the limit
 /// the governor, not this figure, decides whether every layer stays held.
+/// That measurement read 2,048-token chunks; on an M5 or newer the engine's
+/// Automatic chunk for this model is 4,096, whose step peaks about 0.35 GB
+/// higher, and under a 25 GB limit every expert still stayed held
+/// (2026-11-27).
 fn complete_residency_transient_bytes(
     layer_plans: &[QuantizedExpertLayerPlan],
 ) -> Result<u64, Qwen3_5MemoryGeometryError> {

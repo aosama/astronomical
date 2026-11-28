@@ -108,7 +108,7 @@ pub(crate) fn publish_engine_status_event(
     }
 }
 
-/// The drafter's and the custom kernels' reports, split from
+/// The drafter's, the custom kernels' and the prompt chunk's reports, split from
 /// `publish_engine_status_event` so each dispatch stays small.
 fn publish_model_report_event(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
@@ -121,6 +121,9 @@ fn publish_model_report_event(
         ipc_protocol::WorkerEvent::CustomMetalKernelsChanged {
             custom_metal_kernels,
         } => publish_custom_metal_kernels(health_snapshot, Some(custom_metal_kernels)),
+        ipc_protocol::WorkerEvent::PromptProcessingChunkChanged {
+            prompt_processing_chunk,
+        } => publish_prompt_processing_chunk(health_snapshot, Some(prompt_processing_chunk)),
         _ => {}
     }
 }
@@ -159,6 +162,15 @@ pub(crate) fn publish_custom_metal_kernels(
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.custom_metal_kernels = custom_metal_kernels;
+    }
+}
+
+pub(crate) fn publish_prompt_processing_chunk(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    prompt_processing_chunk: Option<ipc_protocol::PromptProcessingChunkReport>,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot.prompt_processing_chunk = prompt_processing_chunk;
     }
 }
 
