@@ -18,8 +18,14 @@
 //! steps a pass) it stopped before learning anything. At this size it
 //! takes about a minute and a half on Kev 0.8B (53% to 100% right) and
 //! about fifteen on Clef 9B (50% to 100%), whose 108 steps cost about eight
-//! and a half seconds each. Run one family with its alias and
-//! `--configuration PATH` naming that family's `model_directory`:
+//! and a half seconds each. Laya needs its own recipe
+//! (`LAYA_WHOLE_MODEL_TRAINING_SETTINGS`, issue #2705): on MLX's CUDA backend
+//! it takes about four minutes, the shipped model 63.3% right on the unseen
+//! lines and the trained one 100%, and a second journey repeats it on a
+//! balanced layout from another passage (60.0% to 100%).
+//!
+//! Run one family with its alias and `--configuration PATH` naming that
+//! family's `model_directory`:
 //! `cargo test-kev-whole-model-positive-control`,
 //! `cargo test-clef-whole-model-positive-control` or
 //! `cargo test-laya-whole-model-positive-control`.
@@ -40,14 +46,43 @@ mod romeo_and_juliet;
 const EXAMPLE_COUNT: usize = 200;
 const WORDS_PER_LINE: usize = 14;
 /// The share of judged lines the trained model must answer right.
-const REQUIRED_TRAINED_ACCURACY: f64 = 0.9;
+pub(super) const REQUIRED_TRAINED_ACCURACY: f64 = 0.9;
 const QUESTIONS_JSON: &str = r#"{"mood": {"type": "choice", "instructions": "What is the main feeling of this line from Romeo and Juliet?", "criteria": {"love": "romantic love or longing", "conflict": "quarrels, insults, threats or fighting"}}}"#;
 
-/// The code of each example and the option it decides: a fixed scramble of
-/// the example index, so neither the line's words nor its position predict
-/// it.
-fn coded_option(example_index: usize) -> usize {
-    (example_index * 7 + example_index / 3) % 2
+/// How the coded lines are laid out: which option each line's code decides,
+/// and which words of the play the lines come from.
+#[derive(Clone, Copy)]
+struct CodeLayout {
+    /// The code of line `i` decides option
+    /// `(i * multiplier + i / divisor) % 2`: a fixed scramble of the index,
+    /// so neither the line's words nor its position predict it.
+    multiplier: usize,
+    divisor: usize,
+    /// The first word of the first line.
+    first_word_index: usize,
+}
+
+/// The control's layout. A third of its lines carry option 1, so a guess of
+/// option 0 alone is already right about two lines in three.
+const DEFAULT_CODE_LAYOUT: CodeLayout = CodeLayout {
+    multiplier: 7,
+    divisor: 3,
+    first_word_index: 0,
+};
+
+/// Half the lines carry each option, from another stretch of the play, so
+/// nothing the default layout fixed (its lean, its lines) is what is learned
+/// (issue #2705).
+const BALANCED_CODE_LAYOUT: CodeLayout = CodeLayout {
+    multiplier: 5,
+    divisor: 4,
+    first_word_index: 5_000,
+};
+
+impl CodeLayout {
+    const fn coded_option(self, example_index: usize) -> usize {
+        (example_index * self.multiplier + example_index / self.divisor) % 2
+    }
 }
 
 fn example_role(example_index: usize, correct_option: usize) -> QuestionRole {
@@ -61,11 +96,16 @@ fn example_role(example_index: usize, correct_option: usize) -> QuestionRole {
 }
 
 pub(super) fn coded_job() -> DecisionTrainingJob {
+    coded_job_laid_out(DEFAULT_CODE_LAYOUT)
+}
+
+fn coded_job_laid_out(code_layout: CodeLayout) -> DecisionTrainingJob {
     let mut examples = Vec::with_capacity(EXAMPLE_COUNT);
     for example_index in 0..EXAMPLE_COUNT {
-        let correct_option = coded_option(example_index);
+        let correct_option = code_layout.coded_option(example_index);
         let code = if correct_option == 0 { 17 } else { 42 };
-        let line = romeo_and_juliet::passage(example_index * WORDS_PER_LINE, WORDS_PER_LINE);
+        let first_word_index = code_layout.first_word_index + example_index * WORDS_PER_LINE;
+        let line = romeo_and_juliet::passage(first_word_index, WORDS_PER_LINE);
         examples.push(TrainingExample {
             state: OrderedJsonValue::Text(format!("[code {code}] {line}")),
             questions: serde_json::from_str(QUESTIONS_JSON).expect("the question is well formed"),
@@ -84,7 +124,7 @@ pub(super) fn coded_job() -> DecisionTrainingJob {
 /// on (`judged_rows`), so a training line's returned scores are
 /// placeholders.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum HeldBackRole {
+pub(super) enum HeldBackRole {
     Choosing,
     Judging,
 }
@@ -103,7 +143,7 @@ impl HeldBackRole {
 /// right option, served and trained. Both held-back roles are reported, so
 /// a run that stopped early reads differently from one that learned but did
 /// not carry the code over.
-fn held_back_accuracy(
+pub(super) fn held_back_accuracy(
     job: &DecisionTrainingJob,
     outcome: &DecisionTrainingOutcome,
     held_back_role: HeldBackRole,
@@ -164,7 +204,7 @@ fn print_add_on_movement(outcome: &DecisionTrainingOutcome) {
     );
 }
 
-fn highest_scoring(option_logits: &[f32]) -> usize {
+pub(super) fn highest_scoring(option_logits: &[f32]) -> usize {
     let mut best_option = 0;
     for (option_index, option_logit) in option_logits.iter().enumerate() {
         if *option_logit > option_logits[best_option] {
@@ -174,11 +214,11 @@ fn highest_scoring(option_logits: &[f32]) -> usize {
     best_option
 }
 
-async fn prove_whole_model_learns_the_code(family: TunableHeadFamily) {
+async fn prove_whole_model_learns_the_code(family: TunableHeadFamily, code_layout: CodeLayout) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = TestRunContext::current().required_model_directory();
     let mut decision_engine = loaded_engine(family, &model_directory);
-    let job = coded_job();
+    let job = coded_job_laid_out(code_layout);
     let outcome = train_to_completion(decision_engine.as_mut(), job.clone(), "positive-control");
     print_training_report(&job, &outcome);
     print_add_on_movement(&outcome);
@@ -199,19 +239,26 @@ async fn prove_whole_model_learns_the_code(family: TunableHeadFamily) {
 #[tokio::test]
 #[serial_test::serial]
 async fn should_learn_a_code_the_final_layers_cannot_on_kev() {
-    prove_whole_model_learns_the_code(TunableHeadFamily::Kev).await;
+    prove_whole_model_learns_the_code(TunableHeadFamily::Kev, DEFAULT_CODE_LAYOUT).await;
 }
 
 #[ignore = "requires a Clef model_directory in the explicit test-run configuration"]
 #[tokio::test]
 #[serial_test::serial]
 async fn should_learn_a_code_the_final_layers_cannot_on_clef() {
-    prove_whole_model_learns_the_code(TunableHeadFamily::Clef).await;
+    prove_whole_model_learns_the_code(TunableHeadFamily::Clef, DEFAULT_CODE_LAYOUT).await;
 }
 
 #[ignore = "requires the MLX Laya repository model_directory in the explicit test-run configuration"]
 #[tokio::test]
 #[serial_test::serial]
 async fn should_learn_a_code_the_final_layers_cannot_on_laya() {
-    prove_whole_model_learns_the_code(TunableHeadFamily::Laya).await;
+    prove_whole_model_learns_the_code(TunableHeadFamily::Laya, DEFAULT_CODE_LAYOUT).await;
+}
+
+#[ignore = "requires the MLX Laya repository model_directory in the explicit test-run configuration"]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_learn_a_balanced_code_from_another_passage_on_laya() {
+    prove_whole_model_learns_the_code(TunableHeadFamily::Laya, BALANCED_CODE_LAYOUT).await;
 }
