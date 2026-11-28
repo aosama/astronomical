@@ -48,3 +48,47 @@ fn should_offer_bonsai_2_5_as_the_only_27b_bonsai() {
         ["ahmedihamdy/Ternary-Bonsai-2.5-27B-MLX-2bit-vision-DFLASH2"]
     );
 }
+
+/// Ternary Bonsai 2's 2B and 9B packs are the smallest Bonsai builds, and the
+/// shared core serves both with their vision tower since #2737.
+#[test]
+fn should_offer_the_small_bonsai_2_packs_with_vision() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    for small_pack_id in [
+        "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+        "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+    ] {
+        let small_pack = shipped_entry(&download_catalog, small_pack_id);
+        assert_eq!(small_pack.family().as_str(), FOLDED_TERNARY_FAMILY);
+        assert_eq!(small_pack.revision().len(), 40);
+        assert!(small_pack.capabilities().supports_vision);
+        assert!(small_pack.approximate_memory_bytes() < FOLDED_TARGET_WEIGHTS_BYTES);
+    }
+}
+
+/// The 9B pack ships a multi-token-prediction head in `mtp/` that the engine
+/// does not load, so the download leaves it out and keeps every file the pack
+/// loads with.
+#[test]
+fn should_leave_the_unused_prediction_head_out_of_the_9b_download() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let nine_b_pack = shipped_entry(&download_catalog, "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit");
+    let selection = nine_b_pack.download_path_selection();
+    assert!(!selection.includes("mtp/model.safetensors"));
+    assert!(!selection.includes("mtp/config.json"));
+    for loaded_file in [
+        "config.json",
+        "hadamard.json",
+        "model.safetensors",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja",
+        "generation_config.json",
+        "preprocessor_config.json",
+        "video_preprocessor_config.json",
+    ] {
+        assert!(selection.includes(loaded_file), "{loaded_file}");
+    }
+}
