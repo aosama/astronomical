@@ -414,6 +414,25 @@ impl FixturePackMutation {
         }
     }
 
+    /// Makes the pack's output head its embedding table, as Ternary Bonsai
+    /// 2's 2B ships: every tied statement on, and no `lm_head` module,
+    /// manifest entry or tensors.
+    pub fn tie_output_head_to_embedding(&mut self) {
+        self.config["tie_word_embeddings"] = json!(true);
+        self.config["text_config"]["tie_word_embeddings"] = json!(true);
+        self.config["tied_output"] = json!(true);
+        self.hadamard["prism.hadamard.tied_output"] = json!(true);
+        if let Some(modules) = self.config["modules"].as_array_mut() {
+            modules.retain(is_not_output_head_module);
+        }
+        if let Some(rotated_names) = self.hadamard["prism.hadamard.weight_names"].as_array_mut() {
+            rotated_names.retain(is_not_output_head_weight_name);
+        }
+        for suffix in ["weight", "scales", "biases", "signs"] {
+            self.drop_tensor(&format!("language_model.lm_head.{suffix}"));
+        }
+    }
+
     /// Rewrites one tensor declaration's shape (payload length follows).
     pub fn reshape_tensor(&mut self, tensor_name: &str, shape: Vec<usize>) {
         for (name, _, declared_shape) in &mut self.tensor_declarations {
@@ -427,4 +446,12 @@ impl FixturePackMutation {
 /// Removes a directory tree (test fixture cleanup).
 pub fn remove_fixture_directory(directory: &Path) {
     let _ = fs::remove_dir_all(directory);
+}
+
+fn is_not_output_head_module(module: &Value) -> bool {
+    module["path"] != "lm_head"
+}
+
+fn is_not_output_head_weight_name(weight_name: &Value) -> bool {
+    weight_name != "language_model.lm_head.weight"
 }

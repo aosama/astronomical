@@ -52,12 +52,13 @@ const MAXIMUM_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 /// The suffix of the per-module sign tensors the sign table already holds.
 const MODULE_SIGNS_SUFFIX: &str = ".signs";
 /// The configuration keys only the folded pack uses.
-const FOLDED_PACK_ONLY_KEYS: [&str; 5] = [
+const FOLDED_PACK_ONLY_KEYS: [&str; 6] = [
     "modules",
     "hadamard_config",
     "requires_runtime",
     "components",
     "tensor_namespace",
+    "tied_output",
 ];
 
 /// Whether `model_directory` holds a folded ternary pack: its `config.json`
