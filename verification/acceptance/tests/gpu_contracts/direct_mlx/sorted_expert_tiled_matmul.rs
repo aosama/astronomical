@@ -64,6 +64,14 @@ fn should_give_mlx_bits_at_a_35b_a3b_layer_over_a_2048_token_chunk() {
     assert_layer_matches_mlx(ORNITH_35B_A3B_LAYER, &flat_expert_ids, 8, 2_717);
 }
 
+#[test]
+#[ignore = "runs custom Metal kernels on the GPU"]
+#[serial]
+fn should_give_mlx_bits_at_a_35b_a3b_layer_over_an_8192_token_chunk() {
+    let flat_expert_ids = skewed_flat_expert_ids(8_192, 8, ORNITH_35B_A3B_LAYER.expert_count);
+    assert_layer_matches_mlx(ORNITH_35B_A3B_LAYER, &flat_expert_ids, 8, 2_722);
+}
+
 // --- edge ---
 
 /// Every row on one expert and the others empty: the tile list holds that
