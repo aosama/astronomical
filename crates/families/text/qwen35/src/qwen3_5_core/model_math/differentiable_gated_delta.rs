@@ -1,16 +1,20 @@
 //! Qwen3.5's Gated DeltaNet recurrence in a form MLX can differentiate, for
 //! training add-ons inside Kev and Clef.
 //!
-//! Serving runs the recurrence through Astronomical's fused Metal kernel,
-//! which has no backward pass of its own. Training needs two things from
-//! it: scores that equal serving's exactly, so the parity check before
-//! training and the proof of the written folder can compare them, and a
-//! gradient that is merely accurate. So the recurrence here runs serving's
-//! own kernel forward and borrows its backward pass from MLX's
-//! `gated_delta_update`, attached as a custom vector-Jacobian product.
+//! Serving runs the recurrence through Astronomical's fused Metal kernel
+//! when the worker's capability probe kept it, and through one-token public
+//! MLX operations when the probe demoted it, as on MLX's CUDA backend, which
+//! cannot run a Metal kernel. Neither route has a backward pass of its own
+//! that training can afford. Training needs two things from the recurrence:
+//! scores that equal serving's exactly, so the parity check before training
+//! and the proof of the written folder can compare them, and a gradient that
+//! is merely accurate. So the recurrence here runs serving's own route
+//! forward, the one the loaded model chose, and borrows its backward pass
+//! from MLX's `gated_delta_update`, attached as a custom vector-Jacobian
+//! product.
 //!
-//! The two other routes were measured on one Clef-shaped layer
-//! (16 key heads, 32 value heads of 128) and not taken:
+//! The two other routes were measured on Metal, on one Clef-shaped layer
+//! (16 key heads, 32 value heads of 128), and not taken:
 //! - MLX's `gated_delta_update` on its own: a backward pass of 0.10 GiB and
 //!   0.07 s over 512 tokens, but its forward differs from serving's kernel
 //!   by about 8e-4 relative per layer, so a trainable copy built on it could
@@ -19,6 +23,12 @@
 //!   and differentiable, but its backward pass keeps every token's state,
 //!   2.48 GiB and 0.34 s per layer over 512 tokens, about 60 GiB across
 //!   Clef's 24 such layers.
+//!
+//! That 0.10 GiB backward pass is Metal's fused kernel. MLX 0.32.5's CUDA
+//! backend has a forward kernel for `gated_delta_update` but no backward one
+//! (`GatedDeltaUpdateVJP::use_fallback` is always true there), so on CUDA
+//! the borrowed backward pass differentiates MLX's one-token loop and keeps
+//! every token's state, as the plain-op route above does.
 //!
 //! The borrowed backward pass is MLX's derivative of a recurrence that
 //! differs from the forward by those 8e-4, so the gradient is off by about
@@ -47,11 +57,15 @@ pub struct DifferentiableGatedDelta {
 
 impl DifferentiableGatedDelta {
     /// Builds the recurrence once; every layer and pass reuses it.
+    /// `serving_uses_fused_kernel` is whether the loaded model kept the fused
+    /// kernel (its `gated_delta_kernel` is present): the forward then runs
+    /// that kernel, and otherwise the one-token operations serving falls
+    /// back to, so trained and served scores come from the same arithmetic.
     ///
     /// # Errors
     /// Returns the MLX description when the kernel or a closure cannot be made.
-    pub fn new() -> Result<Self, MlxCError> {
-        let served_forward = served_forward_closure()?;
+    pub fn new(serving_uses_fused_kernel: bool) -> Result<Self, MlxCError> {
+        let served_forward = served_forward_closure(serving_uses_fused_kernel)?;
         let borrowed_backward = MlxClosureCustom::from_fn(borrowed_backward_pass)?;
         Ok(Self {
             recurrence: served_forward.with_custom_vjp(&borrowed_backward)?,
@@ -81,12 +95,16 @@ impl DifferentiableGatedDelta {
     }
 }
 
-/// Serving's fused kernel as an MLX closure. MLX's transforms take a
+/// Serving's route as an MLX closure: the fused kernel when serving kept
+/// it, the one-token operations otherwise. MLX's transforms take a
 /// function, not a graph, so this is one of the closures MLX's calling
 /// convention requires; it owns its kernel and bindings context.
-fn served_forward_closure() -> Result<MlxClosure, MlxCError> {
+fn served_forward_closure(serving_uses_fused_kernel: bool) -> Result<MlxClosure, MlxCError> {
     let forward_context = runtime_integration::platform_bindings_context()?;
-    let served_kernel = qwen3_5_gated_delta_kernel().map_err(recurrence_failure)?;
+    let served_kernel = serving_uses_fused_kernel
+        .then(qwen3_5_gated_delta_kernel)
+        .transpose()
+        .map_err(recurrence_failure)?;
     MlxClosure::from_fn(move |recurrence_inputs: &[MlxArray]| {
         let [queries, keys, values, decays, update_rates, recurrent_state] = recurrence_inputs
         else {
@@ -94,7 +112,7 @@ fn served_forward_closure() -> Result<MlxClosure, MlxCError> {
         };
         let (sequence_outputs, next_recurrent_state) = qwen3_5_gated_delta_sequence(
             &forward_context,
-            Some(&served_kernel),
+            served_kernel.as_ref(),
             &GatedDeltaInputs {
                 queries,
                 keys,
