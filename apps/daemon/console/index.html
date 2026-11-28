@@ -201,8 +201,8 @@
 
                 <!-- Under the hood: one page for the curious and for developers. The
                      Experts and Memory pages were merged into it; /memory opens it too.
-                     Everyone reads the top: the headline, where the experts are, the last
-                     reply token by token and three plain facts. The engineering detail
+                     Everyone reads the top: the headline, where the experts are and
+                     three plain facts. The engineering detail
                      both pages had stays, unchanged, under "Details for developers". -->
                 <section id="experts-view" class="observatory-view" data-observatory-view="experts" aria-labelledby="memory-page-headline" hidden>
                     <div class="view-heading under-the-hood-heading">
@@ -232,15 +232,6 @@
                             </div>
                             <p id="experts-slot-caption" class="experts-caption"></p>
                             <div id="experts-slot-grid" class="experts-slot-grid" role="img" aria-label="Experts in RAM and on the SSD for the selected layer"></div>
-                        </section>
-                        <section class="panel" aria-labelledby="memory-page-tokens-title">
-                            <h3 id="memory-page-tokens-title">The last reply, token by token</h3>
-                            <p id="memory-page-token-note" class="memory-page-note"></p>
-                            <div id="memory-page-token-strip" class="memory-page-token-strip" role="img" aria-label="One column per token of the last reply. The violet part of each column is the share of its experts read from your SSD."></div>
-                            <div class="memory-page-token-legend">
-                                <span><span class="memory-page-swatch" data-memory-page-part="experts"></span>Experts already in memory</span>
-                                <span><span class="memory-page-swatch" data-memory-page-part="working"></span>Experts read from your SSD</span>
-                            </div>
                         </section>
                         <dl class="under-the-hood-facts">
                             <div class="under-the-hood-fact"><dt>Experts kept in memory</dt><dd id="memory-page-kept-value" class="under-the-hood-fact-value">—</dd><dd id="memory-page-kept-detail" class="under-the-hood-fact-detail"></dd></div>

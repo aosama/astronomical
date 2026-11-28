@@ -1,6 +1,6 @@
 // The picture "Copy as image" makes, on Under the hood and on Home: one
 // sentence a stranger understands ("A 22.9 GB model in an 8 GB limit"),
-// three large figures, the last reply's token columns and a footer naming
+// three large figures, one bar of where the model's experts are and a footer naming
 // the model and the app, drawn on a canvas at a size made for a post. The
 // whole-Mac bar and the wire limit stay on the page: in a post they needed
 // explaining, and the people who would share it are not the ones who know
@@ -19,7 +19,7 @@ function memoryPageImagePalette() {
     const colorOf = (tokenName) => pageStyle.getPropertyValue(tokenName).trim();
     return {
         background: colorOf("--panel"), ink: colorOf("--ink"), inkDim: colorOf("--ink-dim"),
-        accent: colorOf("--accent"), memoryServed: colorOf("--resident"), storageRead: colorOf("--accent")
+        accent: colorOf("--accent"), memoryServed: colorOf("--resident"), onStorage: colorOf("--border")
     };
 }
 
@@ -72,20 +72,19 @@ function drawMemoryPageImageFigures(drawingContext, figures, palette, figuresTop
     });
 }
 
-// One column per token: the memory-served part on top, the share read from
-// the SSD below it, to the same scale as the page's own strip.
-function drawMemoryPageImageTokens(drawingContext, tokenPresentations, palette, stripTop, columnHeight) {
-    const stripWidth = MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 2 * MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, columnGap = 2;
-    // Columns narrow to fit a long reply on one row instead of wrapping it.
-    const columnWidth = Math.min(10, (stripWidth - columnGap * tokenPresentations.length) / Math.max(1, tokenPresentations.length));
-    tokenPresentations.forEach((token, tokenIndex) => {
-        const columnLeft = MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS + tokenIndex * (columnWidth + columnGap);
-        const storageHeight = (token.storageSharePercent / 100) * columnHeight;
-        drawingContext.fillStyle = palette.memoryServed;
-        drawingContext.fillRect(columnLeft, stripTop, columnWidth, columnHeight - storageHeight);
-        drawingContext.fillStyle = palette.storageRead;
-        drawingContext.fillRect(columnLeft, stripTop + columnHeight - storageHeight, columnWidth, storageHeight);
-    });
+// One bar for the whole model: the part of its experts in memory, solid,
+// and the part left on the SSD, dim, with the two sizes written under it.
+// Nothing is drawn for a model that keeps no experts apart.
+function drawMemoryPageImageLibrarySplit(drawingContext, librarySplit, palette, barTop) {
+    if (!librarySplit) return;
+    const barWidth = MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 2 * MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, barHeight = 28;
+    drawingContext.fillStyle = palette.onStorage;
+    drawingContext.fillRect(MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, barTop, barWidth, barHeight);
+    drawingContext.fillStyle = palette.memoryServed;
+    drawingContext.fillRect(MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, barTop, barWidth * librarySplit.residentPercent / 100, barHeight);
+    drawingContext.fillStyle = palette.inkDim;
+    drawingContext.font = "21px " + MEMORY_PAGE_IMAGE_FONT_FAMILY;
+    drawingContext.fillText(librarySplit.caption, MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, barTop + barHeight + 34);
 }
 
 // Draws the picture from the page's two documents.
@@ -104,7 +103,7 @@ function drawMemoryPageImage(imageCanvas, statusDocument, expertStatsDocument, p
     drawingContext.fillText(memoryPageImageHeadline(statusDocument, presentation.headline),
         MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, 168, MEMORY_PAGE_IMAGE_WIDTH_PIXELS - 2 * MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS);
     drawMemoryPageImageFigures(drawingContext, memoryPageImageFigures(statusDocument, expertStatsDocument), palette, 270);
-    drawMemoryPageImageTokens(drawingContext, presentation.tokens, palette, 350, 150);
+    drawMemoryPageImageLibrarySplit(drawingContext, memoryPageLibrarySplit(expertStatsDocument), palette, 390);
     drawingContext.fillStyle = palette.inkDim;
     drawingContext.font = "18px " + MEMORY_PAGE_IMAGE_FONT_FAMILY;
     drawingContext.fillText(memoryPageImageFooter(statusDocument), MEMORY_PAGE_IMAGE_SIDE_MARGIN_PIXELS, 580);

@@ -1,6 +1,6 @@
 // Reply summary tests (Under the hood): the headline, the three plain facts,
 // the Mac's memory bar and its wire limit, the four developer counters, and
-// the per-token strip.
+// the three plain facts and the split of the expert library.
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -78,7 +78,7 @@ test("should_report_the_three_plain_facts", () => {
 
     assert.deepEqual(presentation.plainFacts, {
         kept: { value: "22.0 GB", detail: "69% of all its experts, the ones used most" },
-        read: { value: "13 of 384", detail: "experts for a typical token" },
+        read: { value: "13 of 384", detail: "experts for a typical token; the other 97% were already in memory" },
         limit: { value: "10 GB" }
     });
 });
@@ -117,24 +117,42 @@ test("should_report_the_four_facts_of_the_last_reply", () => {
     ]);
 });
 
-test("should_draw_each_token_to_the_scale_of_the_experts_it_routed_to", () => {
-    const presentation = presentationFor(streamingStatusDocument(), streamingExpertStatsDocument());
+test("should_split_the_expert_library_between_memory_and_the_ssd", () => {
+    const scriptContext = createMemoryPageContext();
+    scriptContext.expertStatsDocument = streamingExpertStatsDocument();
 
-    assert.deepEqual(presentation.tokens.map((token) => token.storageSharePercent.toFixed(2)),
-        ["10.42", "0.00", "0.00", "2.60"]);
-    assert.equal(presentation.tokenNote,
-        "Each token used 384 experts. On average 97% of them were already in memory; the rest were read from your SSD.");
+    const librarySplit = JSON.parse(vm.runInContext("JSON.stringify(memoryPageLibrarySplit(expertStatsDocument))", scriptContext));
+
+    assert.equal(librarySplit.residentPercent, 68.75);
+    assert.equal(librarySplit.caption, "22.0 GB of its experts in memory · 10.0 GB on the SSD");
 });
 
-test("should_scale_tokens_to_the_largest_read_when_the_routed_width_is_unknown", () => {
+test("should_split_nothing_for_a_model_that_keeps_no_experts_apart", () => {
+    const scriptContext = createMemoryPageContext();
+    scriptContext.expertStatsDocument = { residency: { resident_expert_payload_bytes: 0, complete_expert_payload_byte_count: 0 } };
+
+    assert.equal(vm.runInContext("memoryPageLibrarySplit(expertStatsDocument)", scriptContext), null);
+    assert.equal(vm.runInContext("memoryPageLibrarySplit(null)", scriptContext), null);
+});
+
+test("should_never_draw_more_in_memory_than_the_whole_library", () => {
+    const scriptContext = createMemoryPageContext();
+    scriptContext.expertStatsDocument = { residency: { resident_expert_payload_bytes: 40 * 1073741824, complete_expert_payload_byte_count: 32 * 1073741824 } };
+
+    const librarySplit = JSON.parse(vm.runInContext("JSON.stringify(memoryPageLibrarySplit(expertStatsDocument))", scriptContext));
+
+    assert.equal(librarySplit.residentPercent, 100);
+    assert.equal(librarySplit.caption, "32.0 GB of its experts in memory · 0.0 GB on the SSD");
+});
+
+test("should_count_ssd_reads_without_a_share_when_the_routed_width_is_unknown", () => {
     const expertStatsDocument = streamingExpertStatsDocument();
     delete expertStatsDocument.last_reply.routed_expert_count_per_token;
 
     const presentation = presentationFor(streamingStatusDocument(), expertStatsDocument);
 
-    assert.equal(presentation.tokens[0].storageSharePercent, 100);
     assert.equal(presentation.facts[2].value, "13 experts");
-    assert.equal(presentation.tokenNote, "Finish a reply on a model that streams experts to see every token here.");
+    assert.deepEqual(presentation.plainFacts.read, { value: "—", detail: "Appears after the first reply" });
 });
 
 test("should_say_so_when_wired_memory_is_over_the_limit", () => {
@@ -165,7 +183,6 @@ test("should_show_an_invitation_and_no_bar_when_no_model_is_loaded", () => {
     assert.equal(presentation.modelLine, "No model loaded");
     assert.equal(presentation.headline, "Load a model to see how it fits in your memory limit");
     assert.equal(presentation.bar, null);
-    assert.deepEqual(presentation.tokens, []);
     assert.deepEqual(presentation.facts.map((fact) => fact.value), ["—", "—", "—", "—"]);
 });
 
