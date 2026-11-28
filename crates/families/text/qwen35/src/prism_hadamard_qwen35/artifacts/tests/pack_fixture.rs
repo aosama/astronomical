@@ -414,6 +414,23 @@ impl FixturePackMutation {
         }
     }
 
+    /// Turns the fixture into a tied pack shaped like Prism's 2B: every tying
+    /// declaration set, and no `lm_head` module, manifest entry or tensors.
+    pub fn tie_output_head(&mut self) {
+        self.config["tie_word_embeddings"] = json!(true);
+        self.config["text_config"]["tie_word_embeddings"] = json!(true);
+        self.config["tied_output"] = json!(true);
+        if let Some(modules) = self.config["modules"].as_array_mut() {
+            modules.retain(|module| module["path"] != "lm_head");
+        }
+        if let Some(rotated_names) = self.hadamard["prism.hadamard.weight_names"].as_array_mut() {
+            rotated_names.retain(|tensor_name| tensor_name != "language_model.lm_head.weight");
+        }
+        self.hadamard["prism.hadamard.tied_output"] = json!(true);
+        self.tensor_declarations
+            .retain(|(name, _, _)| !name.starts_with("language_model.lm_head."));
+    }
+
     /// Rewrites one tensor declaration's shape (payload length follows).
     pub fn reshape_tensor(&mut self, tensor_name: &str, shape: Vec<usize>) {
         for (name, _, declared_shape) in &mut self.tensor_declarations {

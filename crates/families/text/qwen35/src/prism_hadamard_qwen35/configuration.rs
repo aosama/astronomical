@@ -66,6 +66,7 @@ pub struct FoldedPackConfig {
     text: FoldedTextDimensions,
     packed_modules: Vec<PackedModule>,
     vision_declared: bool,
+    has_tied_output: bool,
 }
 
 impl FoldedPackConfig {
@@ -121,9 +122,11 @@ impl FoldedPackConfig {
         if !document.components.text {
             return Err(FoldedPackConfigError::TextComponentMissing);
         }
-        if document.tie_word_embeddings {
-            return Err(FoldedPackConfigError::TiedEmbeddingsUnsupported);
-        }
+        let has_tied_output = validated_output_tying(
+            document.tie_word_embeddings,
+            document.text_config.tie_word_embeddings,
+            document.tied_output,
+        )?;
         if document.quantization.bits != FOLDED_QUANTIZATION_BITS
             || document.quantization.group_size != FOLDED_QUANTIZATION_GROUP_SIZE
             || document.quantization.mode != FOLDED_QUANTIZATION_MODE
@@ -152,6 +155,7 @@ impl FoldedPackConfig {
             text,
             packed_modules,
             vision_declared: document.components.vision,
+            has_tied_output,
         })
     }
 
@@ -166,10 +170,37 @@ impl FoldedPackConfig {
     }
 
     /// Whether the pack declares a vision component. The tower is validated
-    /// with the pack inventory; image serving lands in a later phase.
+    /// with the pack inventory and served by the shared core.
     pub const fn vision_declared(&self) -> bool {
         self.vision_declared
     }
+
+    /// Whether the output head is the embedding table itself (the 2B pack),
+    /// so the pack ships no `lm_head` module.
+    pub const fn has_tied_output(&self) -> bool {
+        self.has_tied_output
+    }
+}
+
+/// The pack says three times whether its head is tied: the top-level and text
+/// `tie_word_embeddings` a generic loader reads, and Prism's `tied_output`.
+/// They must agree, because serving one reading while the weights follow
+/// another would compute logits from the wrong table.
+fn validated_output_tying(
+    pack_ties_word_embeddings: bool,
+    text_ties_word_embeddings: bool,
+    pack_declares_tied_output: bool,
+) -> Result<bool, FoldedPackConfigError> {
+    if pack_ties_word_embeddings != text_ties_word_embeddings
+        || pack_ties_word_embeddings != pack_declares_tied_output
+    {
+        return Err(FoldedPackConfigError::OutputTyingDisagreement {
+            pack_ties_word_embeddings,
+            text_ties_word_embeddings,
+            pack_declares_tied_output,
+        });
+    }
+    Ok(pack_declares_tied_output)
 }
 
 /// One packed-module record: a projection whose weights live in the rotated
@@ -259,9 +290,6 @@ impl FoldedTextDimensions {
         }
         if !text.attn_output_gate {
             return Err(FoldedPackConfigError::OutputGateMissing);
-        }
-        if text.tie_word_embeddings {
-            return Err(FoldedPackConfigError::TiedEmbeddingsUnsupported);
         }
         validated_dimensionality(&text)?;
         let layer_types = validated_layer_types(&text)?;
@@ -456,8 +484,14 @@ pub enum FoldedPackConfigError {
     MultiTokenPredictionUnsupported,
     #[error("folded pack omits the text component")]
     TextComponentMissing,
-    #[error("folded pack declares tied embeddings, which are unsupported")]
-    TiedEmbeddingsUnsupported,
+    #[error(
+        "folded pack disagrees with itself about a tied output head: tie_word_embeddings {pack_ties_word_embeddings}, text_config.tie_word_embeddings {text_ties_word_embeddings}, tied_output {pack_declares_tied_output}"
+    )]
+    OutputTyingDisagreement {
+        pack_ties_word_embeddings: bool,
+        text_ties_word_embeddings: bool,
+        pack_declares_tied_output: bool,
+    },
     #[error("folded pack declares unsupported hidden activation {actual_hidden_act:?}")]
     UnsupportedHiddenActivation { actual_hidden_act: String },
     #[error("folded pack declares unsupported GDN output gate type {actual_output_gate_type:?}")]

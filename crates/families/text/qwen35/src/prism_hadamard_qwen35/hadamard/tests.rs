@@ -8,6 +8,7 @@ mod acceptance_tests;
 mod manifest_tests;
 mod refusal_tests;
 mod sign_table_tests;
+mod tied_output_tests;
 
 use serde_json::{Value, json};
 

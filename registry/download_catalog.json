@@ -811,6 +811,44 @@
             }
         },
         {
+            "huggingface_id": "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+            "revision": "f4e28a59531731c41b6dfac88cf271bd58f0a287",
+            "summary": "A 9B model in under 4 GB that reads pictures and calls tools.",
+            "family": "prism_hadamard_qwen35",
+            "approximate_size_bytes": 3612123448,
+            "approximate_memory_bytes": 2473272870,
+            "role": "chat",
+            "public": true,
+            "description": "Prism ML's Ternary Bonsai 2 9B, a Qwen 3.5 9B trained to work with three values in each weight, folded into a 2-bit pack with its float16 vision tower. It reads pictures and text, reasons before answering, and calls tools. The download also holds Prism ML's small draft head, about 0.1 GB, which Astronomical does not use yet.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "2-bit ternary affine (group 128) with folded Hadamard transforms",
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+            "revision": "1c6cbae21f8c38830ce337972b46fdae7b18eaaa",
+            "summary": "The smallest Bonsai: a 2B model in about 1 GB that reads pictures.",
+            "family": "prism_hadamard_qwen35",
+            "approximate_size_bytes": 1213282532,
+            "approximate_memory_bytes": 648004262,
+            "role": "chat",
+            "public": true,
+            "description": "Prism ML's Ternary Bonsai 2 2B, a Qwen 3.5 2B trained to work with three values in each weight, folded into a 2-bit pack with its float16 vision tower. It reads pictures and text, reasons before answering, and calls tools. Quick and light, for short everyday questions.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "2-bit ternary affine (group 128) with folded Hadamard transforms",
+            "upstream_license": "Apache-2.0"
+        },
+        {
             "huggingface_id": "araysuter/Ornith-1.5-122B-MLX-mixed-2bit",
             "revision": "848e5a0d53f457d213bb43e554012722f3f3fc60",
             "summary": "The largest model in the catalog. Text only.",

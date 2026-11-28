@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 pub use super::FoldedPackConfigError;
 
 mod acceptance_tests;
+mod output_tying_tests;
 mod refusal_tests;
 
 pub fn shipped_shape_config_json() -> Value {

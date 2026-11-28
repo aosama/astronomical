@@ -93,3 +93,15 @@ fn should_accept_a_text_only_export_without_the_requires_runtime_marker() {
     assert!(!config.vision_declared());
     assert_eq!(config.packed_modules().len(), 3);
 }
+
+/// Qwen 3.5's own 2B and 9B configs leave the GDN gate out, and Prism's
+/// packs of them copy that.
+#[test]
+fn should_read_an_absent_output_gate_as_qwen3_5_swish() {
+    let mut document = shipped_shape_config_json();
+    document["text_config"]
+        .as_object_mut()
+        .expect("the text config is an object")
+        .remove("output_gate_type");
+    parse_config(&document).expect("a Qwen 3.5 text config without a gate should parse");
+}

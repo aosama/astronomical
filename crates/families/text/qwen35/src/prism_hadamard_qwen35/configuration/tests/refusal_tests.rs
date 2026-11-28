@@ -72,10 +72,6 @@ fn should_refuse_unsupported_component_declarations() {
         }),
         FoldedPackConfigError::VisionTokenIdsMissing
     ));
-    assert!(matches!(
-        refusal(|d| d["tie_word_embeddings"] = serde_json::json!(true)),
-        FoldedPackConfigError::TiedEmbeddingsUnsupported
-    ));
 }
 
 #[test]
@@ -125,7 +121,7 @@ fn should_refuse_unsupported_text_semantics() {
     ));
     assert!(matches!(
         refusal(|d| d["text_config"]["tie_word_embeddings"] = serde_json::json!(true)),
-        FoldedPackConfigError::TiedEmbeddingsUnsupported
+        FoldedPackConfigError::OutputTyingDisagreement { .. }
     ));
     assert!(matches!(
         refusal(|d| d["text_config"]["rope_parameters"]["type"] = serde_json::json!("yarn")),

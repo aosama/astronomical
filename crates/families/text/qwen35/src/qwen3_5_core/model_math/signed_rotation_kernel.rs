@@ -20,7 +20,8 @@
 //! the compiled signed cast (`float(x) * sign` is exact for `sign` in ±1),
 //! and the single store rounds `float * scale` to the activation dtype exactly
 //! where the composed route's final cast rounds its float32 product. The
-//! capability probe checks this equality bit for bit, and the upstream parity
+//! capability probe checks this equality bit for bit at one block, its tests
+//! at every block a pack may declare, and the upstream parity
 //! journey is the end-to-end witness. The Metal is in
 //! `metal/astro_family_qwen35_signed_hadamard_rotation.metal`.
 

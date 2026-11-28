@@ -64,3 +64,63 @@ fn should_offer_prism_mls_bonsai_2_pack_with_vision() {
             .contains("Text only")
     );
 }
+
+/// Prism ML's Bonsai 2 9B and 2B packs (#2669). Both carry their vision tower
+/// in the one weights file, so they read pictures; both are pinned at a full
+/// commit; and neither drafts here, so nothing in their text promises the
+/// quicker replies a draft model gives.
+const SMALL_BONSAI_2_PACKS: [&str; 2] = [
+    "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit",
+    "prism-ml/Ternary-Bonsai-2-2B-mlx-2bit",
+];
+
+#[test]
+fn should_offer_prism_mls_bonsai_2_9b_and_2b_packs_with_vision() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    for huggingface_id in SMALL_BONSAI_2_PACKS {
+        let prism_pack = shipped_entry(&download_catalog, huggingface_id);
+        assert_eq!(prism_pack.family().as_str(), FOLDED_TERNARY_FAMILY);
+        assert_eq!(prism_pack.revision().len(), 40, "{huggingface_id}");
+        assert!(
+            prism_pack.capabilities().supports_vision,
+            "{huggingface_id}"
+        );
+        assert!(
+            prism_pack.build().is_none(),
+            "{huggingface_id} is its own model"
+        );
+    }
+}
+
+#[test]
+fn should_not_promise_drafting_for_the_small_bonsai_2_packs() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    for huggingface_id in SMALL_BONSAI_2_PACKS {
+        let prism_pack = shipped_entry(&download_catalog, huggingface_id);
+        let catalog_text = format!(
+            "{} {}",
+            prism_pack.summary().unwrap_or_default(),
+            prism_pack.description().unwrap_or_default()
+        );
+        assert!(!catalog_text.contains("checks them all"), "{catalog_text}");
+        assert!(!catalog_text.contains("Text only"), "{catalog_text}");
+        assert!(prism_pack.measured_speed().is_none(), "{huggingface_id}");
+    }
+}
+
+/// The smaller packs must stay smaller than the 27B: a swapped size would
+/// steer a small Mac to the wrong download.
+#[test]
+fn should_size_the_small_bonsai_2_packs_below_the_27b_target() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let bonsai_9b_entry = shipped_entry(&download_catalog, SMALL_BONSAI_2_PACKS[0]);
+    let bonsai_2b_entry = shipped_entry(&download_catalog, SMALL_BONSAI_2_PACKS[1]);
+    assert!(bonsai_2b_entry.approximate_size_bytes() < bonsai_9b_entry.approximate_size_bytes());
+    assert!(bonsai_9b_entry.approximate_size_bytes() < FOLDED_TARGET_WEIGHTS_BYTES);
+    assert!(
+        bonsai_2b_entry.approximate_memory_bytes() < bonsai_9b_entry.approximate_memory_bytes()
+    );
+}

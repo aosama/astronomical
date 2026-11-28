@@ -190,8 +190,7 @@ pub(super) fn validate_pack_inventory(
 fn validate_complete_packed_module_inventory(
     config: &FoldedPackConfig,
 ) -> Result<(), FoldedPackValidationError> {
-    let mut expected_module_paths =
-        BTreeSet::from(["lm_head".to_owned(), "model.embed_tokens".to_owned()]);
+    let mut expected_module_paths = embedding_and_head_module_paths(config);
     for (layer_index, layer_type) in config.text().layer_types.iter().enumerate() {
         let layer_prefix = format!("model.layers.{layer_index}");
         match layer_type.as_str() {
@@ -478,5 +477,34 @@ fn validate_manifest_module_agreement(
             ),
         });
     }
-    Ok(())
+    validate_output_tying_agreement(config, hadamard_contract)
+}
+
+/// The embedding module, and the head module unless the head is tied: a tied
+/// head is the embedding table, so a tied pack ships no head module.
+fn embedding_and_head_module_paths(config: &FoldedPackConfig) -> BTreeSet<String> {
+    let mut module_paths = BTreeSet::from(["model.embed_tokens".to_owned()]);
+    if !config.has_tied_output() {
+        module_paths.insert("lm_head".to_owned());
+    }
+    module_paths
+}
+
+/// `config.json` and `hadamard.json` must agree on whether the head is tied;
+/// the core rotates a tied head by the manifest's word and checks the
+/// tensors by the config's.
+fn validate_output_tying_agreement(
+    config: &FoldedPackConfig,
+    hadamard_contract: &HadamardContract,
+) -> Result<(), FoldedPackValidationError> {
+    if config.has_tied_output() == hadamard_contract.has_tied_output() {
+        return Ok(());
+    }
+    Err(FoldedPackValidationError::ContractModuleDisagreement {
+        detail: format!(
+            "config.json says the output head is tied ({}) but hadamard.json says {}",
+            config.has_tied_output(),
+            hadamard_contract.has_tied_output()
+        ),
+    })
 }

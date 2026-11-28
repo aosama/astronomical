@@ -52,12 +52,13 @@ const MAXIMUM_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 /// The suffix of the per-module sign tensors the sign table already holds.
 const MODULE_SIGNS_SUFFIX: &str = ".signs";
 /// The configuration keys only the folded pack uses.
-const FOLDED_PACK_ONLY_KEYS: [&str; 5] = [
+const FOLDED_PACK_ONLY_KEYS: [&str; 6] = [
     "modules",
     "hadamard_config",
     "requires_runtime",
     "components",
     "tensor_namespace",
+    "tied_output",
 ];
 
 /// Whether `model_directory` holds a folded ternary pack: its `config.json`
@@ -309,3 +310,7 @@ fn is_left_out_of_the_index(tensor_name: &str) -> bool {
 fn folded_pack_error(description: String) -> Qwen3_5ArtifactValidationError {
     ArtifactValidationError::InvalidFoldedTernaryPack { description }.into()
 }
+
+#[cfg(test)]
+#[path = "folded_ternary_artifact_tests.rs"]
+mod folded_ternary_artifact_tests;

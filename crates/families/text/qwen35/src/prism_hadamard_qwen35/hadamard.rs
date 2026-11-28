@@ -32,6 +32,11 @@ pub const SUPPORTED_BLOCK_SIZES: [u32; 4] = [512, 1024, 2048, 4096];
 /// unimplemented upstream and has no parity reference here.
 pub const SUPPORTED_GDN_LAYOUT_IS_GROUPED: bool = true;
 
+/// The embedding table a tied output head reuses, in the pack's namespace.
+const TIED_OUTPUT_EMBEDDING_WEIGHT_NAME: &str = "language_model.model.embed_tokens.weight";
+/// The separate output head an untied pack ships.
+const UNTIED_OUTPUT_HEAD_WEIGHT_NAME: &str = "language_model.lm_head.weight";
+
 /// Bounded document size guard for the manifest itself.
 pub const MAXIMUM_HADAMARD_CONTRACT_BYTES: usize = 4 * 1024 * 1024;
 /// Bound on the number of rotated or inverse tensor names. The shipped 27B
@@ -47,9 +52,10 @@ const MAXIMUM_SIGN_VECTOR_WIDTH: u32 = 1_048_576;
 
 /// Parsed and validated Hadamard transform contract for a folded artifact.
 ///
-/// The contract answers the serving path's three questions: which tensors are
-/// rotated, which single tensor carries the inverse transform, and which
-/// per-width sign vector the activation transform must use.
+/// The contract answers the serving path's four questions: which tensors are
+/// rotated, which single tensor carries the inverse transform, which
+/// per-width sign vector the activation transform must use, and whether the
+/// output head is that inverse-rotated embedding table itself.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HadamardContract {
     block_size: u32,
@@ -57,6 +63,7 @@ pub struct HadamardContract {
     rotated_tensor_names: BTreeSet<String>,
     inverse_tensor_names: BTreeSet<String>,
     sign_vectors_by_width: BTreeMap<u32, Vec<i8>>,
+    has_tied_output: bool,
 }
 
 impl HadamardContract {
@@ -113,17 +120,13 @@ impl HadamardContract {
                 actual_gdn_layout_is_grouped: document.gdn_v_grouped,
             });
         }
-        let rotated_tensor_names =
-            validated_manifest_set(&document.weight_names, artifact_tensor_names)?;
-        let inverse_tensor_names =
-            validated_manifest_set(&document.inverse_weight_names, artifact_tensor_names)?;
-        if rotated_tensor_names
-            .intersection(&inverse_tensor_names)
-            .next()
-            .is_some()
-        {
-            return Err(HadamardContractError::ForwardInverseOverlap);
-        }
+        let (rotated_tensor_names, inverse_tensor_names) =
+            validated_transform_manifests(&document, artifact_tensor_names)?;
+        let has_tied_output = validated_tied_output(
+            document.tied_output,
+            &inverse_tensor_names,
+            artifact_tensor_names,
+        )?;
         let sign_values = document
             .sign_values
             .iter()
@@ -138,6 +141,7 @@ impl HadamardContract {
             rotated_tensor_names,
             inverse_tensor_names,
             sign_vectors_by_width,
+            has_tied_output,
         })
     }
 
@@ -174,12 +178,59 @@ impl HadamardContract {
         &self.inverse_tensor_names
     }
 
+    /// Whether the output head is the embedding table itself. Its stored
+    /// codes then serve the head as a forward-rotated projection would.
+    pub const fn has_tied_output(&self) -> bool {
+        self.has_tied_output
+    }
+
     /// The validated ±1 sign vector for an activation width, if declared.
     pub fn sign_vector(&self, activation_width: u32) -> Option<&[i8]> {
         self.sign_vectors_by_width
             .get(&activation_width)
             .map(Vec::as_slice)
     }
+}
+
+/// The forward and inverse manifests, each resolved against the artifact and
+/// the two kept disjoint: one tensor cannot be stored in both bases.
+fn validated_transform_manifests(
+    document: &HadamardContractDocument,
+    artifact_tensor_names: &BTreeSet<String>,
+) -> Result<(BTreeSet<String>, BTreeSet<String>), HadamardContractError> {
+    let rotated_tensor_names =
+        validated_manifest_set(&document.weight_names, artifact_tensor_names)?;
+    let inverse_tensor_names =
+        validated_manifest_set(&document.inverse_weight_names, artifact_tensor_names)?;
+    if rotated_tensor_names
+        .intersection(&inverse_tensor_names)
+        .next()
+        .is_some()
+    {
+        return Err(HadamardContractError::ForwardInverseOverlap);
+    }
+    Ok((rotated_tensor_names, inverse_tensor_names))
+}
+
+/// A tied head reuses the embedding's codes, which are only in the head's
+/// basis when the embedding is the inverse-rotated table (stored `E·R`, so
+/// `h·Eᵀ = (h·R)·(E·R)ᵀ`). A pack that also ships its own head contradicts the
+/// flag, and serving either reading could pick the wrong one.
+fn validated_tied_output(
+    declares_tied_output: bool,
+    inverse_tensor_names: &BTreeSet<String>,
+    artifact_tensor_names: &BTreeSet<String>,
+) -> Result<bool, HadamardContractError> {
+    if !declares_tied_output {
+        return Ok(false);
+    }
+    if !inverse_tensor_names.contains(TIED_OUTPUT_EMBEDDING_WEIGHT_NAME) {
+        return Err(HadamardContractError::TiedOutputWithoutInverseEmbedding);
+    }
+    if artifact_tensor_names.contains(UNTIED_OUTPUT_HEAD_WEIGHT_NAME) {
+        return Err(HadamardContractError::TiedOutputWithSeparateHead);
+    }
+    Ok(true)
 }
 
 fn validated_manifest_set(
@@ -325,6 +376,12 @@ pub enum HadamardContractError {
     DuplicateTensorReference,
     #[error("hadamard contract forward and inverse transform manifests overlap")]
     ForwardInverseOverlap,
+    #[error(
+        "hadamard contract declares a tied output head but its embedding is not inverse-rotated"
+    )]
+    TiedOutputWithoutInverseEmbedding,
+    #[error("hadamard contract declares a tied output head but the pack ships its own head")]
+    TiedOutputWithSeparateHead,
     #[error("hadamard contract declares an empty sign table")]
     EmptySignTable,
     #[error(
@@ -379,4 +436,7 @@ struct HadamardContractDocument {
     sign_values: Vec<serde_json::Number>,
     #[serde(rename = "prism.hadamard.gdn_v_grouped")]
     gdn_v_grouped: bool,
+    /// Absent in packs with their own output head, such as the 9B and 27B.
+    #[serde(rename = "prism.hadamard.tied_output", default)]
+    tied_output: bool,
 }
