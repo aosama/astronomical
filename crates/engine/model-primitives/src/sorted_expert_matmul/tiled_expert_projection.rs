@@ -52,11 +52,14 @@ pub const GATE_UP_SCHEDULE: TiledExpertSchedule = TiledExpertSchedule {
     tiles_per_grid_group: 32,
 };
 
-/// The down projection (K 512): 64-row tiles in the plain layout, where
-/// streaming the weights dominates below 120 rows an expert.
+/// The down projection (K 512): 64-row tiles on the grid's x axis. Raced
+/// against oMLX's kernels in one process on an M5 Pro (2026-11-27, same
+/// bits), a 35B-A3B layer's routed experts took 6.16 ms against 6.43 ms with
+/// the plain layout at 2,048 tokens, and 19.31 against 20.02 ms at 8,192
+/// (`tools/tiled_vs_omlx_race.py` in the performance-parity repository).
 pub const DOWN_SCHEDULE: TiledExpertSchedule = TiledExpertSchedule {
     rows_per_tile: 64,
-    tiles_per_grid_group: 0,
+    tiles_per_grid_group: 32,
 };
 
 /// The three kernels, declared once and shared by every expert layer.

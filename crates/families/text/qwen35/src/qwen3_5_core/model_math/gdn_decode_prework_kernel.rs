@@ -43,8 +43,14 @@ const SUPPORTED_HEAD_DIMENSION: i32 = LANE_COUNT * CHANNELS_PER_LANE;
 /// that a separately-compiled fused launch does not reproduce bit-for-bit;
 /// float16 therefore falls back to the composed path.
 const SUPPORTED_ACTIVATION_DTYPES: [MlxDtype; 1] = [MlxDtype::BFloat16];
-/// Launch-bound shapes only: single decode steps and verification rows.
-const MAX_FUSED_TOKEN_COUNT: i32 = KEPT_STATE_ROW_COUNT + 1;
+/// The most rows one launch takes: a whole prompt span. The kernel was
+/// written for decode steps and verification rows, but it convolves each row
+/// from its own window, so a prompt span is the same arithmetic over more
+/// rows; the direct-MLX contract proves its bits against the composed path at
+/// 2,048 rows and at an uneven tail. One launch replaces the composed span's
+/// conv1d, SiLU, split, two RMS norms and two scales, about six passes over
+/// the span's 40 MiB of mixed q/k/v.
+const MAX_FUSED_TOKEN_COUNT: i32 = 16_384;
 
 const PREWORK_OPERATION: &str = "apply the fused Qwen3.5 gated-delta decode prework";
 
@@ -275,7 +281,7 @@ fn validate_prework_shapes(
     }
     if !(1..=MAX_FUSED_TOKEN_COUNT).contains(&token_count) {
         return Err(prework_error(
-            "the fused prework kernel serves single decode steps and verification rows",
+            "the fused prework kernel serves at most one prompt span's rows",
         ));
     }
     if convolution_dimension != expected_convolution_dimension {
