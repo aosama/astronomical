@@ -25,7 +25,8 @@ const configurationEditorState = {
     isAdvancedOpen: false,
     invalidSettings: new Map(),
     isBusy: false,
-    neuralEngineStatusDocument: null,
+    // The last status document a poll returned; the rows that show live state read it.
+    latestStatusDocument: null,
     stateDirectory: null,
     unavailableSettingPaths: [],
 };
@@ -273,12 +274,15 @@ function rememberConfigurationStateDirectory(statusDocument) {
 
 // Called on every status poll. The Neural Engine status line lives in that row's
 // explanation for the loaded model only, so it costs the page nothing until someone
-// asks what the toggle is doing.
+// asks what the toggle is doing. The prompt chunk's line sits under its row.
 function renderConfigurationStatus(statusDocument) {
-    configurationEditorState.neuralEngineStatusDocument = statusDocument;
+    configurationEditorState.latestStatusDocument = statusDocument;
     rememberConfigurationStateDirectory(statusDocument);
     document.querySelectorAll("[data-neural-engine-status]").forEach((statusElement) => {
         statusElement.textContent = neuralEnginePrefillStatusMessage(statusDocument.neural_engine_prefill);
+    });
+    document.querySelectorAll("[data-prompt-chunk-status]").forEach((statusElement) => {
+        statusElement.textContent = promptProcessingChunkStatusMessage(statusDocument.prompt_processing_chunk);
     });
 }
 

@@ -40,6 +40,7 @@ thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+ipc-protocol = { path = "../../../contracts/ipc-protocol", features = ["test-support"] }
 model-primitives = { path = "../../../engine/model-primitives", features = ["test-support"] }
 # The GPU tests sample the process-global MLX allocator, so they serialize.
 serial_test.workspace = true

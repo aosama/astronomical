@@ -18,10 +18,9 @@ use ipc_protocol::{
     WorkerDecodeAstroExpertCachePolicy,
 };
 
-use super::qwen3_5_engine_selection::{
-    EngineStart, prompt_chunk_tokens_for, select_qwen3_5_engine_from_artifact,
-};
+use super::qwen3_5_engine_selection::{EngineStart, select_qwen3_5_engine_from_artifact};
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
+use super::qwen3_5_prompt_chunk_settlement::{settle_prompt_chunk, this_macs_prompt_chunk_gpu};
 use super::qwen3_5_startup_storage::{
     astro_ssd_prompt_cache_disk_store_config, astro_ssd_prompt_cache_serves_artifact,
     model_astro_neural_engine_program_cache_directory, open_model_loading_attribution,
@@ -179,7 +178,7 @@ fn resolve_startup_storage(
 /// an engine-initialization failure onto the startup error.
 #[allow(clippy::too_many_arguments)]
 fn construct_selected_qwen3_5_engine(
-    streaming_start: EngineStart,
+    engine_start: EngineStart,
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
@@ -193,8 +192,10 @@ fn construct_selected_qwen3_5_engine(
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     artifact_metadata: &ReviewedArtifactMetadata,
 ) -> Result<ModelFamilyInferenceEngine, Qwen3_5ModelStartupError> {
+    let settled_prompt_chunk =
+        settle_prompt_chunk(chunking, engine_start, this_macs_prompt_chunk_gpu());
     construct_text_engine(
-        prompt_chunk_tokens_for(&chunking, streaming_start.holds_whole_model),
+        settled_prompt_chunk.report.chunk_tokens,
         validated_artifact,
         active_memory_limit_bytes,
         mlx_buffer_cache_limit_bytes,
@@ -202,13 +203,14 @@ fn construct_selected_qwen3_5_engine(
         think_end_token_id,
         model_directory_path,
         maximum_context_tokens,
-        chunking,
+        settled_prompt_chunk.chunking,
         model_loading_performance_attribution,
         performance_attribution_log,
         TextEngineSettings {
             decode_astro_expert_cache_policy,
             astro_neural_engine_program_cache_directory: startup_storage
                 .astro_neural_engine_program_cache_directory,
+            prompt_processing_chunk_report: Some(settled_prompt_chunk.report),
         },
         artifact_metadata,
     )

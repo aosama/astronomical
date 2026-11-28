@@ -41,6 +41,7 @@ impl WorkerEvent {
             Self::NeuralEnginePrefillChanged => "neural_engine_prefill_changed",
             Self::DraftModelChanged => "draft_model_changed",
             Self::CustomMetalKernelsChanged => "custom_metal_kernels_changed",
+            Self::PromptProcessingChunkChanged => "prompt_processing_chunk_changed",
             Self::DraftingReport => "drafting_report",
             Self::NeuralEngineChunkFinished => "neural_engine_chunk_finished",
             Self::ModelLoadInFlight => "model_load_in_flight",
@@ -117,6 +118,7 @@ impl WorkerEvent {
             | Self::NeuralEnginePrefillChanged { .. }
             | Self::DraftModelChanged { .. }
             | Self::CustomMetalKernelsChanged { .. }
+            | Self::PromptProcessingChunkChanged { .. }
             | Self::NeuralEngineChunkFinished { .. }
             | Self::ModelLoadInFlight { .. }
             | Self::ExpertStreamingStats { .. }

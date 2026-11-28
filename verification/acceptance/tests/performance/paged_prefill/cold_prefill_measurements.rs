@@ -93,7 +93,7 @@ fn should_configure_fixed_prompt_processing_chunks_for_summary_metrics_worker() 
     .expect("the metrics worker config should be JSON");
 
     assert_eq!(
-        configuration_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"],
+        configuration_document["chunking"]["prompt_processing_chunk_size_tokens"],
         FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS,
         "summary metrics should use the fixed benchmark prefill chunk size"
     );
@@ -301,7 +301,7 @@ fn isolated_astro_ssd_prompt_cache_worker_launcher(
     let configuration_document = json!({
         "model_directories": [model_directory],
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS,
+            "prompt_processing_chunk_size_tokens": FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS,
         },
     });
     fs::write(

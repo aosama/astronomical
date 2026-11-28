@@ -502,14 +502,20 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # with every one of its features on; the pre-commit hook runs it on any
 # staged Rust source, because no default-feature pass and no
 # continuous-integration lane compiles those feature-gated journeys.
-# `cargo xtask function-length-budget` is the pre-commit hook's workspace
-# clippy pass for the 80-line function budget AGENTS.md sets for production
-# and test code alike. It first scans every Rust source without compiling
-# and fails on any `allow` or `expect` of clippy::too_many_lines; then, on
-# macOS, it runs exactly `cargo clippy --workspace --all-targets`, and on
-# other hosts it leaves out crates whose manifest lists only macOS under
-# `package.metadata.astronomical` `host-platforms`, and every workspace crate
-# depending on them.
+# `cargo xtask function-length-budget` is the pre-commit hook's clippy pass
+# for the 80-line function budget AGENTS.md sets for production and test
+# code alike. It first scans every Rust source without compiling and fails
+# on any `allow` or `expect` of clippy::too_many_lines; then it runs
+# `cargo clippy --all-targets -p ...` over only the workspace packages that
+# own the staged Rust files (a lint judges a crate by its own source, so
+# unchanged dependents keep their verdict; it was 36 of a 53-second hook to
+# re-lint them), and the whole workspace when a manifest, Cargo.lock,
+# clippy.toml, the toolchain file or `.cargo/` is staged, when a staged Rust
+# file is outside every package, or when nothing is staged.
+# `cargo xtask function-length-budget --workspace` always lints the whole
+# workspace. On hosts other than macOS it leaves out crates whose manifest
+# lists only macOS under `package.metadata.astronomical` `host-platforms`, and
+# every workspace crate depending on them.
 # `cargo xtask model-serving-default-features` is the hook's default-feature
 # lint of model-serving and the crates split out of it, with the same host
 # awareness; `cargo xtask lint-acceptance-features` skips on a host that
@@ -1006,6 +1012,16 @@ measure-sorted-expert-matmul-verdict = "run -p xtask -- test-run --package astro
 # any gate bit differs, then prints the profiler's verdict. No model; under a
 # minute.
 measure-sorted-expert-token-rows-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 120 --filter gate_and_up_from_token_rows_against_the_sorted_copy"
+# A 35B-A3B prompt chunk's routed experts (2,048 tokens, four layers) through
+# the tiled sorted-expert kernels (gate, up and their SwiGLU in one kernel
+# from the token rows, then a tiled down) against the route the engine took
+# before them (the token-row matmul for gate and for up, MLX's compiled
+# SwiGLU, MLX's sorted gather_qmm for down): fails if the down outputs differ
+# in any bit, then prints the profiler's verdict. No model; under a minute.
+measure-sorted-expert-tiled-layer-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 120 --filter tiled_routed_experts_against_todays_route"
+# The tiled sorted-expert kernels' exactness contract against MLX (gate, up
+# and SwiGLU; down), on uneven routing and at a 35B-A3B layer. Seconds.
+test-sorted-expert-tiled-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --case-budget-seconds 240 --filter sorted_expert_tiled_matmul"
 # A served 2,048-token prompt chunk on an installed 4-bit mixture-of-experts
 # pack (the 35B-A3B), its gate and up projections through the sorted-expert
 # matmul against MLX's route in one loaded model: fails if the chunk's final

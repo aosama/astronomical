@@ -28,7 +28,7 @@ fn should_resolve_reload_config_from_the_config_file() {
                 "model_directories": []
             },
             "chunking": {
-                "fixed_prompt_processing_chunk_size_tokens": 4096,
+                "prompt_processing_chunk_size_tokens": 4096,
                 "full_attention_key_value_growth_tokens": 192,
                 "prefill_graph_submission_layer_interval": 0,
                 "experimental_ssd_paging_generation_graph_submission_layer_interval": 6,

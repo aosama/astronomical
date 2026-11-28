@@ -163,7 +163,7 @@ fn write_instance_config(state_directory: &Path, model_root: &str) {
     // parallel lane's workers small enough that sibling daemon lifecycle
     // assertions keep their exit budgets.
     let configuration_document = format!(
-        r#"{{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{{"model_directories":["{model_root}"],"maximum_mlx_memory_gb":2}},"chunking":{{"fixed_prompt_processing_chunk_size_tokens":2048}}}}"#
+        r#"{{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{{"model_directories":["{model_root}"],"maximum_mlx_memory_gb":2}},"chunking":{{"prompt_processing_chunk_size_tokens":2048}}}}"#
     );
     std::fs::write(state_directory.join("config.json"), configuration_document)
         .expect("instance config should be written");

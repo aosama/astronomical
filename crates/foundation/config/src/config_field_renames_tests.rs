@@ -23,7 +23,7 @@ fn should_move_the_prompt_astro_ssd_prompt_cache_section_and_chunking_keys_to_th
             "chunking": {
                 "ssd_prompt_cache_block_tokens": null,
                 "ssd_prompt_cache_common_prefix_stride_blocks": 4,
-                "fixed_prompt_processing_chunk_size_tokens": 2048
+                "prompt_processing_chunk_size_tokens": null
             },
             "models": {"some-model": {"chunking": {"ssd_prompt_cache_block_tokens": 256}}}
         })

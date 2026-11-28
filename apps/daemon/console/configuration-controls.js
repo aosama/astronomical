@@ -5,6 +5,7 @@
 // textContent only, never as markup.
 
 const CONFIGURATION_NEURAL_ENGINE_PATH = "chunking.experimental_neural_engine_prefill_enabled";
+const CONFIGURATION_PROMPT_CHUNK_PATH = "chunking.prompt_processing_chunk_size_tokens";
 
 // A held reference to the live Maximum model RAM control, because the page redraws
 // its rows and the control owns listeners that memory-control.js wired once.
@@ -190,8 +191,8 @@ function configurationExplanation(descriptor, scope, context) {
         const statusLine = configurationElement("p", "configuration-tip-note");
         statusLine.dataset.neuralEngineStatus = "";
         statusLine.textContent = neuralEnginePrefillStatusMessage(
-            configurationEditorState.neuralEngineStatusDocument
-                ? configurationEditorState.neuralEngineStatusDocument.neural_engine_prefill : null);
+            configurationEditorState.latestStatusDocument
+                ? configurationEditorState.latestStatusDocument.neural_engine_prefill : null);
         explanation.append(statusLine);
     }
     return explanation;
@@ -265,7 +266,27 @@ function renderConfigurationRow(descriptor, scope) {
     row.append(labelCell, controlCell);
     row.append(isMemoryRow ? configurationElement("span") : configurationResetButton(descriptor, context));
     row.append(messageElement);
+    row.append(...configurationRowNotes(descriptor, scope));
     return row;
+}
+
+// Lines shown under a row without opening its explanation: the schema's advice, and
+// for the loaded model's prompt chunk, what is in use now and why. The status line is
+// refreshed on every status poll.
+function configurationRowNotes(descriptor, scope) {
+    const rowNotes = [];
+    if (descriptor.advice) {
+        rowNotes.push(configurationElement("p", "configuration-row-note", descriptor.advice));
+    }
+    if (descriptor.path.join(".") === CONFIGURATION_PROMPT_CHUNK_PATH && scope.isLoadedModel === true) {
+        const statusLine = configurationElement("p", "configuration-row-note");
+        statusLine.dataset.promptChunkStatus = "";
+        statusLine.textContent = promptProcessingChunkStatusMessage(
+            configurationEditorState.latestStatusDocument
+                ? configurationEditorState.latestStatusDocument.prompt_processing_chunk : null);
+        rowNotes.push(statusLine);
+    }
+    return rowNotes;
 }
 
 function configurationGroupHasValues(group, scope) {

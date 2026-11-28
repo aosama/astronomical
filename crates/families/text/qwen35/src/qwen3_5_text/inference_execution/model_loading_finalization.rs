@@ -20,6 +20,7 @@ impl Qwen3_5EngineState {
             .with_neural_engine_prefill_status(self.neural_engine_prefill.status().clone())
             .with_draft_model_status(self.draft_model_status())
             .with_custom_metal_kernel_report(self.custom_metal_kernel_report())
+            .with_prompt_processing_chunk_report(self.prompt_processing_chunk_report)
     }
 
     /// What this worker's capability probes decided and which custom kernels

@@ -4,19 +4,15 @@
 
 use super::{AUTOMATIC_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS, resolve_model_chunking_configuration};
 use ipc_protocol::WorkerChunkingConfiguration;
+use ipc_protocol::worker_chunking_test_support::worker_chunking_with_prompt_chunks;
 
 fn worker_chunking_configuration_with(growth_tokens: u32) -> WorkerChunkingConfiguration {
     WorkerChunkingConfiguration {
-        fixed_prompt_processing_chunk_size_tokens: 512,
-        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 512,
         full_attention_key_value_growth_tokens: growth_tokens,
         prefill_graph_submission_layer_interval: 4,
         experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
-        ssd_prompt_cache_block_tokens: None,
         ssd_prompt_cache_common_prefix_stride_blocks: 2,
-        experimental_in_memory_prefix_adoption_enabled: false,
-        experimental_neural_engine_prefill_enabled: false,
-        multi_token_prediction_draft_tokens: None,
+        ..worker_chunking_with_prompt_chunks(Some(512), 512)
     }
 }
 

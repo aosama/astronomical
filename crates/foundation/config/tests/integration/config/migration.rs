@@ -70,7 +70,7 @@ fn representable_legacy_configuration_json(model_root: &Path) -> String {
         "prompt_cache_max_size_gb": 20,
         "performance_attribution_enabled": true,
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 4096,
+            "prompt_processing_chunk_size_tokens": 4096,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 1024,
             "full_attention_key_value_growth_tokens": 512,
             "prefill_graph_submission_layer_interval": 2,
@@ -208,7 +208,7 @@ fn should_migrate_full_realistic_legacy_configuration_using_retired_section_spel
         "performance_attribution_enabled": false,
         "mtp_enabled": true,
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 2048,
+            "prompt_processing_chunk_size_tokens": 2048,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2048,
             "full_attention_key_value_growth_tokens": 256,
             "prefill_graph_submission_layer_interval": 1,
@@ -272,7 +272,7 @@ fn should_strip_retired_speculative_prefill_settings_while_migrating_legacy_conf
         "model_directories": [],
         "maximum_mlx_memory_gb": 16,
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 2048,
+            "prompt_processing_chunk_size_tokens": 2048,
             "speculative_prefill_draft_forward_tokens": 1536
         },
         "speculative_prefill": {
@@ -372,8 +372,9 @@ fn should_strip_retired_speculative_prefill_settings_from_v1_config() {
     assert_eq!(
         resolved_model
             .chunking()
-            .fixed_prompt_processing_chunk_size_tokens(),
-        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
+            .prompt_processing_chunk_size_tokens(),
+        None,
+        "a migrated file leaves the in-memory chunk to Automatic"
     );
 }
 
@@ -447,8 +448,9 @@ fn should_strip_fields_removed_in_release_0_2_66_from_v1_config() {
     assert_eq!(
         resolved_model
             .chunking()
-            .fixed_prompt_processing_chunk_size_tokens(),
-        config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
+            .prompt_processing_chunk_size_tokens(),
+        None,
+        "a migrated file leaves the in-memory chunk to Automatic"
     );
 }
 

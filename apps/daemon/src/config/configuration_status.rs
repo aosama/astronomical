@@ -60,7 +60,10 @@ struct ReadyModelConfigurationSummary {
 
 #[derive(Serialize)]
 struct ChunkingConfigurationSummary {
-    fixed_prompt_processing_chunk_size_tokens: ConfigurationValue<u32>,
+    /// `configured` is the person's size (`None` when Automatic); `effective`
+    /// is the in-memory chunk the loaded model settled on, `None` while part
+    /// of the model streams from the SSD and the streaming chunk is in use.
+    prompt_processing_chunk_size_tokens: NullableConfigurationValue<u32>,
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: ConfigurationValue<u32>,
     full_attention_key_value_growth_tokens: ConfigurationValue<u32>,
     prefill_graph_submission_layer_interval: ConfigurationValue<u32>,
@@ -150,6 +153,7 @@ impl ConfigurationStatusSummary {
                 resolved_config.as_ref(),
                 worker_health_snapshot.ready_model_id.as_deref(),
                 worker_configuration.and_then(|configuration| configuration.loaded_model.as_ref()),
+                worker_health_snapshot.prompt_processing_chunk,
             ),
             astro_ssd_prompt_cache: astro_ssd_prompt_cache_summary(
                 configured_config.as_ref(),
@@ -171,6 +175,7 @@ fn ready_model_summary(
     resolved_config: Option<&ResolvedRuntimeConfig>,
     ready_model_id: Option<&str>,
     effective_model: Option<&WorkerLoadedModelRuntimeConfiguration>,
+    prompt_processing_chunk: Option<ipc_protocol::PromptProcessingChunkReport>,
 ) -> Option<ReadyModelConfigurationSummary> {
     let ready_model_id = ready_model_id?;
     let configured_policy =
@@ -219,13 +224,14 @@ fn ready_model_summary(
             resolved_policy
                 .and_then(|policy| policy.generation_defaults.repetition_penalty_thousandths),
         ),
-        chunking: chunking_summary(configured_policy, effective_model),
+        chunking: chunking_summary(configured_policy, effective_model, prompt_processing_chunk),
     })
 }
 
 fn chunking_summary(
     configured_policy: Option<&crate::RuntimeModelPolicy>,
     effective_model: Option<&WorkerLoadedModelRuntimeConfiguration>,
+    prompt_processing_chunk: Option<ipc_protocol::PromptProcessingChunkReport>,
 ) -> ChunkingConfigurationSummary {
     let configured_fields = configured_policy
         .map(|policy| policy.configured_chunking_fields)
@@ -237,11 +243,10 @@ fn chunking_summary(
         .and_then(WorkerLoadedModelRuntimeConfiguration::autoregressive)
         .map(|configuration| &configuration.chunking);
     ChunkingConfigurationSummary {
-        fixed_prompt_processing_chunk_size_tokens: reported_chunking_configuration_value(
-            configured_fields.fixed_prompt_processing_chunk_size_tokens,
-            configured_chunking.map(|chunking| chunking.fixed_prompt_processing_chunk_size_tokens),
-            config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-            effective_chunking.map(|chunking| chunking.fixed_prompt_processing_chunk_size_tokens),
+        prompt_processing_chunk_size_tokens: reported_nullable_chunking_configuration_value(
+            configured_fields.prompt_processing_chunk_size_tokens,
+            configured_chunking.and_then(|chunking| chunking.prompt_processing_chunk_size_tokens),
+            in_memory_chunk_in_use(prompt_processing_chunk),
         ),
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens:
             reported_chunking_configuration_value(
@@ -322,6 +327,22 @@ fn reported_chunking_configuration_value<T>(
 /// `Option<T>`: the operator can explicitly clear it, so "configured" can be
 /// none even while the field's presence flag is true. Nullable fields have no
 /// built-in default, so that slot stays empty.
+/// The in-memory chunk the loaded model reads prompts in; `None` when no
+/// model reported one, or while part of it streams from the SSD and the
+/// streaming chunk is in use instead.
+const fn in_memory_chunk_in_use(
+    prompt_processing_chunk: Option<ipc_protocol::PromptProcessingChunkReport>,
+) -> Option<u32> {
+    match prompt_processing_chunk {
+        Some(ipc_protocol::PromptProcessingChunkReport {
+            reason: ipc_protocol::PromptProcessingChunkReason::SsdStreaming,
+            ..
+        })
+        | None => None,
+        Some(report) => Some(report.chunk_tokens),
+    }
+}
+
 fn reported_nullable_chunking_configuration_value<T>(
     is_field_configured: bool,
     configured_value: Option<T>,

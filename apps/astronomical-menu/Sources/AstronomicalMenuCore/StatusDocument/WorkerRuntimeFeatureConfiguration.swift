@@ -204,7 +204,9 @@ struct WorkerLoadedEmbeddingModelRuntimeConfiguration: Codable, Equatable {
 }
 
 struct WorkerChunkingConfiguration: Codable, Equatable {
-  let fixedPromptProcessingChunkSizeTokens: UInt32
+  // The in-memory prompt chunk the person set; nil is Automatic, which the
+  // engine settles when the model loads. The key is always present.
+  let promptProcessingChunkSizeTokens: UInt32?
   let fixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32
   let fullAttentionKeyValueGrowthTokens: UInt32
   let prefillGraphSubmissionLayerInterval: UInt32
@@ -225,7 +227,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   let multiTokenPredictionDraftTokens: UInt32?
 
   enum CodingKeys: String, CodingKey, CaseIterable {
-    case fixedPromptProcessingChunkSizeTokens = "fixed_prompt_processing_chunk_size_tokens"
+    case promptProcessingChunkSizeTokens = "prompt_processing_chunk_size_tokens"
     case fixedSsdStreamingPromptProcessingChunkSizeTokens = "fixed_ssd_streaming_prompt_processing_chunk_size_tokens"
     case fullAttentionKeyValueGrowthTokens = "full_attention_key_value_growth_tokens"
     case prefillGraphSubmissionLayerInterval = "prefill_graph_submission_layer_interval"
@@ -241,8 +243,8 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   init(from decoder: Decoder) throws {
     try decoder.rejectUnknownKeys(CodingKeys.self)
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    fixedPromptProcessingChunkSizeTokens = try container.decode(
-      UInt32.self, forKey: .fixedPromptProcessingChunkSizeTokens)
+    promptProcessingChunkSizeTokens = try container.decodeRequiredNullable(
+      UInt32.self, forKey: .promptProcessingChunkSizeTokens)
     fixedSsdStreamingPromptProcessingChunkSizeTokens = try container.decode(
       UInt32.self, forKey: .fixedSsdStreamingPromptProcessingChunkSizeTokens)
     fullAttentionKeyValueGrowthTokens = try container.decode(

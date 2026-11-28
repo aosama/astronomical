@@ -22,6 +22,8 @@ mod qwen3_5_model_startup_error;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod qwen3_5_model_startup_error_tests;
 #[cfg(feature = "direct-mlx")]
+mod qwen3_5_prompt_chunk_settlement;
+#[cfg(feature = "direct-mlx")]
 mod qwen3_5_startup_storage;
 
 pub use chat_engine::{ModelFamilyInferenceEngine, boxed_chat_engine};

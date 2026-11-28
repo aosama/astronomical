@@ -5,8 +5,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ChunkingConfigFile {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) fixed_prompt_processing_chunk_size_tokens: Option<u32>,
+    /// The in-memory prompt chunk: a number the user chose, or `null` for
+    /// Automatic, where the engine picks the size for the model and the Mac
+    /// when the model loads.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_nullable_u32",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) prompt_processing_chunk_size_tokens: Option<Option<u32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) fixed_ssd_streaming_prompt_processing_chunk_size_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -49,7 +56,7 @@ pub(crate) struct ChunkingConfigFile {
 /// Presence map for advanced chunking fields after global/model inheritance.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ConfiguredChunkingFields {
-    pub fixed_prompt_processing_chunk_size_tokens: bool,
+    pub prompt_processing_chunk_size_tokens: bool,
     pub fixed_ssd_streaming_prompt_processing_chunk_size_tokens: bool,
     pub full_attention_key_value_growth_tokens: bool,
     pub prefill_graph_submission_layer_interval: bool,
@@ -103,9 +110,7 @@ where
 impl ChunkingConfigFile {
     pub(crate) fn configured_fields(&self) -> ConfiguredChunkingFields {
         ConfiguredChunkingFields {
-            fixed_prompt_processing_chunk_size_tokens: self
-                .fixed_prompt_processing_chunk_size_tokens
-                .is_some(),
+            prompt_processing_chunk_size_tokens: self.prompt_processing_chunk_size_tokens.is_some(),
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: self
                 .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
                 .is_some(),
@@ -141,9 +146,9 @@ impl ChunkingConfigFile {
         // field comment), so the merged document carries None.
         Self {
             speculative_decoding_block_length_tokens: None,
-            fixed_prompt_processing_chunk_size_tokens: model
-                .fixed_prompt_processing_chunk_size_tokens
-                .or(global.fixed_prompt_processing_chunk_size_tokens),
+            prompt_processing_chunk_size_tokens: model
+                .prompt_processing_chunk_size_tokens
+                .or(global.prompt_processing_chunk_size_tokens),
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: model
                 .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
                 .or(global.fixed_ssd_streaming_prompt_processing_chunk_size_tokens),
@@ -176,25 +181,6 @@ impl ChunkingConfigFile {
 }
 
 pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
-/// The macOS (Metal) build's prompt chunk.
-#[cfg(target_os = "macos")]
-pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
-/// Non-macOS builds run MLX on the CPU today (a future CUDA build would want
-/// its own defaults), where a prompt chunk costs orders
-/// of magnitude more than on a GPU: tens of seconds for 64 tokens of the
-/// smallest Qwen3.5 model. The engine runs one chunk at load to measure its
-/// MLX working buffers, so a 2,048-token default would keep a model loading
-/// for most of an hour; 64 keeps the load and every progress report short.
-/// `config.json` can still set any size.
-#[cfg(not(target_os = "macos"))]
-pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 64;
-/// The previously shipped resident-chunk default. Load-time persistence rewrites
-/// this exact value to the current default so config.json files written with the
-/// 4,096-token chunk — whose measured win turned out to be a macOS file cache warmth
-/// artifact, with 2,048 reproducibly faster at 10k words — adopt the reverted
-/// default without a manual edit; any other persisted value is deliberate user
-/// intent and is preserved.
-pub const LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// Independent SSD-paged prompt chunk. Owned separately from the resident chunk.
 ///
 /// Each SSD-paged prefill chunk re-streams every nonresident expert layer, so
@@ -203,44 +189,24 @@ pub const LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// three rounds, resident chunk held at 2,048) measured 4,096 faster in 12 of
 /// 12 pairings: 21% at a 24 GiB ceiling (about 40% fewer bytes read from the
 /// SSD) and 13% at 37 GiB, with identical peak memory and 41k-token prompts
-/// still admitted. The resident chunk's 4,096 win was a macOS file cache artifact;
-/// this one holds with the macOS file cache both cold and warm.
+/// still admitted, with the macOS file cache both cold and warm. The in-memory
+/// chunk is a separate setting whose Automatic size the engine picks per model
+/// and Mac (`text_generation::prompt_processing_chunk_choice`).
 #[cfg(target_os = "macos")]
 pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
-/// The SSD-paged probe also runs one chunk at load, so non-macOS builds
-/// use the same small chunk as for resident prompts.
+/// The SSD-paged probe also runs one chunk at load, so non-macOS builds use
+/// the same small chunk the engine picks for in-memory prompts there.
 #[cfg(not(target_os = "macos"))]
 pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 64;
 /// The previously shipped SSD-paged chunk default. Load-time persistence moves
-/// this exact value to the current default, as it does for the resident
-/// chunk; any other persisted value is deliberate user intent and is kept.
+/// this exact value to the current default; any other persisted value is
+/// deliberate user intent and is kept.
 pub const LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 
-/// Chunk sizes a `config.json` holds only because an earlier build wrote its
-/// own default there; load moves them to the current default. Non-macOS
-/// builds also retire the macOS build's defaults, which earlier Linux builds
-/// wrote and which keep a CPU loading for many minutes.
-#[cfg(target_os = "macos")]
-const RETIRED_RESIDENT_CHUNK_DEFAULTS: &[u32] =
-    &[LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS];
-#[cfg(not(target_os = "macos"))]
-const RETIRED_RESIDENT_CHUNK_DEFAULTS: &[u32] = &[
-    LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-    2_048,
-];
 /// SSD-paged sparse models are not served on non-macOS builds yet, so a
 /// saved SSD-paged chunk is not retired there beyond what macOS retires.
 const RETIRED_SSD_STREAMING_CHUNK_DEFAULTS: &[u32] =
     &[LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS];
-
-/// Pure: whether the persisted resident chunk should be (re)written to the
-/// current default — absent, or still a retired default.
-#[must_use]
-pub const fn should_materialize_resident_chunk_default(
-    persisted_chunk_tokens: Option<u32>,
-) -> bool {
-    is_absent_or_retired(persisted_chunk_tokens, RETIRED_RESIDENT_CHUNK_DEFAULTS)
-}
 
 /// Pure: whether the persisted SSD-paged chunk should be (re)written to the
 /// current default — absent, or still a retired default.
@@ -290,7 +256,7 @@ pub const MAXIMUM_MULTI_TOKEN_PREDICTION_DRAFT_TOKENS: u32 = 3;
 /// components convert only numeric representation—not policy or defaults.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChunkingConfig {
-    fixed_prompt_processing_chunk_size_tokens: u32,
+    prompt_processing_chunk_size_tokens: Option<u32>,
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
     full_attention_key_value_growth_tokens: u32,
     prefill_graph_submission_layer_interval: u32,
@@ -319,9 +285,9 @@ impl ChunkingConfig {
         let _ignored_speculative_decoding_block_length_tokens =
             configured.speculative_decoding_block_length_tokens;
         let resolved = Self {
-            fixed_prompt_processing_chunk_size_tokens: configured
-                .fixed_prompt_processing_chunk_size_tokens
-                .unwrap_or(DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS),
+            prompt_processing_chunk_size_tokens: configured
+                .prompt_processing_chunk_size_tokens
+                .unwrap_or(None),
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: configured
                 .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
                 .unwrap_or(DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS),
@@ -355,39 +321,8 @@ impl ChunkingConfig {
     }
 
     fn validate(&self) -> Result<(), AstronomicalConfigError> {
-        for (field_name, field_value) in [
-            (
-                "chunking.fixed_prompt_processing_chunk_size_tokens",
-                self.fixed_prompt_processing_chunk_size_tokens,
-            ),
-            (
-                "chunking.full_attention_key_value_growth_tokens",
-                self.full_attention_key_value_growth_tokens,
-            ),
-            (
-                "chunking.ssd_prompt_cache_common_prefix_stride_blocks",
-                self.ssd_prompt_cache_common_prefix_stride_blocks,
-            ),
-        ] {
-            if field_value == 0 {
-                return Err(AstronomicalConfigError::InvalidChunkingValue {
-                    field_name,
-                    description: "must be positive",
-                });
-            }
-        }
-        if self.fixed_ssd_streaming_prompt_processing_chunk_size_tokens == 0 {
-            return Err(AstronomicalConfigError::InvalidChunkingValue {
-                field_name: "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
-                description: "must be positive",
-            });
-        }
-        if self.ssd_prompt_cache_block_tokens == Some(0) {
-            return Err(AstronomicalConfigError::InvalidChunkingValue {
-                field_name: "chunking.ssd_prompt_cache_block_tokens",
-                description: "must be null for automatic sizing or a positive token count",
-            });
-        }
+        self.validate_positive_counts()?;
+        self.validate_automatic_or_positive_counts()?;
         // MLX array dimensions cross the native boundary as signed 32-bit
         // integers. Reject an unrepresentable slab increment while loading the
         // user's config rather than failing later during the first model load.
@@ -400,9 +335,60 @@ impl ChunkingConfig {
         Ok(())
     }
 
+    /// Counts that must always hold a positive number.
+    fn validate_positive_counts(&self) -> Result<(), AstronomicalConfigError> {
+        for (field_name, field_value) in [
+            (
+                "chunking.full_attention_key_value_growth_tokens",
+                self.full_attention_key_value_growth_tokens,
+            ),
+            (
+                "chunking.ssd_prompt_cache_common_prefix_stride_blocks",
+                self.ssd_prompt_cache_common_prefix_stride_blocks,
+            ),
+            (
+                "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
+                self.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+            ),
+        ] {
+            if field_value == 0 {
+                return Err(AstronomicalConfigError::InvalidChunkingValue {
+                    field_name,
+                    description: "must be positive",
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Sizes where `null` asks for automatic sizing and a number must be
+    /// positive.
+    fn validate_automatic_or_positive_counts(&self) -> Result<(), AstronomicalConfigError> {
+        for (field_name, field_value) in [
+            (
+                "chunking.prompt_processing_chunk_size_tokens",
+                self.prompt_processing_chunk_size_tokens,
+            ),
+            (
+                "chunking.ssd_prompt_cache_block_tokens",
+                self.ssd_prompt_cache_block_tokens,
+            ),
+        ] {
+            if field_value == Some(0) {
+                return Err(AstronomicalConfigError::InvalidChunkingValue {
+                    field_name,
+                    description: "must be null for automatic sizing or a positive token count",
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// The in-memory prompt chunk the user chose; `None` is Automatic, which
+    /// the engine settles when the model loads.
     #[must_use]
-    pub const fn fixed_prompt_processing_chunk_size_tokens(&self) -> u32 {
-        self.fixed_prompt_processing_chunk_size_tokens
+    pub const fn prompt_processing_chunk_size_tokens(&self) -> Option<u32> {
+        self.prompt_processing_chunk_size_tokens
     }
 
     #[must_use]
@@ -471,8 +457,7 @@ impl Default for ChunkingConfig {
         Self {
             experimental_in_memory_prefix_adoption_enabled: true,
             experimental_neural_engine_prefill_enabled: false,
-            fixed_prompt_processing_chunk_size_tokens:
-                DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+            prompt_processing_chunk_size_tokens: None,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens:
                 DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
             full_attention_key_value_growth_tokens: DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,

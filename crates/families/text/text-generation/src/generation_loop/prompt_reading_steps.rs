@@ -87,11 +87,11 @@ pub fn resolve_next_prefill_chunk_span<Engine: TextExecutionCoreOwner>(
     )
 }
 
-/// Publishes the stretch's durable `astro_ssd_prompt_cache` blocks and its
-/// partial tail, then advances the request position and cursor.
+/// Hands the stretch's `astro_ssd_prompt_cache` blocks and its partial tail to
+/// the background writer, then advances the request position and cursor.
 ///
-/// Publication comes first, so the saved chain always ends at a durable
-/// parent. A block that cannot be saved ends saving for the rest of the
+/// Blocks are queued in chain order, so the writer always writes a parent
+/// before its children. A block that cannot be copied or queued ends saving for the rest of the
 /// request instead of the request itself: the cache keeps the prefix saved so
 /// far, which a later request restores and continues from, and the reply goes
 /// on. Stopping the request instead turned one unsaved block into a failed

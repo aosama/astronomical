@@ -119,6 +119,9 @@ mod small_mac_matrix_tests;
 mod source_size;
 #[cfg(test)]
 mod source_size_tests;
+mod staged_package_scope;
+#[cfg(test)]
+mod staged_package_scope_tests;
 mod step_log;
 mod test_channel_isolation;
 #[cfg(test)]

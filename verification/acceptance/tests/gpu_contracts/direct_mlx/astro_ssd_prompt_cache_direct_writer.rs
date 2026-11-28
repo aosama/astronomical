@@ -19,7 +19,7 @@ const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const DIRECT_MLX_ASTRO_SSD_PROMPT_CACHE_TEST_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test]
-async fn should_publish_required_capture_directly_without_serialized_host_ownership() {
+async fn should_publish_required_capture_from_host_copies_with_every_stage_attributed() {
     tokio::time::timeout(DIRECT_MLX_ASTRO_SSD_PROMPT_CACHE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = runtime_with_shared_limits();
@@ -365,20 +365,18 @@ fn assert_retried_blocks_load_with_published_shapes(
     block_key: &AstroSsdPromptCacheBlockKey,
     published_state_tensors: &PublicationStateTensors<'_>,
 ) {
-    let loaded_sequence_state = astro_ssd_prompt_cache
-        .load_kv_block(restored_runtime, block_key, None)
-        .expect("the retried sequence state should load")
-        .expect("the retried sequence state should be present");
-    let loaded_boundary_state = astro_ssd_prompt_cache
-        .load_recurrent_snapshot(restored_runtime, block_key, None)
-        .expect("the retried boundary state should load")
-        .expect("the retried boundary state should be present");
+    let loaded_block_state =
+        super::astro_ssd_prompt_cache_disk_store_support::load_published_block_state(
+            restored_runtime,
+            astro_ssd_prompt_cache,
+            block_key,
+        );
     super::astro_ssd_prompt_cache_disk_store_support::assert_split_tensor_shapes_match(
-        &loaded_sequence_state,
+        &loaded_block_state.sequence_state_tensors,
         published_state_tensors.sequence_state_tensors,
     );
     super::astro_ssd_prompt_cache_disk_store_support::assert_split_tensor_shapes_match(
-        &loaded_boundary_state,
+        &loaded_block_state.boundary_state_tensors,
         published_state_tensors.boundary_state_tensors,
     );
 }

@@ -18,7 +18,7 @@ fn should_resolve_an_exact_model_directory_from_configured_recursive_roots() {
         temporary_home_directory.path(),
         &serde_json::json!({
             "model_directories": [configured_model_root],
-            "chunking": { "fixed_prompt_processing_chunk_size_tokens": 2048 },
+            "chunking": { "prompt_processing_chunk_size_tokens": 2048 },
         })
         .to_string(),
     );

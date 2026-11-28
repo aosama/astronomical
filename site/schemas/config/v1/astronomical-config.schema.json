@@ -20,7 +20,7 @@
     "tuning": [
         {"title": "Generation", "description": "How this model writes when a request does not say. A request's own values always win.", "settings": ["generation_defaults.temperature", "generation_defaults.top_p", "generation_defaults.repetition_penalty", "generation_defaults.maximum_output_tokens"]},
         {"title": "Limits", "description": "Ceilings for this model that sit below what the model file allows.", "settings": ["limits.maximum_context_tokens"]},
-        {"title": "Prompt processing", "description": "How a prompt is split into pieces while the model reads it. These trade memory for speed.", "tier": "advanced", "settings": ["chunking.fixed_prompt_processing_chunk_size_tokens", "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens", "chunking.prefill_graph_submission_layer_interval", "chunking.full_attention_key_value_growth_tokens"]},
+        {"title": "Prompt processing", "description": "How a prompt is split into pieces while the model reads it. These trade memory for speed.", "tier": "advanced", "settings": ["chunking.prompt_processing_chunk_size_tokens", "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens", "chunking.prefill_graph_submission_layer_interval", "chunking.full_attention_key_value_growth_tokens"]},
         {"title": "Prompt cache blocks", "description": "How a prompt is divided when it is stored in the prompt cache.", "tier": "advanced", "settings": ["chunking.ssd_prompt_cache_block_tokens", "chunking.ssd_prompt_cache_common_prefix_stride_blocks"]},
         {"title": "SSD streaming", "description": "Used only while part of a model is read from the SSD because it does not fit in memory.", "tier": "advanced", "settings": ["chunking.experimental_ssd_paging_generation_graph_submission_layer_interval"]},
         {"title": "Speculative decoding", "description": "Drafting more than one token at a time, with the model's own prediction head or a small helper model installed beside it.", "tier": "advanced", "settings": ["chunking.multi_token_prediction_draft_tokens", "chunking.speculative_decoding_block_length_tokens"]},
@@ -183,14 +183,22 @@
       "description": "Advanced execution boundaries. Model values override only properties explicitly present here.",
       "additionalProperties": false,
       "properties": {
-        "fixed_prompt_processing_chunk_size_tokens": {
+        "prompt_processing_chunk_size_tokens": {
           "title": "Prompt chunk size",
-          "type": "integer",
-          "minimum": 1,
-          "default": 2048,
-          "description": "Maximum ordinary prompt-processing rows evaluated in one forward. The default is 2048 with Metal on macOS and 64 on builds without Metal, where MLX runs on the CPU.",
+          "description": "Prompt rows read in one forward while the whole model is held in memory, or null for Automatic: 4096 for a model with experts on an M5 or newer GPU, otherwise 2048 with Metal on macOS and 64 on builds without Metal, where MLX runs on the CPU.",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
           "x-astronomical-unit": "tokens",
-          "x-astronomical-explanation": "A long prompt is read in pieces. This is the size of each piece. Larger pieces read a prompt faster but need more memory at once; smaller pieces are gentler on memory.",
+          "x-astronomical-explanation": "A long prompt is read in pieces. This is the size of each piece. Larger pieces read a prompt faster but need more memory at once; smaller pieces are gentler on memory. Automatic picks 4,096 for models with experts on an M5 chip or newer, where it reads long prompts up to 8% faster for about a third of a gigabyte more memory, and 2,048 everywhere else.",
+          "x-astronomical-advice": "If your Mac has an M5 chip or newer, keep this at 4,096. Automatic already does that for models with experts.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": {
