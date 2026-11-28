@@ -52,10 +52,16 @@ impl Qwen3_5ExpertPager {
             request_shape.route_token_count,
             self.decode_tokens_multiply_packed_pages(),
         )?;
+        let page_admission_label = streamed_page_admission_label(
+            layer_index,
+            expert_ids.len(),
+            request_shape.route_token_count,
+            serving_phase,
+        );
         require_streamed_page_admission(
             runtime,
             self,
-            layer_index,
+            &page_admission_label,
             pending_page_allocation_bytes,
             performance_attribution,
         )?;
@@ -212,6 +218,21 @@ fn pending_streamed_page_allocation_bytes(
     })
 }
 
+/// Pure: names a streamed page in its admission decision. A refusal reads
+/// "rust_streamed_expert_layer_9 (126 experts, 4 routed tokens, Decode)", so
+/// the page that did not fit can be told apart from a single token's page
+/// without rerunning the request under a debugger.
+pub(crate) fn streamed_page_admission_label(
+    layer_index: usize,
+    page_expert_count: usize,
+    route_token_count: i32,
+    serving_phase: SessionStreamingPhase,
+) -> String {
+    format!(
+        "rust_streamed_expert_layer_{layer_index} ({page_expert_count} experts, {route_token_count} routed tokens, {serving_phase:?})"
+    )
+}
+
 /// Admission must happen before opening/loading source ranges. It checks the
 /// exact payload against current active memory and the shared ceiling; forward
 /// admission has already reclaimed experts for persistent and transient
@@ -219,7 +240,7 @@ fn pending_streamed_page_allocation_bytes(
 fn require_streamed_page_admission(
     runtime: &runtime_integration::MlxRuntime,
     expert_pager: &Qwen3_5ExpertPager,
-    layer_index: usize,
+    page_admission_label: &str,
     pending_page_allocation_bytes: u64,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<(), ExpertPagingError> {
@@ -228,7 +249,7 @@ fn require_streamed_page_admission(
         |_performance_attribution| {
             expert_pager.memory_budget.require_admission(
                 runtime,
-                &format!("rust_streamed_expert_layer_{layer_index}"),
+                page_admission_label,
                 pending_page_allocation_bytes,
             )
         },
@@ -247,7 +268,7 @@ fn require_streamed_page_admission(
         |_performance_attribution| {
             expert_pager.memory_budget.require_admission(
                 runtime,
-                &format!("rust_streamed_expert_layer_{layer_index}_after_cleanup"),
+                &format!("{page_admission_label} after cleanup"),
                 pending_page_allocation_bytes,
             )
         },

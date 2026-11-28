@@ -6,6 +6,8 @@ mod session_stats;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod complete_page_multiplication_tests;
+#[cfg(test)]
+mod expert_page_admission_label_tests;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod expert_subset_tests;
 

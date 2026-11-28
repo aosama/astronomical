@@ -59,6 +59,7 @@ pub mod layer_probe_shape;
 pub mod layer_submission;
 pub mod memory_governance;
 mod mlx_buffer_cache_bound;
+mod model_memory_shape;
 pub mod mtp_drafting;
 pub mod mtp_head;
 mod neural_engine_host;

@@ -10,7 +10,7 @@ use crate::qwen3_5_text::expert_streaming::expert_pager::{
 use crate::qwen3_5_text::model::Qwen3_5Model;
 use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_mandatory_complete_layer,
-    should_complete_partial_layer_on_prefill_read,
+    should_complete_partial_layer_in_phase,
 };
 use engine_core::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 use model_primitives::serving_phase::SessionStreamingPhase;
@@ -431,6 +431,7 @@ impl Qwen3_5Model {
         }
         let read_scope = self.prefill_partial_read_scope(
             layer_index,
+            route_token_count,
             expert_capacity,
             production_default_paging,
         );
@@ -495,10 +496,13 @@ impl Qwen3_5Model {
         Ok(Some(assembled_page))
     }
 
-    /// Whether this chunk may still try to finish the layer in one read.
+    /// Whether this chunk may still try to finish the layer in one read. A
+    /// drafted reply forward reaches here too; the engine's real phase, not
+    /// the route's token count, tells the policy which it is (issue #1715).
     fn prefill_partial_read_scope(
         &self,
         layer_index: usize,
+        route_token_count: i32,
         expert_capacity: usize,
         production_default_paging: bool,
     ) -> super::prefill_partial_layer_read::PrefillStorageReadScope {
@@ -506,7 +510,8 @@ impl Qwen3_5Model {
         if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
             resident_expert_count = astro_expert_cache.borrow().occupied_slot_count(layer_index);
         }
-        let completion_is_funded = should_complete_partial_layer_on_prefill_read(
+        let completion_is_funded = should_complete_partial_layer_in_phase(
+            memory_phase_of_serving_phase(self.current_serving_phase(route_token_count)),
             production_default_paging,
             self.expert_layer_state(layer_index),
             resident_expert_count,
@@ -684,4 +689,12 @@ fn route_coverage_with_prefetch_accounting(
         );
     }
     route_coverage
+}
+
+/// The memory policy's name for the engine's serving phase.
+const fn memory_phase_of_serving_phase(serving_phase: SessionStreamingPhase) -> crate::MemoryPhase {
+    match serving_phase {
+        SessionStreamingPhase::Prefill => crate::MemoryPhase::Prefill,
+        SessionStreamingPhase::Decode => crate::MemoryPhase::Decode,
+    }
 }
