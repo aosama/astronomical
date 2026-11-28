@@ -5,13 +5,14 @@
 ._*
 
 # Claude Code's per-machine folders. Only the shared parts of .claude are
-# committed (settings.json, launch.json, skills); plans and worktrees are
-# made on each Mac, and a worktree is a whole checkout of the repository.
-# A local exclude used to keep them out on one Mac only, so any other clone
-# could commit them.
+# committed (launch.json, skills). settings.json is per-machine session
+# configuration and is not committed. plans and worktrees are made on each
+# Mac, and a worktree is a whole checkout of the repository. A local exclude
+# used to keep them out on one Mac only, so any other clone could commit them.
 /.claude/plans/
 /.claude/worktrees/
 /.claude/settings.local.json
+/.claude/settings.json
 
 # Editor and IDE local state
 .idea/
