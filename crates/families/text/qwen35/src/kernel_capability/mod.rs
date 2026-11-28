@@ -48,7 +48,10 @@ pub use sorted_expert_matmul_probe::SORTED_EXPERT_MATMUL;
 #[cfg(feature = "direct-mlx")]
 pub use sorted_expert_shared_combination_probe::SORTED_EXPERT_SHARED_COMBINATION;
 #[cfg(feature = "direct-mlx")]
-pub use sorted_expert_tiled_matmul_probe::SORTED_EXPERT_TILED_MATMUL;
+pub use sorted_expert_tiled_matmul_probe::{
+    SORTED_EXPERT_TILED_MATMUL, SORTED_EXPERT_TILED_MATMUL_6BIT,
+    SORTED_EXPERT_TILED_MATMUL_FAMILIES,
+};
 #[cfg(feature = "direct-mlx")]
 pub use sorted_expert_weighted_sum_probe::SORTED_EXPERT_WEIGHTED_SUM;
 #[cfg(feature = "direct-mlx")]

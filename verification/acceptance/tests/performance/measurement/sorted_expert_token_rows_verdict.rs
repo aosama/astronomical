@@ -126,7 +126,7 @@ impl TokenRowsFixture<'_> {
             self.runtime,
             sorted_rows,
             experts,
-            &self.sorted_expert_ids,
+            (&self.sorted_expert_ids, 4),
         ))
     }
 

@@ -63,7 +63,8 @@ fn should_give_mlx_gather_qmm_bits_for_every_layout_and_uneven_routing() {
             &random_key,
         )
         .expect("rows are drawn");
-    let mlx_output = mlx_sorted_gather_qmm(&runtime, &sorted_rows, &experts, &sorted_expert_ids);
+    let mlx_output =
+        mlx_sorted_gather_qmm(&runtime, &sorted_rows, &experts, (&sorted_expert_ids, 4));
     for layout in LAYOUTS {
         let astronomical_output = sorted_expert_quantized_matmul_with_layout(
             &runtime,
@@ -107,7 +108,8 @@ fn should_give_mlx_bits_reading_rows_straight_from_the_token_rows() {
     let sorted_rows = runtime
         .take_axis(&token_rows, &sorted_token_indices, 0)
         .expect("the sorted copy is taken");
-    let mlx_output = mlx_sorted_gather_qmm(&runtime, &sorted_rows, &experts, &sorted_expert_ids);
+    let mlx_output =
+        mlx_sorted_gather_qmm(&runtime, &sorted_rows, &experts, (&sorted_expert_ids, 4));
     let astronomical_output = sorted_expert_quantized_matmul_from_token_rows(
         &runtime,
         &kernels,

@@ -44,7 +44,11 @@ impl Qwen3_5TextModel {
             ),
             (
                 "sorted_expert_tiled_matmul",
-                accelerators.sorted_expert_tiled_kernels.is_some(),
+                holds_tiled_kernels_for(accelerators.sorted_expert_tiled_kernels.as_ref(), 4),
+            ),
+            (
+                "sorted_expert_tiled_matmul_6bit",
+                holds_tiled_kernels_for(accelerators.sorted_expert_tiled_kernels.as_ref(), 6),
             ),
             (
                 "row_batched_matmul",
@@ -76,5 +80,17 @@ impl Qwen3_5TextModel {
         }
         kernels_in_use.sort();
         kernels_in_use
+    }
+}
+
+/// Whether the tiled sorted-expert kernels are held for `weight_bits`
+/// stacks: each width is kept only when its own probe passed.
+fn holds_tiled_kernels_for(
+    tiled_kernels: Option<&crate::sorted_expert_matmul::TiledExpertKernels>,
+    weight_bits: i32,
+) -> bool {
+    match tiled_kernels {
+        Some(tiled_kernels) => tiled_kernels.weight_bits().contains(&weight_bits),
+        None => false,
     }
 }

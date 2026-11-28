@@ -350,9 +350,9 @@ pub enum SortedExpertProjectionError {
     Runtime(#[from] MlxRuntimeError),
     #[error("the sorted-expert kernel returned no output")]
     MissingOutput,
-    #[error(
-        "the sorted-expert kernel reads only 4-bit, group-64 expert stacks with bf16 scales: {description}"
-    )]
+    /// A stack or shape the kernel does not read; the description says
+    /// which packings it takes.
+    #[error("the sorted-expert kernel does not read this expert stack: {description}")]
     UnsupportedQuantization { description: String },
 }
 

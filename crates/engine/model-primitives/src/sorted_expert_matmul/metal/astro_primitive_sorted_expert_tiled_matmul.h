@@ -1,8 +1,10 @@
-// Helpers of the tiled sorted-expert 4-bit matmuls (the gate/up kernel with
-// its SwiGLU epilogue and the plain kernel the down projection takes). They
-// follow astro_primitive_sorted_expert_matmul.h, whose fragments, matrix-unit
-// operation and dequantization they reuse, so every product keeps MLX's
-// bits.
+// Helpers of the tiled sorted-expert 4-bit and 6-bit matmuls (the gate/up
+// kernel with its SwiGLU epilogue and the plain kernel the down projection
+// takes). They
+// follow astro_primitive_sorted_expert_matmul.h, whose fragments and
+// matrix-unit operation they reuse with its 4-bit dequantization; 6-bit
+// weights dequantize here as MLX's own 6-bit `dequantize` does. Every
+// product keeps MLX's bits.
 //
 // The schedule follows oMLX's tensor-unit sorted gather_qmm
 // (omlx/patches/m5_gather_qmm_nax.py, Apache-2.0, Copyright the oMLX
@@ -87,26 +89,91 @@ inline void dequantize_held_bytes(vec<uchar, 16> packed_bytes, bfloat scale, bfl
   }
 }
 
+// The packed half group (32 weights) a loader thread holds between reading
+// it and dequantizing it, for one weight bit width. Each specialization
+// dequantizes exactly as MLX's `dequantize` in metal/kernels/quantized.h does
+// for that width, so a staged weight is MLX's to the bit.
+template <int BITS>
+struct HeldHalfGroup;
+
+// 4 bits: 16 bytes, one 128-bit load.
+template <>
+struct HeldHalfGroup<4> {
+  vec<uchar, 16> packed_bytes;
+
+  inline void fetch(const device uchar* half_group) thread {
+    packed_bytes = *(const device vec<uchar, 16>*)half_group;
+  }
+
+  inline void dequantize_into(bfloat scale, bfloat bias, threadgroup bfloat* out) const thread {
+    dequantize_held_bytes(packed_bytes, scale, bias, out);
+  }
+};
+
+// 6 bits: 24 bytes, four weights in every three bytes as MLX packs them. A
+// half group starts 24 bytes into its group, so its loads are 8 bytes wide.
+template <>
+struct HeldHalfGroup<6> {
+  vec<uchar, 8> packed_words[3];
+
+  inline void fetch(const device uchar* half_group) thread {
+    _Pragma("clang loop unroll(full)")
+    for (short word = 0; word < 3; word++) {
+      packed_words[word] = *(const device vec<uchar, 8>*)(half_group + 8 * word);
+    }
+  }
+
+  inline uchar byte_at(short byte_index) const thread {
+    return packed_words[byte_index >> 3][byte_index & 7];
+  }
+
+  // MLX's 6-bit `dequantize`, value for value: (q * s + b) in float, then bf16.
+  inline void dequantize_into(bfloat scale, bfloat bias, threadgroup bfloat* out) const thread {
+    const float s = float(scale), b = float(bias);
+    _Pragma("clang loop unroll(full)")
+    for (short eighth = 0; eighth < 4; eighth++) {
+      vec<bfloat, 8> weights;
+      _Pragma("clang loop unroll(full)")
+      for (short pack = 0; pack < 2; pack++) {
+        const short first_byte = 6 * eighth + 3 * pack;
+        const uchar w0 = byte_at(first_byte), w1 = byte_at(first_byte + 1), w2 = byte_at(first_byte + 2);
+        weights[4 * pack] = bfloat((w0 & 0x3f) * s + b);
+        weights[4 * pack + 1] = bfloat((((w0 >> 6) & 0x03) + ((w1 & 0x0f) << 2)) * s + b);
+        weights[4 * pack + 2] = bfloat((((w1 >> 4) & 0x0f) + ((w2 & 0x03) << 4)) * s + b);
+        weights[4 * pack + 3] = bfloat(((w2 >> 2) & 0x3f) * s + b);
+      }
+      *(threadgroup vec<bfloat, 8>*)(out + 8 * eighth) = weights;
+    }
+  }
+};
+
+// Bytes of one 64-value group of a weight row at BITS bits.
+template <int BITS>
+inline constexpr int group_bytes() {
+  return 8 * BITS;
+}
+
 // One loader thread's share of every weight step: half (thread % 2) of tile
 // row thread / 2, from the stack and row the caller chose.
+template <int BITS>
 struct WeightStepLoader {
   const device uchar* packed;
   const device bfloat* scales;
   const device bfloat* biases;
   // Where this thread's 32 weights sit in a staged step.
   int slot_offset;
-  vec<uchar, 16> held_bytes;
+  HeldHalfGroup<BITS> held;
   bfloat held_scale;
   bfloat held_bias;
 
   inline void fetch(int step) thread {
-    held_bytes = *(const device vec<uchar, 16>*)(packed + step * 32);
+    held.fetch(packed + step * group_bytes<BITS>());
     held_scale = scales[step];
     held_bias = biases[step];
   }
 
   inline void store(threadgroup bfloat* weight_buffer) thread {
-    dequantize_held_bytes(held_bytes, held_scale, held_bias, weight_buffer + slot_offset);
+    held.dequantize_into(held_scale, held_bias, weight_buffer + slot_offset);
   }
 };
 

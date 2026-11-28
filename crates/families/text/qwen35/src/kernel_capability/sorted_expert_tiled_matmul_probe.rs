@@ -9,6 +9,9 @@
 //! up on the sorted copy of the rows, its compiled SwiGLU, its sorted
 //! `gather_qmm` for down), and asks for the same values to the bit at both
 //! the SwiGLU and the down output.
+//!
+//! Each weight width is its own family, proven on its own: a 6-bit failure
+//! never takes away the 4-bit kernels, and the reverse.
 
 use mlx_bridge::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
 use runtime_integration::{MlxRuntime, MlxRuntimeError};
@@ -22,12 +25,30 @@ use crate::sorted_expert_matmul::{
     tiled_sorted_expert_matmul,
 };
 
-/// Registry identifier of the tiled sorted-expert kernels.
+/// Registry identifier of the tiled sorted-expert kernels on 4-bit stacks.
 pub const SORTED_EXPERT_TILED_MATMUL: CustomMetalKernelFamily =
     CustomMetalKernelFamily::new("sorted_expert_tiled_matmul");
 
+/// Registry identifier of the tiled sorted-expert kernels on 6-bit stacks.
+pub const SORTED_EXPERT_TILED_MATMUL_6BIT: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("sorted_expert_tiled_matmul_6bit");
+
+/// Each family with the weight width it proves.
+pub const SORTED_EXPERT_TILED_MATMUL_FAMILIES: [(CustomMetalKernelFamily, i32); 2] = [
+    (SORTED_EXPERT_TILED_MATMUL, 4),
+    (SORTED_EXPERT_TILED_MATMUL_6BIT, 6),
+];
+
 pub fn capability_probes(runtime: &MlxRuntime) -> Vec<Box<dyn CustomMetalKernelProbe + '_>> {
-    vec![Box::new(SortedExpertTiledMatmulProbe { runtime })]
+    let mut probes: Vec<Box<dyn CustomMetalKernelProbe + '_>> = Vec::new();
+    for (family, weight_bits) in SORTED_EXPERT_TILED_MATMUL_FAMILIES {
+        probes.push(Box::new(SortedExpertTiledMatmulProbe {
+            runtime,
+            family,
+            weight_bits,
+        }));
+    }
+    probes
 }
 
 const PROBE_EXPERT_COUNT: i32 = 4;
@@ -39,33 +60,37 @@ const PROBE_GROUP_SIZE: i32 = 64;
 
 struct SortedExpertTiledMatmulProbe<'runtime> {
     runtime: &'runtime MlxRuntime,
+    family: CustomMetalKernelFamily,
+    /// The packed weight width this probe's stacks are quantized to.
+    weight_bits: i32,
 }
 
 impl CustomMetalKernelProbe for SortedExpertTiledMatmulProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        SORTED_EXPERT_TILED_MATMUL
+        self.family
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {
         let kernels =
-            TiledExpertKernels::declare().map_err(|error| KernelCapabilityError::Compilation {
-                description: error.to_string(),
-            })?;
-        let (kernel_values, mlx_values) =
-            run_probe_layer(self.runtime, &kernels).map_err(|error| {
-                KernelCapabilityError::Execution {
+            TiledExpertKernels::declare_for_weight_bits(&[self.weight_bits]).map_err(|error| {
+                KernelCapabilityError::Compilation {
                     description: error.to_string(),
                 }
+            })?;
+        let (kernel_values, mlx_values) = run_probe_layer(self.runtime, &kernels, self.weight_bits)
+            .map_err(|error| KernelCapabilityError::Execution {
+                description: error.to_string(),
             })?;
         exact_bits_verdict(&kernel_values, &mlx_values)
     }
 }
 
-/// A probe expert stack of fixed values, quantized by MLX to 4 bits.
+/// A probe expert stack of fixed values, quantized by MLX to `weight_bits`.
 fn probe_expert_stack(
     runtime: &MlxRuntime,
     (output_width, input_width): (i32, i32),
     value_stride: usize,
+    weight_bits: i32,
 ) -> Result<(MlxArray, MlxArray, MlxArray), MlxRuntimeError> {
     let shape = [PROBE_EXPERT_COUNT, output_width, input_width];
     let value_count = shape.iter().product::<i32>() as usize;
@@ -76,7 +101,7 @@ fn probe_expert_stack(
         &runtime.array_from_f32(&weight_values, &shape)?,
         MlxDtype::BFloat16,
     )?;
-    Ok(runtime.quantize_affine(&weights, PROBE_GROUP_SIZE, 4)?)
+    Ok(runtime.quantize_affine(&weights, PROBE_GROUP_SIZE, weight_bits)?)
 }
 
 fn stack_of(experts: &(MlxArray, MlxArray, MlxArray)) -> ExpertStack<'_> {
@@ -91,7 +116,7 @@ fn mlx_sorted_projection(
     runtime: &MlxRuntime,
     rows: &MlxArray,
     experts: &(MlxArray, MlxArray, MlxArray),
-    sorted_experts: &MlxArray,
+    (sorted_experts, weight_bits): (&MlxArray, i32),
 ) -> Result<MlxArray, MlxRuntimeError> {
     Ok(runtime.gather_quantized_matmul_affine(
         rows,
@@ -102,7 +127,7 @@ fn mlx_sorted_projection(
         Some(sorted_experts),
         true,
         PROBE_GROUP_SIZE,
-        4,
+        weight_bits,
         true,
     )?)
 }
@@ -114,9 +139,10 @@ fn kernel_failure(projection_error: impl std::fmt::Display) -> MlxRuntimeError {
     }
 }
 
-/// The probe layer's inputs: gate, up and down stacks, token rows and the
-/// sorted routing (order, tokens, experts).
+/// The probe layer's inputs: gate, up and down stacks of one weight width,
+/// token rows and the sorted routing (order, tokens, experts).
 struct ProbeLayer {
+    weight_bits: i32,
     gate: (MlxArray, MlxArray, MlxArray),
     up: (MlxArray, MlxArray, MlxArray),
     down: (MlxArray, MlxArray, MlxArray),
@@ -124,7 +150,7 @@ struct ProbeLayer {
     routing: (MlxArray, MlxArray, MlxArray),
 }
 
-fn probe_layer(runtime: &MlxRuntime) -> Result<ProbeLayer, MlxRuntimeError> {
+fn probe_layer(runtime: &MlxRuntime, weight_bits: i32) -> Result<ProbeLayer, MlxRuntimeError> {
     let token_values: Vec<f32> = (0..(PROBE_TOKEN_COUNT * PROBE_HIDDEN_WIDTH) as usize)
         .map(|index| probe_value(index, 11))
         .collect();
@@ -133,9 +159,25 @@ fn probe_layer(runtime: &MlxRuntime) -> Result<ProbeLayer, MlxRuntimeError> {
         MlxDtype::BFloat16,
     )?;
     Ok(ProbeLayer {
-        gate: probe_expert_stack(runtime, (PROBE_EXPERT_WIDTH, PROBE_HIDDEN_WIDTH), 7)?,
-        up: probe_expert_stack(runtime, (PROBE_EXPERT_WIDTH, PROBE_HIDDEN_WIDTH), 5)?,
-        down: probe_expert_stack(runtime, (PROBE_HIDDEN_WIDTH, PROBE_EXPERT_WIDTH), 3)?,
+        weight_bits,
+        gate: probe_expert_stack(
+            runtime,
+            (PROBE_EXPERT_WIDTH, PROBE_HIDDEN_WIDTH),
+            7,
+            weight_bits,
+        )?,
+        up: probe_expert_stack(
+            runtime,
+            (PROBE_EXPERT_WIDTH, PROBE_HIDDEN_WIDTH),
+            5,
+            weight_bits,
+        )?,
+        down: probe_expert_stack(
+            runtime,
+            (PROBE_HIDDEN_WIDTH, PROBE_EXPERT_WIDTH),
+            3,
+            weight_bits,
+        )?,
         token_rows,
         routing: probe_routing(runtime)?,
     })
@@ -179,23 +221,25 @@ fn kernel_layer_values(
 
 fn mlx_layer_values(runtime: &MlxRuntime, layer: &ProbeLayer) -> Result<Vec<f32>, MlxRuntimeError> {
     let (_, sorted_tokens, sorted_experts) = &layer.routing;
+    let routing = (sorted_experts, layer.weight_bits);
     let sorted_rows = runtime.take_axis(&layer.token_rows, sorted_tokens, 0)?;
     let compiled_swiglu = MlxCompiledSwiGlu::new()?;
     let activated = runtime.apply_compiled_swiglu(
         &compiled_swiglu,
-        &mlx_sorted_projection(runtime, &sorted_rows, &layer.gate, sorted_experts)?,
-        &mlx_sorted_projection(runtime, &sorted_rows, &layer.up, sorted_experts)?,
+        &mlx_sorted_projection(runtime, &sorted_rows, &layer.gate, routing)?,
+        &mlx_sorted_projection(runtime, &sorted_rows, &layer.up, routing)?,
     )?;
-    let down_outputs = mlx_sorted_projection(runtime, &activated, &layer.down, sorted_experts)?;
+    let down_outputs = mlx_sorted_projection(runtime, &activated, &layer.down, routing)?;
     layer_values(runtime, &activated, &down_outputs)
 }
 
-/// (kernel values, MLX values) for the probe layer.
+/// (kernel values, MLX values) for the probe layer at `weight_bits`.
 fn run_probe_layer(
     runtime: &MlxRuntime,
     kernels: &TiledExpertKernels,
+    weight_bits: i32,
 ) -> Result<(Vec<f32>, Vec<f32>), MlxRuntimeError> {
-    let layer = probe_layer(runtime)?;
+    let layer = probe_layer(runtime, weight_bits)?;
     Ok((
         kernel_layer_values(runtime, kernels, &layer)?,
         mlx_layer_values(runtime, &layer)?,

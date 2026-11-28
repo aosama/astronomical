@@ -194,23 +194,34 @@ fn kept_expert_combination_kernels(
     })
 }
 
-/// The tiled sorted-expert kernels when this GPU reproduced MLX's bits with
-/// them and the sorted route they read is kept; `None` otherwise, and prompt
-/// chunks keep the routes before them.
+#[cfg(test)]
+#[path = "streaming_expert_runtime_loading_tests.rs"]
+mod streaming_expert_runtime_loading_tests;
+
+/// The tiled sorted-expert kernels of every weight width whose probe
+/// reproduced MLX's bits on this GPU, when the sorted route they read is
+/// kept; `None` when no width passed or that route is not kept, and prompt
+/// chunks keep the routes before them. A stack of a width not kept is
+/// refused chunk by chunk and keeps those routes too.
 fn kept_sorted_expert_tiled(
     worker_kernel_capabilities: &crate::kernel_capability::WorkerKernelCapabilities,
     sorted_route_kept: bool,
 ) -> Option<crate::sorted_expert_matmul::TiledExpertKernels> {
-    if !sorted_route_kept
-        || !worker_kernel_capabilities
-            .is_custom_kernel_supported(crate::kernel_capability::SORTED_EXPERT_TILED_MATMUL)
-    {
+    let mut proven_weight_bits = Vec::new();
+    for (family, weight_bits) in crate::kernel_capability::SORTED_EXPERT_TILED_MATMUL_FAMILIES {
+        if worker_kernel_capabilities.is_custom_kernel_supported(family) {
+            proven_weight_bits.push(weight_bits);
+        }
+    }
+    if !sorted_route_kept || proven_weight_bits.is_empty() {
         tracing::info!(
             "tiled sorted-expert kernels not kept: prompt chunks keep the sorted-expert matmul and MLX's down"
         );
         return None;
     }
-    match crate::sorted_expert_matmul::TiledExpertKernels::declare() {
+    match crate::sorted_expert_matmul::TiledExpertKernels::declare_for_weight_bits(
+        &proven_weight_bits,
+    ) {
         Ok(kernels) => Some(kernels),
         Err(declaration_error) => {
             tracing::warn!(

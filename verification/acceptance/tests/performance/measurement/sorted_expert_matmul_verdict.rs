@@ -278,12 +278,18 @@ pub(super) fn quantized_experts(
     )
 }
 
-/// Every token's 8 distinct experts from a fixed pseudo-random stream,
-/// token by token: the router's choices before its sort.
+/// Every token's 8 distinct experts over a `PROMPT_TOKENS` chunk.
 pub(super) fn routed_expert_ids() -> Vec<i32> {
+    routed_expert_ids_for(PROMPT_TOKENS)
+}
+
+/// Every token's 8 distinct experts from a fixed pseudo-random stream,
+/// token by token over `token_count` tokens: the router's choices before
+/// its sort. A longer chunk starts with the shorter one's tokens.
+pub(super) fn routed_expert_ids_for(token_count: i32) -> Vec<i32> {
     let mut stream_state: u64 = 0x2710_5eed;
-    let mut expert_ids = Vec::with_capacity((PROMPT_TOKENS * EXPERTS_A_TOKEN) as usize);
-    for _token_index in 0..PROMPT_TOKENS {
+    let mut expert_ids = Vec::with_capacity((token_count * EXPERTS_A_TOKEN) as usize);
+    for _token_index in 0..token_count {
         let mut token_experts: Vec<i32> = Vec::with_capacity(EXPERTS_A_TOKEN as usize);
         while token_experts.len() < EXPERTS_A_TOKEN as usize {
             stream_state = stream_state
