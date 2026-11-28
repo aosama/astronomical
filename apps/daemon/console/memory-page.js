@@ -1,7 +1,10 @@
-// The Memory page: the whole Mac's memory on one bar with the kernel's wire
-// limit drawn on it, four facts about the reply, and one column per token.
-// The shareable picture is drawn by memory-page-image.js from the same
-// presentation. Text is set through textContent only; never innerHTML.
+// The reply summary on Under the hood: a headline naming the model, the
+// memory limit and the speed, three plain facts, and one column per token of
+// the last reply. Its developer details keep the whole Mac's memory on one
+// bar with the kernel's wire limit drawn on it and four engineering counters.
+// The shareable picture (memory-page-image.js) and Home's "Right now" card
+// (overview-right-now.js) are drawn from the same two documents. Text is set
+// through textContent only; never innerHTML.
 
 const MEMORY_PAGE_BYTES_PER_GIGABYTE = 1073741824;
 
@@ -21,20 +24,28 @@ function formatMemoryPageGigabytes(byteCount) {
     return (byteCount / MEMORY_PAGE_BYTES_PER_GIGABYTE).toFixed(1) + " GB";
 }
 
+// The memory limit in force, in whole gigabytes, or 0 when not reported.
+// The limit, not the Mac's size, is what the claim is about: most people give
+// a model the 8 GB a 16 GB Mac can spare, and a "48 GB Mac" headline told them
+// the trick needed a large Mac.
+function memoryPageLimitGigabytes(statusDocument) {
+    const limitBytes = statusDocument.mlx_memory_ceiling_bytes || 0;
+    return limitBytes > 0 ? Math.round(limitBytes / MEMORY_PAGE_BYTES_PER_GIGABYTE) : 0;
+}
+
 // The claim at the top, built only from what is known: a part with no
-// figure behind it is left out, never shown as zero.
+// figure behind it is left out, never shown as zero. Without a model there is
+// no claim, and the page shows its invitation instead of a bare "8 GB limit".
 function memoryPageHeadline(statusDocument) {
-    const headlineParts = [];
-    if (statusDocument.ready_model_size_bytes > 0) {
-        headlineParts.push(formatMemoryPageGigabytes(statusDocument.ready_model_size_bytes) + " model");
-    }
-    if (statusDocument.machine_mlx_memory_ceiling_bytes > 0) {
-        headlineParts.push(
-            Math.round(statusDocument.machine_mlx_memory_ceiling_bytes / MEMORY_PAGE_BYTES_PER_GIGABYTE) + " GB Mac");
+    if (!(statusDocument.ready_model_size_bytes > 0)) return "";
+    const headlineParts = [formatMemoryPageGigabytes(statusDocument.ready_model_size_bytes) + " model"];
+    const limitGigabytes = memoryPageLimitGigabytes(statusDocument);
+    if (limitGigabytes > 0) {
+        headlineParts.push(limitGigabytes + " GB limit");
     }
     const tokensPerSecond = statusDocument.serving_session?.average_generation_tok_per_second || 0;
     if (tokensPerSecond > 0) {
-        headlineParts.push(Math.round(tokensPerSecond) + " tokens per second");
+        headlineParts.push(Math.round(tokensPerSecond) + " tokens a second");
     }
     return headlineParts.join(", ");
 }
@@ -110,6 +121,31 @@ function memoryPageFacts(statusDocument, expertStatsDocument) {
     ];
 }
 
+// The three facts everyone reads, in plain words: the experts kept in
+// memory, what a typical token reads from the SSD, and the limit with a way
+// to change it. The engineering counters stay in the developer details.
+function memoryPagePlainFacts(statusDocument, expertStatsDocument) {
+    const residency = expertStatsDocument?.residency;
+    const lastReply = expertStatsDocument?.last_reply;
+    const libraryBytes = residency?.complete_expert_payload_byte_count || 0;
+    const residentBytes = residency?.resident_expert_payload_bytes || 0;
+    const averageStorageReads = memoryPageAverageStorageReads(lastReply);
+    const routedExpertCount = lastReply?.routed_expert_count_per_token || 0;
+    const limitGigabytes = memoryPageLimitGigabytes(statusDocument);
+    return {
+        kept: libraryBytes > 0
+            // The total is left out here: the lede above prints it to two
+            // decimals, and a second, differently rounded copy read as a mismatch.
+            ? { value: formatMemoryPageGigabytes(residentBytes),
+                detail: Math.round((residentBytes / libraryBytes) * 100) + "% of all its experts, the ones used most" }
+            : { value: "—", detail: "Appears for a model that streams experts" },
+        read: averageStorageReads !== null && routedExpertCount > 0
+            ? { value: Math.round(averageStorageReads) + " of " + routedExpertCount, detail: "experts for a typical token" }
+            : { value: "—", detail: "Appears after the first reply" },
+        limit: { value: limitGigabytes > 0 ? limitGigabytes + " GB" : "—" }
+    };
+}
+
 function memoryPageAverageStorageReads(lastReply) {
     const storageReadCounts = lastReply?.storage_read_expert_counts_by_token || [];
     if (storageReadCounts.length === 0) return null;
@@ -137,9 +173,17 @@ function memoryPageTokenNote(lastReply) {
     if (averageStorageReads === null || routedExpertCount === 0) {
         return "Finish a reply on a model that streams experts to see every token here.";
     }
-    const memoryServedPercent = Math.round((1 - averageStorageReads / routedExpertCount) * 100);
-    return "Each token used " + routedExpertCount + " experts. On average " + memoryServedPercent
-        + "% of them were already in memory; the rest were read from the SSD.";
+    return "Each token used " + routedExpertCount + " experts. On average " + memoryPageMemoryServedPercent(lastReply)
+        + "% of them were already in memory; the rest were read from your SSD.";
+}
+
+// The share of each token's experts already in memory, averaged over the
+// last reply, or null before a reply on a model that streams experts.
+function memoryPageMemoryServedPercent(lastReply) {
+    const averageStorageReads = memoryPageAverageStorageReads(lastReply);
+    const routedExpertCount = lastReply?.routed_expert_count_per_token || 0;
+    if (averageStorageReads === null || routedExpertCount === 0) return null;
+    return Math.round((1 - averageStorageReads / routedExpertCount) * 100);
 }
 
 function memoryPagePresentation(statusDocument, expertStatsDocument) {
@@ -147,9 +191,10 @@ function memoryPagePresentation(statusDocument, expertStatsDocument) {
     const lastReply = expertStatsDocument?.last_reply;
     return {
         modelLine: statusDocumentOrEmpty.ready_model_id || "No model loaded",
-        headline: memoryPageHeadline(statusDocumentOrEmpty) || "Load a model to see how it fits in this Mac's memory",
+        headline: memoryPageHeadline(statusDocumentOrEmpty) || "Load a model to see how it fits in your memory limit",
         bar: memoryPageBar(statusDocumentOrEmpty),
         facts: memoryPageFacts(statusDocumentOrEmpty, expertStatsDocument),
+        plainFacts: memoryPagePlainFacts(statusDocumentOrEmpty, expertStatsDocument),
         tokens: memoryPageTokens(lastReply),
         tokenNote: memoryPageTokenNote(lastReply)
     };
@@ -157,12 +202,29 @@ function memoryPagePresentation(statusDocument, expertStatsDocument) {
 
 function rememberMemoryPageStatus(statusDocument) {
     memoryPageStatusDocument = statusDocument;
-    renderMemoryPage();
+    renderReplySummaries();
 }
 
 function rememberMemoryPageExpertStats(expertStatsDocument) {
     memoryPageExpertStatsDocument = expertStatsDocument;
+    renderReplySummaries();
+}
+
+// Under the hood and Home's "Right now" card read the same two documents, so
+// both redraw whenever either document arrives.
+function renderReplySummaries() {
     renderMemoryPage();
+    if (typeof renderOverviewRightNow === "function") {
+        renderOverviewRightNow(memoryPageStatusDocument, memoryPageExpertStatsDocument);
+    }
+}
+
+function renderMemoryPagePlainFacts(plainFacts) {
+    document.getElementById("memory-page-kept-value").textContent = plainFacts.kept.value;
+    document.getElementById("memory-page-kept-detail").textContent = plainFacts.kept.detail;
+    document.getElementById("memory-page-read-value").textContent = plainFacts.read.value;
+    document.getElementById("memory-page-read-detail").textContent = plainFacts.read.detail;
+    document.getElementById("memory-page-limit-value").textContent = plainFacts.limit.value;
 }
 
 function renderMemoryPageBar(barPresentation) {
@@ -208,6 +270,7 @@ function renderMemoryPage() {
     const presentation = memoryPagePresentation(memoryPageStatusDocument, memoryPageExpertStatsDocument);
     document.getElementById("memory-page-model").textContent = presentation.modelLine;
     document.getElementById("memory-page-headline").textContent = presentation.headline;
+    renderMemoryPagePlainFacts(presentation.plainFacts);
     renderMemoryPageBar(presentation.bar);
     presentation.facts.forEach((fact, factIndex) => {
         document.getElementById("memory-page-fact-label-" + factIndex).textContent = fact.label;
@@ -218,6 +281,8 @@ function renderMemoryPage() {
 }
 
 function wireMemoryPage() {
-    document.getElementById("memory-page-copy")?.addEventListener("click", () => { void copyMemoryPageImage(); });
+    document.getElementById("memory-page-copy")?.addEventListener("click", () => {
+        void copyMemoryPageImage("memory-page-copy-feedback");
+    });
     renderMemoryPage();
 }

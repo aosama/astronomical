@@ -116,3 +116,22 @@
 .overview-next-step-model { margin: 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--text-lg); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
 .overview-next-step-reason { margin: 0; color: var(--ink-2, var(--text)); }
 .overview-next-step-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+
+/* Home's "Right now" card: the plain sentence everyone sees first. Its
+   border is the violet tint, the one card on Home drawn in the accent. */
+.overview-right-now { display: flex; flex-direction: column; gap: 14px; padding: 24px 28px; border-color: var(--nebula-dim); }
+.overview-right-now-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.overview-right-now-tag { margin: 0; color: var(--accent-text); font-size: var(--text-sm); font-weight: var(--weight-label); }
+.overview-right-now-model { margin: 0; color: var(--text-dim); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--text-xs); overflow-wrap: anywhere; }
+.overview-right-now-headline { margin: 0; max-width: 900px; font-size: var(--text-3xl); font-weight: 700; line-height: 1.18; letter-spacing: -0.02em; }
+.overview-right-now-detail { margin: 0; max-width: 860px; color: var(--ink-2); font-size: var(--text-lg); line-height: 1.5; }
+.overview-right-now-split { display: flex; flex-direction: column; gap: 8px; }
+.overview-right-now-bar { height: 14px; overflow: hidden; border-radius: 999px; background: var(--streaming); background-color: var(--panel-2); }
+.overview-right-now-memory { height: 100%; background: var(--resident); transition: width 400ms ease; }
+.overview-right-now-key { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; color: var(--ink-2); font-size: var(--text-sm); }
+.overview-right-now-key > span { display: flex; align-items: center; gap: 8px; }
+.overview-right-now-swatch { width: 12px; height: 12px; border-radius: 3px; }
+.overview-right-now-swatch[data-right-now-part="memory"] { background: var(--resident); }
+.overview-right-now-swatch[data-right-now-part="ssd"] { background: var(--streaming); background-color: var(--panel-2); }
+.overview-right-now-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+

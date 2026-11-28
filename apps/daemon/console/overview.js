@@ -330,7 +330,10 @@ function overviewModelFacts(statusDocument, modelListing, expertPlacement) {
     if (typeof statusDocument.ready_model_size_bytes === "number") {
         modelFacts.push({ label: "On disk", value: formatOverviewGigabytes(statusDocument.ready_model_size_bytes) });
     }
-    if (expertPlacement?.stockSentence) modelFacts.push({ label: "In memory", value: expertPlacement.stockSentence });
+    // The placement sentence says where the experts sit ("40 layers in RAM",
+    // "11.30 GB on SSD"), so the label names the place rather than claiming
+    // "In memory" beside a figure that is on the SSD.
+    if (expertPlacement?.stockSentence) modelFacts.push({ label: "Where it is", value: expertPlacement.stockSentence });
     if (expertPlacement?.replySentence) modelFacts.push({ label: "Experts", value: expertPlacement.replySentence });
     return modelFacts;
 }

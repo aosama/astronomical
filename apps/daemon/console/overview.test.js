@@ -217,7 +217,7 @@ test("should_list_chat_model_facts_without_any_dash_rows", () => {
         { label: "Context", value: "262K tokens" },
         { label: "Reads", value: "Text and images" },
         { label: "On disk", value: "21.9 GB" },
-        { label: "In memory", value: "All in RAM" },
+        { label: "Where it is", value: "All in RAM" },
         { label: "Experts", value: "Experts are being served from RAM." }
     ]);
 });
