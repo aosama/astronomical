@@ -105,7 +105,7 @@ pub const WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
 /// balanced layout from another passage (unseen 60.0% to 100%), and
 /// `astronomical decision train --whole-model` on the coded lines (unseen
 /// 56.7% to 100%, judged better). Both reach 100% in about 18 passes, four
-/// to seven minutes on a 4 GB laptop GPU.
+/// to seven minutes on the CUDA GPU they were measured on.
 ///
 /// What it costs: learning a rule the base model lacks moves answers it was
 /// not asked about. With the command's check set in the job
