@@ -176,11 +176,32 @@ impl Qwen3_5Model {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, TextExecutionError> {
+        self.forward_until_routes_and_room_resolve(
+            token_indices,
+            token_count,
+            starting_position_tokens,
+            request_decoder_state,
+            performance_attribution,
+        )
+    }
+
+    /// The loop behind [`Self::forward_resolving_expert_routes`]: an attempt
+    /// that missed experts runs again the exact way, and a reply attempt
+    /// refused room for a page runs again once the room is made.
+    fn forward_until_routes_and_room_resolve(
+        &self,
+        token_indices: &MlxArray,
+        token_count: i32,
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, TextExecutionError> {
         let storage_read_bytes_before = self
             .request_expert_storage_read_tally
             .expert_storage_read_byte_count();
         let mut speculative_attempt =
             self.speculative_attempt(token_count, request_decoder_state)?;
+        let mut state_before_exact_rerun = None;
         loop {
             if let Some((speculative_way, _)) = speculative_attempt.as_ref() {
                 self.begin_speculative_forward(*speculative_way, performance_attribution);
@@ -199,7 +220,20 @@ impl Qwen3_5Model {
                 performance_attribution,
             );
             self.end_speculative_forward();
-            let (logits, validation_outcome) = attempt?;
+            let (logits, validation_outcome) = match attempt {
+                Ok(evaluated_forward) => evaluated_forward,
+                Err(forward_error) => {
+                    let state_before_forward =
+                        state_before_refused_forward(speculative_attempt.take())
+                            .or(state_before_exact_rerun.take());
+                    state_before_exact_rerun = Some(self.room_to_redo_reply_forward(
+                        forward_error,
+                        request_decoder_state,
+                        state_before_forward,
+                    )?);
+                    continue;
+                }
+            };
             match validation_outcome {
                 PagedRouteValidationOutcome::CompleteHit => {
                     self.remember_whether_the_token_read_from_storage(storage_read_bytes_before);
@@ -211,7 +245,8 @@ impl Qwen3_5Model {
                             description: "an exact forward reported experts missing from memory",
                         });
                     };
-                    request_decoder_state.restore_checkpoint(checkpoint)?;
+                    state_before_exact_rerun =
+                        self.restore_for_exact_rerun(request_decoder_state, checkpoint)?;
                     self.record_speculative_miss(speculative_way, performance_attribution);
                 }
             }
@@ -375,4 +410,15 @@ impl Qwen3_5Model {
             .previous_token_was_served_from_memory
             .set(storage_read_bytes_after == storage_read_bytes_before);
     }
+}
+
+/// The state a speculative attempt began from, without the way it tried.
+fn state_before_refused_forward(
+    speculative_attempt: Option<(
+        SpeculativeWay,
+        text_generation::RequestDecoderStateStackCheckpoint,
+    )>,
+) -> Option<text_generation::RequestDecoderStateStackCheckpoint> {
+    let (_, state_before_speculation) = speculative_attempt?;
+    Some(state_before_speculation)
 }

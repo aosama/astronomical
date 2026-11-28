@@ -431,6 +431,60 @@ impl DFlashDrafterWeights {
         }
         Ok(())
     }
+
+    /// Everything a bound drafter needs before it is hosted: its linears
+    /// quantized, then the tensors served as stored read into memory, so
+    /// what the host measures across the load is all the drafter holds.
+    pub fn prepare_for_serving(
+        &mut self,
+        runtime: &MlxRuntime,
+        use_register_order: bool,
+    ) -> Result<(), MlxRuntimeError> {
+        self.quantize_linears(runtime, use_register_order)?;
+        self.read_tensors_served_as_stored(runtime)
+    }
+
+    /// Reads into memory every tensor served as the checkpoint stores it:
+    /// the selector's codebooks, the normalizations and the convolutions'
+    /// base kernels.
+    ///
+    /// A bound tensor is read only when something first evaluates it, and
+    /// quantizing reads the linears alone. Left bound, the two codebooks
+    /// (254 MB for a 248,320-token vocabulary at rank 256) arrived in the
+    /// first draft round, after the host had measured what the drafter
+    /// holds: the 35B-A3B's ledger counted 224 MB for a drafter holding
+    /// about 480 MB, kept experts in the rest, and replies at an 8 GiB limit
+    /// ended with the limit exceeded.
+    pub fn read_tensors_served_as_stored(
+        &self,
+        runtime: &MlxRuntime,
+    ) -> Result<(), MlxRuntimeError> {
+        runtime.evaluate_arrays(&self.tensors_served_as_stored())?;
+        Ok(())
+    }
+
+    /// Every tensor [`Self::read_tensors_served_as_stored`] reads.
+    #[must_use]
+    pub fn tensors_served_as_stored(&self) -> Vec<&MlxArray> {
+        let mut stored_tensors = vec![&self.tap_fusion_normalization, &self.final_normalization];
+        if let Some(candidate_selector) = self.candidate_selector.as_ref() {
+            stored_tensors.push(&candidate_selector.predecessor_codebook);
+            stored_tensors.push(&candidate_selector.successor_codebook);
+        }
+        for layer in &self.layers {
+            stored_tensors.extend([
+                &layer.input_normalization,
+                &layer.post_attention_normalization,
+                &layer.query_head_normalization,
+                &layer.key_head_normalization,
+            ]);
+            if let Some(convolutions) = layer.convolutions.as_ref() {
+                stored_tensors.push(&convolutions.attention.base_kernel);
+                stored_tensors.push(&convolutions.mlp.base_kernel);
+            }
+        }
+        stored_tensors
+    }
 }
 
 impl DrafterLayerWeights {

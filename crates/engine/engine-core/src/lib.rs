@@ -101,7 +101,7 @@ pub use memory::{
     rotating_committed_token_count, rotating_prefill_transient_token_count,
     safe_minimum_active_memory_ceiling_bytes, seated_complete_layer_count,
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
-    should_commit_multi_token_union_as_complete_layer,
+    should_commit_multi_token_union_as_complete_layer, should_complete_partial_layer_in_phase,
     should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
 };
 

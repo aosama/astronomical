@@ -220,6 +220,53 @@ fn should_not_complete_an_empty_complete_or_unfunded_layer() {
     ));
 }
 
+#[test]
+fn should_complete_a_funded_partial_layer_while_reading_a_prompt() {
+    use crate::phase::MemoryPhase;
+    use crate::residency::should_complete_partial_layer_in_phase;
+    assert!(should_complete_partial_layer_in_phase(
+        MemoryPhase::Prefill,
+        true,
+        ExpertLayerState::Kept,
+        65,
+        128
+    ));
+}
+
+#[test]
+fn should_not_complete_a_partial_layer_while_writing_a_reply() {
+    use crate::phase::MemoryPhase;
+    use crate::residency::should_complete_partial_layer_in_phase;
+    // A drafted reply forward routes several tokens like a prompt chunk, but
+    // the reply reserves one routed page: finishing the layer read 240
+    // experts and overran an 8 GiB limit.
+    for memory_phase in [MemoryPhase::Decode, MemoryPhase::GenerationPreparation] {
+        assert!(
+            !should_complete_partial_layer_in_phase(
+                memory_phase,
+                true,
+                ExpertLayerState::Kept,
+                16,
+                256
+            ),
+            "{memory_phase:?} reads only the route's missing experts"
+        );
+    }
+}
+
+#[test]
+fn should_not_complete_an_unfunded_layer_even_while_reading_a_prompt() {
+    use crate::phase::MemoryPhase;
+    use crate::residency::should_complete_partial_layer_in_phase;
+    assert!(!should_complete_partial_layer_in_phase(
+        MemoryPhase::Prefill,
+        true,
+        ExpertLayerState::Absent,
+        65,
+        128
+    ));
+}
+
 mod decode_whole_layer_keep {
     use crate::residency::{
         CurrentExpertLayerResidency, DECODE_TABLE_TARGET_SLOT_COUNT, RetainedExpertPageClass,

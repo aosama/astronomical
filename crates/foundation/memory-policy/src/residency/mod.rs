@@ -45,7 +45,7 @@ pub use page_commit::{
     decode_table_target_slot_count, decode_warm_floor_eviction_indexes,
     decode_whole_layer_keep_count, hot_expert_warm_slot_count, minimum_decode_warm_slot_count,
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
-    should_commit_multi_token_union_as_complete_layer,
+    should_commit_multi_token_union_as_complete_layer, should_complete_partial_layer_in_phase,
     should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
 };
 pub use planner::plan_expert_residency;
