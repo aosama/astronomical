@@ -1018,8 +1018,9 @@ measure-sorted-expert-token-rows-verdict = "run -p xtask -- test-run --package a
 # before them: at 4 bits the token-row matmul for gate and for up, MLX's
 # compiled SwiGLU and MLX's sorted gather_qmm for down; at 6 bits MLX's own
 # sorted route (the sorted copy, its gather_qmm for gate, up and down, its
-# compiled SwiGLU). Fails if the down outputs differ in any bit, then prints
-# the profiler's verdict for each width. No model; under two minutes.
+# compiled SwiGLU). Over 2,048-token and 8,192-token chunks. Fails if the down
+# outputs differ in any bit, then prints the profiler's verdict for each width
+# and length. No model; under three minutes.
 measure-sorted-expert-tiled-layer-verdict = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --case-budget-seconds 120 --filter tiled_routed_experts_against"
 # The tiled sorted-expert kernels' exactness contract against MLX (gate, up
 # and SwiGLU; down) at 4 and 6 bits, on uneven routing and at a 35B-A3B

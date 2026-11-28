@@ -13,14 +13,14 @@
 //! (`model_primitives::sorted_expert_matmul::tiled_expert_projection`).
 //!
 //! Same shapes and routing as `sorted_expert_matmul_verdict`: 256 experts,
-//! groups of 64, hidden 2,048, expert width 512, 8 distinct experts a token
-//! over 2,048 tokens, four layers a job. The first layer's down output
+//! groups of 64, hidden 2,048, expert width 512, 8 distinct experts a token,
+//! four layers a job, over 2,048-token and 8,192-token chunks. The first layer's down output
 //! is compared element by element, and a mismatch fails the run after the
 //! timing is printed; the two routes are timed as two jobs of the MLX
 //! performance profiler, twelve rounds with the order flipped every round.
 //!
 //! Run with `cargo measure-sorted-expert-tiled-layer-verdict` (both
-//! widths). No model; under two minutes.
+//! widths, both chunk lengths). No model; under three minutes.
 
 use std::path::Path;
 
@@ -34,7 +34,7 @@ use runtime_integration::MlxRuntime;
 use serial_test::serial;
 
 use super::k_row_verify_cost::initialize_runtime;
-use super::sorted_expert_matmul_verdict::{EXPERTS_A_TOKEN, PROMPT_TOKENS, routed_expert_ids};
+use super::sorted_expert_matmul_verdict::{EXPERTS_A_TOKEN, routed_expert_ids_for};
 use super::verdict_text::metric_text;
 use crate::sorted_expert_fixtures::{
     QuantizedStack, mismatched_values, mlx_sorted_gather_qmm, quantized_expert_stack, stack_of,
@@ -176,52 +176,86 @@ impl LayerFixture<'_> {
     }
 }
 
+/// One comparison: the route the tiled kernels replace for a width, the
+/// width, and the chunk length.
+struct TiledVerdictCase {
+    baseline_route: ExpertRoute,
+    baseline_name: &'static str,
+    weight_bits: i32,
+    prompt_tokens: i32,
+    seed: u64,
+    report_title: &'static str,
+}
+
+const FOUR_BIT_AGAINST_TODAY: TiledVerdictCase = TiledVerdictCase {
+    baseline_route: ExpertRoute::Today,
+    baseline_name: "today",
+    weight_bits: 4,
+    prompt_tokens: 2_048,
+    seed: 2_721,
+    report_title: "Routed experts: tiled kernels against today's route",
+};
+
+const SIX_BIT_AGAINST_MLX: TiledVerdictCase = TiledVerdictCase {
+    baseline_route: ExpertRoute::MlxSorted,
+    baseline_name: "mlx",
+    weight_bits: 6,
+    prompt_tokens: 2_048,
+    seed: 2_724,
+    report_title: "6-bit routed experts: tiled kernels against MLX's sorted route",
+};
+
 #[test]
 #[ignore = "performance measurement on the GPU; run through cargo measure-sorted-expert-tiled-layer-verdict"]
 #[serial]
 fn should_give_a_verdict_on_the_tiled_routed_experts_against_todays_route() {
-    run_tiled_verdict(
-        (ExpertRoute::Today, "today"),
-        4,
-        2_721,
-        "Routed experts: tiled kernels against today's route",
-    );
+    run_tiled_verdict(&FOUR_BIT_AGAINST_TODAY);
 }
 
 #[test]
 #[ignore = "performance measurement on the GPU; run through cargo measure-sorted-expert-tiled-layer-verdict"]
 #[serial]
 fn should_give_a_verdict_on_the_6bit_tiled_routed_experts_against_mlxs_route() {
-    run_tiled_verdict(
-        (ExpertRoute::MlxSorted, "mlx"),
-        6,
-        2_724,
-        "6-bit routed experts: tiled kernels against MLX's sorted route",
-    );
+    run_tiled_verdict(&SIX_BIT_AGAINST_MLX);
 }
 
-/// Times the tiled route against `baseline` on `weight_bits` stacks as two
-/// profiler jobs, then fails if the first layer's down outputs differ in any
-/// bit.
-fn run_tiled_verdict(
-    (baseline_route, baseline_name): (ExpertRoute, &'static str),
-    weight_bits: i32,
-    seed: u64,
-    report_title: &str,
-) {
+#[test]
+#[ignore = "performance measurement on the GPU; run through cargo measure-sorted-expert-tiled-layer-verdict"]
+#[serial]
+fn should_give_a_verdict_on_the_tiled_routed_experts_against_todays_route_at_8192_tokens() {
+    run_tiled_verdict(&TiledVerdictCase {
+        prompt_tokens: 8_192,
+        ..FOUR_BIT_AGAINST_TODAY
+    });
+}
+
+#[test]
+#[ignore = "performance measurement on the GPU; run through cargo measure-sorted-expert-tiled-layer-verdict"]
+#[serial]
+fn should_give_a_verdict_on_the_6bit_tiled_routed_experts_against_mlxs_route_at_8192_tokens() {
+    run_tiled_verdict(&TiledVerdictCase {
+        prompt_tokens: 8_192,
+        ..SIX_BIT_AGAINST_MLX
+    });
+}
+
+/// Times the tiled route against the case's baseline as two profiler jobs,
+/// then fails if the first layer's down outputs differ in any bit.
+fn run_tiled_verdict(case: &TiledVerdictCase) {
     let runtime = initialize_runtime();
-    let random_key = runtime.random_key(seed).expect("a key builds");
+    let random_key = runtime.random_key(case.seed).expect("a key builds");
     let todays_kernels = SortedExpertMatmulKernels::declare().expect("today's kernels declare");
     let tiled_kernels = TiledExpertKernels::declare().expect("the tiled kernels declare");
     let fixture = layer_fixture(
         &runtime,
         (&todays_kernels, &tiled_kernels),
-        (&random_key, weight_bits),
+        &random_key,
+        case,
     );
     let mismatched_down_values = mismatched_values(
         &runtime,
         &fixture
-            .routed_outputs(baseline_route, &fixture.layers[0])
+            .routed_outputs(case.baseline_route, &fixture.layers[0])
             .expect("the baseline route runs"),
         &fixture
             .routed_outputs(ExpertRoute::Tiled, &fixture.layers[0])
@@ -229,12 +263,15 @@ fn run_tiled_verdict(
     );
     let report_directory = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join(REPORT_SUBDIRECTORY)
-        .join(format!("{weight_bits}bit"));
+        .join(format!(
+            "{}bit-{}tokens",
+            case.weight_bits, case.prompt_tokens
+        ));
     std::fs::create_dir_all(&report_directory).expect("the report directory is made");
     let comparison = compare_jobs(
         &mut ExpertLayerPass {
-            name: baseline_name,
-            route: baseline_route,
+            name: case.baseline_name,
+            route: case.baseline_route,
             fixture: &fixture,
         },
         &mut ExpertLayerPass {
@@ -243,21 +280,24 @@ fn run_tiled_verdict(
             fixture: &fixture,
         },
         ReportLocation {
-            title: report_title,
+            title: case.report_title,
             directory: &report_directory,
             file_base: "routed_experts",
         },
     )
     .expect("the two routes are compared");
     eprintln!(
-        "[sorted-expert-tiled-layer-verdict] {weight_bits}-bit routed experts, {LAYER_COUNT} layers: mismatched down values {mismatched_down_values} | job {} | GPU {} | pages {}",
+        "[sorted-expert-tiled-layer-verdict] {}-bit routed experts, {} tokens, {LAYER_COUNT} layers: mismatched down values {mismatched_down_values} | job {} | GPU {} | pages {}",
+        case.weight_bits,
+        case.prompt_tokens,
         metric_text(&comparison.job_wall, "tiled"),
         metric_text(&comparison.gpu_span, "tiled"),
         report_directory.display()
     );
     assert_eq!(
         mismatched_down_values, 0,
-        "the tiled route gave different bits from the {baseline_name} route"
+        "the tiled route gave different bits from the {} route",
+        case.baseline_name
     );
 }
 
@@ -267,8 +307,10 @@ fn layer_fixture<'fixture>(
         &'fixture SortedExpertMatmulKernels,
         &'fixture TiledExpertKernels,
     ),
-    (random_key, weight_bits): (&MlxArray, i32),
+    random_key: &MlxArray,
+    case: &TiledVerdictCase,
 ) -> LayerFixture<'fixture> {
+    let weight_bits = case.weight_bits;
     let mut layers = Vec::with_capacity(LAYER_COUNT);
     for _ in 0..LAYER_COUNT {
         layers.push(ExpertLayer {
@@ -292,9 +334,12 @@ fn layer_fixture<'fixture>(
             ),
         });
     }
-    let token_rows = standard_normal_rows(runtime, random_key, (PROMPT_TOKENS, HIDDEN_WIDTH));
-    let (sorted_order, sorted_token_indices, sorted_expert_ids) =
-        uploaded_stable_routing(runtime, &routed_expert_ids(), EXPERTS_A_TOKEN);
+    let token_rows = standard_normal_rows(runtime, random_key, (case.prompt_tokens, HIDDEN_WIDTH));
+    let (sorted_order, sorted_token_indices, sorted_expert_ids) = uploaded_stable_routing(
+        runtime,
+        &routed_expert_ids_for(case.prompt_tokens),
+        EXPERTS_A_TOKEN,
+    );
     runtime
         .evaluate_arrays(&[
             &token_rows,

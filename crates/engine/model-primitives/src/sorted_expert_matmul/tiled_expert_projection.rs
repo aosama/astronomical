@@ -41,6 +41,9 @@ const TILE_LIST_THREADS: i32 = 1_024;
 /// Weight steps are one 64-value quantization group deep.
 const STEP_DEPTH: i32 = 64;
 /// The weight bit widths the tiled kernels read, each with its own kernels.
+/// Both widths run the same schedules below, which were raced at 4 bits;
+/// 6-bit stacks took 26.3% less GPU time than MLX's sorted route with them
+/// (2,048 tokens), but no other tile shape was raced at 6 bits.
 pub const TILED_WEIGHT_BITS: [i32; 2] = [4, 6];
 
 /// How a multiply's rows are tiled and its threadgroups laid out.
@@ -170,7 +173,7 @@ impl TiledExpertKernels {
         };
         kernel_pair.ok_or_else(|| {
             unsupported(format!(
-                "{weight_bits}-bit stacks: these tiled kernels read {:?}-bit stacks",
+                "{weight_bits}-bit stacks: these tiled kernels were declared for widths {:?}",
                 self.weight_bits()
             ))
         })
@@ -357,7 +360,7 @@ fn tiled_stack_shape(
         weight_bits,
     ) else {
         return Err(unsupported(format!(
-            "weight {weight_shape:?} {:?}, scales {scale_shape:?} {:?}: the tiled kernels read {TILED_WEIGHT_BITS:?}-bit group-64 stacks with bf16 scales",
+            "weight {weight_shape:?} {:?}, scales {scale_shape:?} {:?}: the tiled kernels read group-64 stacks of widths {TILED_WEIGHT_BITS:?} with bf16 scales",
             experts.packed_weight.dtype(),
             experts.scales.dtype()
         )));

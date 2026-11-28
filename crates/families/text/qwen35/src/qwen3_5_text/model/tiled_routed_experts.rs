@@ -7,7 +7,11 @@
 //! than the route before it (the sorted-expert matmul for gate and for up,
 //! MLX's compiled SwiGLU, MLX's sorted `gather_qmm` for down), faster in 12
 //! of 12 rounds, with the same down outputs to the bit
-//! (`cargo measure-sorted-expert-tiled-layer-verdict`, M5 Pro, 2026-11-27).
+//! (`cargo measure-sorted-expert-tiled-layer-verdict`, M5 Pro, 2026-11-27);
+//! 13.7% less over an 8,192-token chunk. At 6 bits, against MLX's own sorted
+//! route, 26.3% less at 2,048 tokens and 23.3% at 8,192, same bits; a served
+//! 2,048-token chunk of Tiel-Coder 35B-A3B oQ6e ran 7.1% faster with its
+//! final logits unchanged (`cargo measure-sorted-expert-matmul-served-chunk`).
 
 use mlx_bridge::MlxArray;
 use text_generation::execution_error::TextExecutionError;

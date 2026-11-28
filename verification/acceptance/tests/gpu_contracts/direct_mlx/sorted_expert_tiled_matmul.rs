@@ -11,8 +11,8 @@
 
 use mlx_bridge::{MlxArray, MlxCompiledSwiGlu};
 use model_serving::sorted_expert_matmul::{
-    SortedExpertProjectionError, TiledExpertKernels, sorted_expert_swiglu_from_token_rows,
-    tiled_sorted_expert_matmul,
+    SortedExpertProjectionError, TILED_WEIGHT_BITS, TiledExpertKernels,
+    sorted_expert_swiglu_from_token_rows, tiled_sorted_expert_matmul,
 };
 use serial_test::serial;
 
@@ -46,9 +46,6 @@ const ORNITH_35B_A3B_LAYER: LayerWidths = LayerWidths {
     hidden_width: 2_048,
     expert_width: 512,
 };
-
-/// The weight widths the tiled kernels read, each checked on every case.
-const TILED_WEIGHT_BITS: [i32; 2] = [4, 6];
 
 // --- positive ---
 
@@ -140,6 +137,34 @@ fn should_refuse_an_eight_bit_stack_instead_of_misreading_it() {
 fn should_refuse_a_six_bit_stack_when_only_the_four_bit_kernels_were_kept() {
     assert!(matches!(
         project_four_rows((8, 128, 128), 6, (2_723, &[4])),
+        Err(SortedExpertProjectionError::UnsupportedQuantization { .. })
+    ));
+}
+
+/// Gate and up quantized at different widths are refused rather than read
+/// with one width's kernels.
+#[test]
+#[ignore = "runs MLX on the GPU"]
+#[serial]
+fn should_refuse_gate_and_up_stacks_of_different_widths() {
+    let runtime = initialize_runtime();
+    let random_key = runtime.random_key(2_725).expect("a key builds");
+    let kernels = TiledExpertKernels::declare().expect("the kernels declare");
+    let gate = quantized_expert_stack(&runtime, &random_key, (8, 64, 128), 4);
+    let up = quantized_expert_stack(&runtime, &random_key, (8, 64, 128), 6);
+    let token_rows = standard_normal_rows(&runtime, &random_key, (4, 128));
+    let (sorted_order, _, sorted_expert_ids) = uploaded_stable_routing(&runtime, &[0, 1, 2, 3], 1);
+
+    let projection = sorted_expert_swiglu_from_token_rows(
+        &runtime,
+        &kernels,
+        (&token_rows, &sorted_order, &sorted_expert_ids),
+        1,
+        (&stack_of(&gate), &stack_of(&up)),
+    );
+
+    assert!(matches!(
+        projection,
         Err(SortedExpertProjectionError::UnsupportedQuantization { .. })
     ));
 }

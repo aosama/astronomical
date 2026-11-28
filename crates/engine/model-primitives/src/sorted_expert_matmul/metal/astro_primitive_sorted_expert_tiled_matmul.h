@@ -1,9 +1,10 @@
 // Helpers of the tiled sorted-expert 4-bit and 6-bit matmuls (the gate/up
 // kernel with its SwiGLU epilogue and the plain kernel the down projection
 // takes). They
-// follow astro_primitive_sorted_expert_matmul.h, whose fragments, matrix-unit
-// operation and dequantization they reuse, so every product keeps MLX's
-// bits.
+// follow astro_primitive_sorted_expert_matmul.h, whose fragments and
+// matrix-unit operation they reuse with its 4-bit dequantization; 6-bit
+// weights dequantize here as MLX's own 6-bit `dequantize` does. Every
+// product keeps MLX's bits.
 //
 // The schedule follows oMLX's tensor-unit sorted gather_qmm
 // (omlx/patches/m5_gather_qmm_nax.py, Apache-2.0, Copyright the oMLX

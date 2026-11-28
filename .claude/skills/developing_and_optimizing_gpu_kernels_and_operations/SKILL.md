@@ -20,7 +20,7 @@ Before writing a kernel, find out how far the operation is from its ceiling. A k
 
 ### 1. Fuse so intermediates never reach memory
 
-The biggest win came from a kernel that computes gate, up and SwiGLU in one pass and writes only the activated row. The two projection outputs never touch device memory. Together with lesson 2, a prompt layer's routed experts took 17.2% less GPU time than MLX's route (12 of 12 rounds, same bits), and a served 2,048-token chunk ran 3.8% faster.
+The biggest win came from a kernel that computes gate, up and SwiGLU in one pass and writes only the activated row. The two projection outputs never touch device memory. Together with lesson 2, a prompt layer's routed experts took 17.2% less GPU time than MLX's route (12 of 12 rounds, same bits), and a served 2,048-token chunk ran 3.8% faster. The same kernels at 6 bits (one more dequantize specialization, same tiling) took 23-26% less GPU time than MLX's sorted route, and a served Tiel-Coder chunk ran 7.1% faster with identical logits.
 
 Fusion pays when the fused-away intermediate is large and is written then read straight back. It does not pay when the GPU is already full (see "Ideas that measured as losses").
 

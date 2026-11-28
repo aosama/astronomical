@@ -194,6 +194,10 @@ fn kept_expert_combination_kernels(
     })
 }
 
+#[cfg(test)]
+#[path = "streaming_expert_runtime_loading_tests.rs"]
+mod streaming_expert_runtime_loading_tests;
+
 /// The tiled sorted-expert kernels of every weight width whose probe
 /// reproduced MLX's bits on this GPU, when the sorted route they read is
 /// kept; `None` when no width passed or that route is not kept, and prompt
