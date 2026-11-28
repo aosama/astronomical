@@ -1,5 +1,7 @@
-// Body shared by the tiled sorted-expert 4-bit matmuls, which declare its
-// inputs and template integers in their signature blocks and define:
+// Body shared by the tiled sorted-expert 4-bit and 6-bit matmuls, which
+// declare its inputs and template integers in their signature blocks and
+// define:
+// - WEIGHT_BITS: 4 or 6, the bits of every packed weight;
 // - SOURCE_ROW(sorted_row): the row of X a sorted row is read from;
 // - PAIRED: 1 when the 64-row weight tile pairs gate and up rows of the same
 //   32 output columns and the epilogue writes MLX's compiled SwiGLU of them,
@@ -8,7 +10,7 @@
 //   a weight row is read from.
 //
 // Every product is MLX's: weights dequantized with MLX's bits
-// (dequantize_held_bytes), the 16x32x16 matrix-unit operations of
+// (HeldHalfGroup<WEIGHT_BITS>), the 16x32x16 matrix-unit operations of
 // astro_primitive_sorted_expert_matmul.h in the same K order, accumulators
 // rounded to bf16 as MLX stores them. Rows past a tile's own are clamped to
 // its last row and never stored, so they change no stored value.
@@ -44,13 +46,14 @@
 
   // Loader thread t dequantizes half (t % 2) of weight tile row t / 2.
   const bool loads = thread_in_group < kLoaderThreads;
-  WeightStepLoader loader;
+  WeightStepLoader<WEIGHT_BITS> loader;
   if (loads) {
     const int tile_row = thread_in_group / 2;
     const bool reads_up = PAIRED && paired_row_reads_up(tile_row);
     const int operand_row = PAIRED ? paired_operand_row(tile_row) : tile_row;
     const long weight_row = long(expert) * N + long(column_block) * COLUMNS_PER_TILE + operand_row;
-    loader.packed = (const device uchar*)WEIGHT_PACKED(reads_up) + weight_row * (K / 2) + 16 * (thread_in_group % 2);
+    loader.packed = (const device uchar*)WEIGHT_PACKED(reads_up) + weight_row * (K * WEIGHT_BITS / 8) +
+                    (group_bytes<WEIGHT_BITS>() / 2) * (thread_in_group % 2);
     loader.scales = (const device bfloat*)WEIGHT_SCALES(reads_up) + weight_row * (K / 64);
     loader.biases = (const device bfloat*)WEIGHT_BIASES(reads_up) + weight_row * (K / 64);
     loader.slot_offset = tile_row * kPaddedStep + 32 * (thread_in_group % 2);

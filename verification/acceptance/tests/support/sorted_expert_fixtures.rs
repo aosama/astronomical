@@ -101,12 +101,13 @@ pub fn stack_of(experts: &QuantizedStack) -> ExpertStack<'_> {
     }
 }
 
-/// MLX's own sorted 4-bit `gather_qmm` of `sorted_rows` by each row's expert.
+/// MLX's own sorted `gather_qmm` of `sorted_rows` by each row's expert, on
+/// a stack quantized at `bits`.
 pub fn mlx_sorted_gather_qmm(
     runtime: &MlxRuntime,
     sorted_rows: &MlxArray,
     experts: &QuantizedStack,
-    sorted_expert_ids: &MlxArray,
+    (sorted_expert_ids, bits): (&MlxArray, i32),
 ) -> MlxArray {
     runtime
         .gather_quantized_matmul_affine(
@@ -118,7 +119,7 @@ pub fn mlx_sorted_gather_qmm(
             Some(sorted_expert_ids),
             true,
             QUANTIZATION_GROUP_SIZE,
-            4,
+            bits,
             true,
         )
         .expect("MLX projects")

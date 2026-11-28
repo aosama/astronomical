@@ -7,6 +7,11 @@
 //! Each multiply first cuts its sorted rows into single-expert row tiles
 //! (`astro_primitive_sorted_expert_tile_list`); the multiply then runs one
 //! threadgroup per (row tile, 64-column block).
+//!
+//! The kernels read 4-bit and 6-bit group-64 stacks with bf16 scales, one
+//! kernel pair a width. A stack's width is read from its own shape, and a
+//! width whose kernels were not declared (its probe did not pass) is refused,
+//! so the chunk keeps MLX's route.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -18,12 +23,15 @@ use crate::metal_kernel_declaration::declare_metal_kernel;
 use crate::metal_kernel_template::integer;
 use crate::metal_kernels::{
     ASTRO_PRIMITIVE_SORTED_EXPERT_GATE_UP_SWIGLU_4BIT_TOKEN_ROWS,
+    ASTRO_PRIMITIVE_SORTED_EXPERT_GATE_UP_SWIGLU_6BIT_TOKEN_ROWS,
     ASTRO_PRIMITIVE_SORTED_EXPERT_TILE_LIST, ASTRO_PRIMITIVE_SORTED_EXPERT_TILED_MATMUL_4BIT,
+    ASTRO_PRIMITIVE_SORTED_EXPERT_TILED_MATMUL_6BIT,
 };
+use metal_kernel_declarations::MetalKernelSource;
 
 use super::sorted_expert_quantized_matmul::{
-    ExpertStack, SortedExpertProjectionError, bf16_row_count, check_expert_stack, last_output,
-    unsupported, uploaded_i32_array,
+    ExpertStack, SortedExpertProjectionError, bf16_row_count, last_output, unsupported,
+    uploaded_i32_array,
 };
 
 /// Output columns a threadgroup computes (two 32-column simdgroups).
@@ -32,6 +40,8 @@ const TILE_COLUMNS: i32 = 64;
 const TILE_LIST_THREADS: i32 = 1_024;
 /// Weight steps are one 64-value quantization group deep.
 const STEP_DEPTH: i32 = 64;
+/// The weight bit widths the tiled kernels read, each with its own kernels.
+pub const TILED_WEIGHT_BITS: [i32; 2] = [4, 6];
 
 /// How a multiply's rows are tiled and its threadgroups laid out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,11 +72,30 @@ pub const DOWN_SCHEDULE: TiledExpertSchedule = TiledExpertSchedule {
     tiles_per_grid_group: 32,
 };
 
-/// The three kernels, declared once and shared by every expert layer.
-pub struct TiledExpertKernels {
-    tile_list: MlxMetalKernel,
+/// The gate/up and down kernels of one weight bit width.
+struct TiledKernelPair {
     gate_up_swiglu: MlxMetalKernel,
     matmul: MlxMetalKernel,
+}
+
+impl TiledKernelPair {
+    fn declare(
+        gate_up_swiglu: &MetalKernelSource,
+        matmul: &MetalKernelSource,
+    ) -> Result<Self, MlxRuntimeError> {
+        Ok(Self {
+            gate_up_swiglu: declare_metal_kernel(gate_up_swiglu, &[])?,
+            matmul: declare_metal_kernel(matmul, &[])?,
+        })
+    }
+}
+
+/// The tile-list kernel and the kernel pairs of the declared bit widths,
+/// declared once and shared by every expert layer.
+pub struct TiledExpertKernels {
+    tile_list: MlxMetalKernel,
+    four_bit: Option<TiledKernelPair>,
+    six_bit: Option<TiledKernelPair>,
     /// `[rows, max tiles]` int32 arrays already uploaded: a chunk makes the
     /// same lists every layer, and each upload is a host round the GPU waits on.
     bounds_arrays: RefCell<HashMap<(i32, i32), MlxArray>>,
@@ -79,18 +108,71 @@ impl std::fmt::Debug for TiledExpertKernels {
 }
 
 impl TiledExpertKernels {
-    /// Declares the kernels. MLX compiles a custom kernel on its first
-    /// evaluation, so serving proves them first through the
-    /// `sorted_expert_tiled_matmul` probe.
+    /// Declares the kernels of every width in `TILED_WEIGHT_BITS`. MLX
+    /// compiles a custom kernel on its first evaluation, so serving proves
+    /// each width first through its probe and declares only those
+    /// (`declare_for_weight_bits`).
     pub fn declare() -> Result<Self, MlxRuntimeError> {
+        Self::declare_for_weight_bits(&TILED_WEIGHT_BITS)
+    }
+
+    /// Declares the kernels of the widths in `weight_bits` only; a stack of
+    /// any other width is refused. Widths outside `TILED_WEIGHT_BITS` are
+    /// ignored.
+    pub fn declare_for_weight_bits(weight_bits: &[i32]) -> Result<Self, MlxRuntimeError> {
+        let four_bit = if weight_bits.contains(&4) {
+            Some(TiledKernelPair::declare(
+                &ASTRO_PRIMITIVE_SORTED_EXPERT_GATE_UP_SWIGLU_4BIT_TOKEN_ROWS,
+                &ASTRO_PRIMITIVE_SORTED_EXPERT_TILED_MATMUL_4BIT,
+            )?)
+        } else {
+            None
+        };
+        let six_bit = if weight_bits.contains(&6) {
+            Some(TiledKernelPair::declare(
+                &ASTRO_PRIMITIVE_SORTED_EXPERT_GATE_UP_SWIGLU_6BIT_TOKEN_ROWS,
+                &ASTRO_PRIMITIVE_SORTED_EXPERT_TILED_MATMUL_6BIT,
+            )?)
+        } else {
+            None
+        };
         Ok(Self {
             tile_list: declare_metal_kernel(&ASTRO_PRIMITIVE_SORTED_EXPERT_TILE_LIST, &[])?,
-            gate_up_swiglu: declare_metal_kernel(
-                &ASTRO_PRIMITIVE_SORTED_EXPERT_GATE_UP_SWIGLU_4BIT_TOKEN_ROWS,
-                &[],
-            )?,
-            matmul: declare_metal_kernel(&ASTRO_PRIMITIVE_SORTED_EXPERT_TILED_MATMUL_4BIT, &[])?,
+            four_bit,
+            six_bit,
             bounds_arrays: RefCell::default(),
+        })
+    }
+
+    /// The bit widths these kernels read, in `TILED_WEIGHT_BITS` order.
+    #[must_use]
+    pub fn weight_bits(&self) -> Vec<i32> {
+        let mut weight_bits = Vec::new();
+        if self.four_bit.is_some() {
+            weight_bits.push(4);
+        }
+        if self.six_bit.is_some() {
+            weight_bits.push(6);
+        }
+        weight_bits
+    }
+
+    /// The kernel pair of `weight_bits`, or a refusal when that width was
+    /// not declared.
+    fn kernel_pair(
+        &self,
+        weight_bits: i32,
+    ) -> Result<&TiledKernelPair, SortedExpertProjectionError> {
+        let kernel_pair = match weight_bits {
+            4 => self.four_bit.as_ref(),
+            6 => self.six_bit.as_ref(),
+            _ => None,
+        };
+        kernel_pair.ok_or_else(|| {
+            unsupported(format!(
+                "{weight_bits}-bit stacks: these tiled kernels read {:?}-bit stacks",
+                self.weight_bits()
+            ))
         })
     }
 
@@ -129,13 +211,19 @@ pub fn sorted_expert_swiglu_from_token_rows(
     experts_per_token: i32,
     (gate, up): (&ExpertStack<'_>, &ExpertStack<'_>),
 ) -> Result<MlxArray, SortedExpertProjectionError> {
-    let widths = check_expert_stack(gate)?;
-    if check_expert_stack(up)? != widths {
+    let gate_shape = tiled_stack_shape(gate)?;
+    if tiled_stack_shape(up)? != gate_shape {
         return Err(unsupported(
-            "the gate and up stacks differ in shape".to_owned(),
+            "the gate and up stacks differ in shape or bits".to_owned(),
         ));
     }
-    let (expert_count, output_width, input_width) = widths;
+    let TiledStackShape {
+        expert_count,
+        output_width,
+        input_width,
+        weight_bits,
+    } = gate_shape;
+    let kernel_pair = kernels.kernel_pair(weight_bits)?;
     check_tileable(output_width * 2, input_width)?;
     let (_, token_count) = bf16_row_count(token_rows, input_width, "token rows")?;
     let row_count = token_count * experts_per_token;
@@ -149,7 +237,7 @@ pub fn sorted_expert_swiglu_from_token_rows(
     )?;
     let activated = run_tiled_kernel(
         runtime,
-        &kernels.gate_up_swiglu,
+        &kernel_pair.gate_up_swiglu,
         &[
             &flat_tokens,
             gate.packed_weight,
@@ -185,7 +273,13 @@ pub fn tiled_sorted_expert_matmul(
     experts: &ExpertStack<'_>,
     sorted_expert_ids: &MlxArray,
 ) -> Result<MlxArray, SortedExpertProjectionError> {
-    let (expert_count, output_width, input_width) = check_expert_stack(experts)?;
+    let TiledStackShape {
+        expert_count,
+        output_width,
+        input_width,
+        weight_bits,
+    } = tiled_stack_shape(experts)?;
+    let kernel_pair = kernels.kernel_pair(weight_bits)?;
     check_tileable(output_width, input_width)?;
     let (rows_shape, row_count) = bf16_row_count(rows, input_width, "rows")?;
     let flat_rows = runtime.reshape(rows, &[row_count, input_width])?;
@@ -206,7 +300,7 @@ pub fn tiled_sorted_expert_matmul(
     ];
     let projected = run_tiled_kernel(
         runtime,
-        &kernels.matmul,
+        &kernel_pair.matmul,
         &down_inputs,
         &TiledLaunch {
             schedule: DOWN_SCHEDULE,
@@ -221,6 +315,59 @@ pub fn tiled_sorted_expert_matmul(
     let mut output_shape = rows_shape;
     *output_shape.last_mut().expect("rows have a width") = output_width;
     Ok(runtime.reshape(&projected, &output_shape)?)
+}
+
+/// The shape and bit width of an expert stack the tiled kernels read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TiledStackShape {
+    expert_count: i32,
+    output_width: i32,
+    input_width: i32,
+    weight_bits: i32,
+}
+
+/// Reads a group-64 stack's shape and bit width: the input width from the
+/// scales (one a 64-value group), the bits from the packed words a row
+/// (input x bits / 32). A width outside `TILED_WEIGHT_BITS`, a word count
+/// that matches no width, or any dtype but uint32 words with bf16 scales and
+/// biases is refused rather than misread.
+fn tiled_stack_shape(
+    experts: &ExpertStack<'_>,
+) -> Result<TiledStackShape, SortedExpertProjectionError> {
+    let weight_shape = experts.packed_weight.shape();
+    let scale_shape = experts.scales.shape();
+    let (&[expert_count, output_width, packed_words], &[scale_experts, scale_rows, groups]) =
+        (&weight_shape[..], &scale_shape[..])
+    else {
+        return Err(unsupported(format!(
+            "weight {weight_shape:?} and scales {scale_shape:?}: expected [experts, output, words] and [experts, output, groups]"
+        )));
+    };
+    let input_width = groups * STEP_DEPTH;
+    let dtypes_match = experts.packed_weight.dtype() == MlxDtype::UInt32
+        && experts.scales.dtype() == MlxDtype::BFloat16
+        && experts.biases.dtype() == MlxDtype::BFloat16;
+    let weight_bits = TILED_WEIGHT_BITS
+        .into_iter()
+        .find(|weight_bits| packed_words * 32 == input_width * weight_bits);
+    let (true, Some(weight_bits)) = (
+        dtypes_match
+            && (scale_experts, scale_rows) == (expert_count, output_width)
+            && experts.biases.shape() == scale_shape,
+        weight_bits,
+    ) else {
+        return Err(unsupported(format!(
+            "weight {weight_shape:?} {:?}, scales {scale_shape:?} {:?}: the tiled kernels read {TILED_WEIGHT_BITS:?}-bit group-64 stacks with bf16 scales",
+            experts.packed_weight.dtype(),
+            experts.scales.dtype()
+        )));
+    };
+    Ok(TiledStackShape {
+        expert_count,
+        output_width,
+        input_width,
+        weight_bits,
+    })
 }
 
 /// Refuses widths the tiles cannot cover exactly: `weight_rows` (2 x output

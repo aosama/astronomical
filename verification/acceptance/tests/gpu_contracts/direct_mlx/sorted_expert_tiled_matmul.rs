@@ -1,4 +1,5 @@
-//! Component contract of the tiled sorted-expert multiplies against MLX:
+//! Component contract of the tiled sorted-expert multiplies against MLX, at
+//! 4-bit and at 6-bit:
 //! the gate/up kernel's SwiGLU against MLX's two sorted `gather_qmm`s on the
 //! sorted copy of the rows followed by MLX's compiled SwiGLU, and the plain
 //! kernel against MLX's sorted `gather_qmm`, bit for bit.
@@ -6,7 +7,7 @@
 //! The small routing gives experts no rows, one row, a few, exactly a 64-row
 //! tile, more than one 96-row tile, none again, a partial tile and a last
 //! expert, so tile cuts at an expert's end and at the matrix's end both run;
-//! a second case uses a 35B-A3B layer's real widths and expert count.
+//! further cases use a 35B-A3B layer's real widths and expert count.
 
 use mlx_bridge::{MlxArray, MlxCompiledSwiGlu};
 use model_serving::sorted_expert_matmul::{
@@ -46,6 +47,9 @@ const ORNITH_35B_A3B_LAYER: LayerWidths = LayerWidths {
     expert_width: 512,
 };
 
+/// The weight widths the tiled kernels read, each checked on every case.
+const TILED_WEIGHT_BITS: [i32; 2] = [4, 6];
+
 // --- positive ---
 
 #[test]
@@ -53,7 +57,14 @@ const ORNITH_35B_A3B_LAYER: LayerWidths = LayerWidths {
 #[serial]
 fn should_give_mlx_bits_for_gate_up_swiglu_and_down_on_uneven_routing() {
     let flat_expert_ids = small_flat_expert_ids();
-    assert_layer_matches_mlx(SMALL_LAYER, &flat_expert_ids, SMALL_EXPERTS_A_TOKEN, 2_716);
+    for weight_bits in TILED_WEIGHT_BITS {
+        assert_layer_matches_mlx(
+            (SMALL_LAYER, weight_bits),
+            &flat_expert_ids,
+            SMALL_EXPERTS_A_TOKEN,
+            2_716,
+        );
+    }
 }
 
 #[test]
@@ -61,7 +72,14 @@ fn should_give_mlx_bits_for_gate_up_swiglu_and_down_on_uneven_routing() {
 #[serial]
 fn should_give_mlx_bits_at_a_35b_a3b_layer_over_a_2048_token_chunk() {
     let flat_expert_ids = skewed_flat_expert_ids(2_048, 8, ORNITH_35B_A3B_LAYER.expert_count);
-    assert_layer_matches_mlx(ORNITH_35B_A3B_LAYER, &flat_expert_ids, 8, 2_717);
+    for weight_bits in TILED_WEIGHT_BITS {
+        assert_layer_matches_mlx(
+            (ORNITH_35B_A3B_LAYER, weight_bits),
+            &flat_expert_ids,
+            8,
+            2_717,
+        );
+    }
 }
 
 #[test]
@@ -69,7 +87,14 @@ fn should_give_mlx_bits_at_a_35b_a3b_layer_over_a_2048_token_chunk() {
 #[serial]
 fn should_give_mlx_bits_at_a_35b_a3b_layer_over_an_8192_token_chunk() {
     let flat_expert_ids = skewed_flat_expert_ids(8_192, 8, ORNITH_35B_A3B_LAYER.expert_count);
-    assert_layer_matches_mlx(ORNITH_35B_A3B_LAYER, &flat_expert_ids, 8, 2_722);
+    for weight_bits in TILED_WEIGHT_BITS {
+        assert_layer_matches_mlx(
+            (ORNITH_35B_A3B_LAYER, weight_bits),
+            &flat_expert_ids,
+            8,
+            2_722,
+        );
+    }
 }
 
 // --- edge ---
@@ -83,7 +108,9 @@ fn should_give_mlx_bits_at_a_35b_a3b_layer_over_an_8192_token_chunk() {
 #[ignore = "runs custom Metal kernels on the GPU"]
 #[serial]
 fn should_give_mlx_bits_when_every_row_goes_to_one_expert() {
-    assert_layer_matches_mlx(SMALL_LAYER, &[5; 300], 1, 2_718);
+    for weight_bits in TILED_WEIGHT_BITS {
+        assert_layer_matches_mlx((SMALL_LAYER, weight_bits), &[5; 300], 1, 2_718);
+    }
 }
 
 // --- negative ---
@@ -92,7 +119,7 @@ fn should_give_mlx_bits_when_every_row_goes_to_one_expert() {
 #[ignore = "runs MLX on the GPU"]
 #[serial]
 fn should_refuse_an_output_width_the_tiles_do_not_cover() {
-    assert!(project_four_rows((8, 96, 128), 4, 2_720).is_err());
+    assert!(project_four_rows((8, 96, 128), 4, (2_720, &[4])).is_err());
 }
 
 #[test]
@@ -100,21 +127,34 @@ fn should_refuse_an_output_width_the_tiles_do_not_cover() {
 #[serial]
 fn should_refuse_an_eight_bit_stack_instead_of_misreading_it() {
     assert!(matches!(
-        project_four_rows((8, 128, 128), 8, 2_719),
+        project_four_rows((8, 128, 128), 8, (2_719, &[4, 6])),
+        Err(SortedExpertProjectionError::UnsupportedQuantization { .. })
+    ));
+}
+
+/// A width whose probe did not pass has no kernels, so its stacks are
+/// refused and keep MLX's route.
+#[test]
+#[ignore = "runs MLX on the GPU"]
+#[serial]
+fn should_refuse_a_six_bit_stack_when_only_the_four_bit_kernels_were_kept() {
+    assert!(matches!(
+        project_four_rows((8, 128, 128), 6, (2_723, &[4])),
         Err(SortedExpertProjectionError::UnsupportedQuantization { .. })
     ));
 }
 
 /// Four rows, one an expert, through the tiled kernel and a `bits` stack of
-/// `(experts, output, input)`.
+/// `(experts, output, input)`, with kernels declared for `kept_bits` only.
 fn project_four_rows(
     stack_shape: (i32, i32, i32),
     bits: i32,
-    seed: u64,
+    (seed, kept_bits): (u64, &[i32]),
 ) -> Result<MlxArray, SortedExpertProjectionError> {
     let runtime = initialize_runtime();
     let random_key = runtime.random_key(seed).expect("a key builds");
-    let kernels = TiledExpertKernels::declare().expect("the kernels declare");
+    let kernels =
+        TiledExpertKernels::declare_for_weight_bits(kept_bits).expect("the kernels declare");
     let experts = quantized_expert_stack(&runtime, &random_key, stack_shape, bits);
     let rows = standard_normal_rows(&runtime, &random_key, (4, stack_shape.2));
     let expert_ids = runtime
@@ -123,10 +163,11 @@ fn project_four_rows(
     tiled_sorted_expert_matmul(&runtime, &kernels, &rows, &stack_of(&experts), &expert_ids)
 }
 
-/// Draws a layer's gate, up and down stacks and token rows, routes the
-/// tokens by `flat_expert_ids`, and asserts that both kernels give MLX's bits.
+/// Draws a layer's gate, up and down stacks at `weight_bits` and token
+/// rows, routes the tokens by `flat_expert_ids`, and asserts that both
+/// kernels give MLX's bits.
 fn assert_layer_matches_mlx(
-    widths: LayerWidths,
+    (widths, weight_bits): (LayerWidths, i32),
     flat_expert_ids: &[i32],
     experts_per_token: i32,
     seed: u64,
@@ -139,16 +180,16 @@ fn assert_layer_matches_mlx(
         widths.expert_width,
         widths.hidden_width,
     );
-    let gate = quantized_expert_stack(&runtime, &random_key, gate_up_shape, 4);
+    let gate = quantized_expert_stack(&runtime, &random_key, gate_up_shape, weight_bits);
     let up_key = runtime.random_key(seed + 1).expect("a key builds");
-    let up = quantized_expert_stack(&runtime, &up_key, gate_up_shape, 4);
+    let up = quantized_expert_stack(&runtime, &up_key, gate_up_shape, weight_bits);
     let down_key = runtime.random_key(seed + 2).expect("a key builds");
     let down_shape = (
         widths.expert_count,
         widths.hidden_width,
         widths.expert_width,
     );
-    let down = quantized_expert_stack(&runtime, &down_key, down_shape, 4);
+    let down = quantized_expert_stack(&runtime, &down_key, down_shape, weight_bits);
     let token_count = flat_expert_ids.len() as i32 / experts_per_token;
     let token_rows =
         standard_normal_rows(&runtime, &random_key, (token_count, widths.hidden_width));
@@ -157,9 +198,10 @@ fn assert_layer_matches_mlx(
     let sorted_rows = runtime
         .take_axis(&token_rows, &sorted_token_indices, 0)
         .expect("the sorted copy is taken");
+    let mlx_routing = (&sorted_expert_ids, weight_bits);
 
-    let mlx_gate = mlx_sorted_gather_qmm(&runtime, &sorted_rows, &gate, &sorted_expert_ids);
-    let mlx_up = mlx_sorted_gather_qmm(&runtime, &sorted_rows, &up, &sorted_expert_ids);
+    let mlx_gate = mlx_sorted_gather_qmm(&runtime, &sorted_rows, &gate, mlx_routing);
+    let mlx_up = mlx_sorted_gather_qmm(&runtime, &sorted_rows, &up, mlx_routing);
     let compiled_swiglu = MlxCompiledSwiGlu::new().expect("the SwiGLU compiles");
     let mlx_activated = runtime
         .apply_compiled_swiglu(&compiled_swiglu, &mlx_gate, &mlx_up)
@@ -175,10 +217,10 @@ fn assert_layer_matches_mlx(
     assert_eq!(
         mismatched_values(&runtime, &mlx_activated, &astronomical_activated),
         0,
-        "the gate/up SwiGLU differs from MLX's"
+        "the {weight_bits}-bit gate/up SwiGLU differs from MLX's"
     );
 
-    let mlx_down = mlx_sorted_gather_qmm(&runtime, &mlx_activated, &down, &sorted_expert_ids);
+    let mlx_down = mlx_sorted_gather_qmm(&runtime, &mlx_activated, &down, mlx_routing);
     let astronomical_down = tiled_sorted_expert_matmul(
         &runtime,
         &kernels,
@@ -190,7 +232,7 @@ fn assert_layer_matches_mlx(
     assert_eq!(
         mismatched_values(&runtime, &mlx_down, &astronomical_down),
         0,
-        "the down projection differs from MLX's"
+        "the {weight_bits}-bit down projection differs from MLX's"
     );
 }
 

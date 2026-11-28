@@ -24,6 +24,6 @@ pub use sorted_expert_quantized_matmul::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use tiled_expert_projection::{
-    DOWN_SCHEDULE, GATE_UP_SCHEDULE, TiledExpertKernels, TiledExpertSchedule,
+    DOWN_SCHEDULE, GATE_UP_SCHEDULE, TILED_WEIGHT_BITS, TiledExpertKernels, TiledExpertSchedule,
     sorted_expert_swiglu_from_token_rows, tiled_sorted_expert_matmul,
 };

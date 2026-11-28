@@ -13,22 +13,22 @@ use mlx_bridge::MlxArray;
 use text_generation::execution_error::TextExecutionError;
 
 use super::streamed_expert_assignment_steps::SortedAssignments;
-use super::token_row_gate_up::{
-    MINIMUM_AVERAGE_ROWS_PER_EXPERT, expert_stack_of, experts_per_token, is_refusal,
-};
+use super::token_row_gate_up::{MINIMUM_AVERAGE_ROWS_PER_EXPERT, experts_per_token, is_refusal};
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_text::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use crate::qwen3_5_text::model::Qwen3_5Model;
 use crate::sorted_expert_matmul::{
-    SortedExpertProjectionError, sorted_expert_swiglu_from_token_rows, tiled_sorted_expert_matmul,
+    ExpertStack, SortedExpertProjectionError, TILED_WEIGHT_BITS,
+    sorted_expert_swiglu_from_token_rows, tiled_sorted_expert_matmul,
 };
 use jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 
 impl Qwen3_5Model {
     /// The chunk's routed down outputs `[assignments, 1, hidden]` in sorted
     /// order, or `None` when it keeps the routes before the tiled kernels: no
-    /// proven kernels, an unsorted or short chunk, rotated activations, or
-    /// weights the kernels do not read (they refuse them rather than misread
-    /// them).
+    /// proven kernels for the stacks' width, an unsorted or short chunk,
+    /// rotated activations, or weights the kernels do not read (they refuse
+    /// them rather than misread them).
     pub(super) fn tiled_routed_expert_outputs(
         &self,
         hidden_states: &MlxArray,
@@ -51,9 +51,9 @@ impl Qwen3_5Model {
             return Ok(None);
         }
         let (Some(gate), Some(up), Some(down)) = (
-            expert_stack_of(&paged_expert_weights.gate_projection),
-            expert_stack_of(&paged_expert_weights.up_projection),
-            expert_stack_of(&paged_expert_weights.down_projection),
+            tiled_expert_stack_of(&paged_expert_weights.gate_projection),
+            tiled_expert_stack_of(&paged_expert_weights.up_projection),
+            tiled_expert_stack_of(&paged_expert_weights.down_projection),
         ) else {
             return Ok(None);
         };
@@ -99,6 +99,26 @@ impl Qwen3_5Model {
         rotations_absent
             && selected_expert_indices.element_count()
                 >= MINIMUM_AVERAGE_ROWS_PER_EXPERT * self.config.expert_count() as usize
+    }
+}
+
+/// The kernels' view of an affine group-64 stack at a width they read
+/// (`TILED_WEIGHT_BITS`); `None` for any other packing, which keeps MLX's
+/// route. Whether this GPU proved that width is the kernels' own refusal.
+fn tiled_expert_stack_of(affine_weights: &Qwen3_5AffineWeights) -> Option<ExpertStack<'_>> {
+    match affine_weights {
+        Qwen3_5AffineWeights::Quantized {
+            packed_weight,
+            quantization_scales,
+            quantization_biases,
+            quantization_bits,
+            quantization_group_size: 64,
+        } if TILED_WEIGHT_BITS.contains(quantization_bits) => Some(ExpertStack {
+            packed_weight,
+            scales: quantization_scales,
+            biases: quantization_biases,
+        }),
+        _ => None,
     }
 }
 

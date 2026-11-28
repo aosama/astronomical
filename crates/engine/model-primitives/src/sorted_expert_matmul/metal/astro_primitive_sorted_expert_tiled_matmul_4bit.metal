@@ -22,6 +22,7 @@
 // @probe sorted_expert_tiled_matmul
 #define SOURCE_ROW(sorted_row) long(sorted_row)
 #define PAIRED 0
+#define WEIGHT_BITS 4
 #define WEIGHT_PACKED(reads_up) Wq
 #define WEIGHT_SCALES(reads_up) S
 #define WEIGHT_BIASES(reads_up) B

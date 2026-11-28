@@ -31,6 +31,7 @@
 // @probe sorted_expert_tiled_matmul
 #define SOURCE_ROW(sorted_row) long(uint(order[sorted_row]) / uint(TOPK))
 #define PAIRED 1
+#define WEIGHT_BITS 4
 #define WEIGHT_PACKED(reads_up) ((reads_up) ? Wu : Wq)
 #define WEIGHT_SCALES(reads_up) ((reads_up) ? Su : S)
 #define WEIGHT_BIASES(reads_up) ((reads_up) ? Bu : B)
