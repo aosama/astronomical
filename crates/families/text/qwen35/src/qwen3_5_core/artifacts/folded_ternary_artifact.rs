@@ -310,3 +310,7 @@ fn is_left_out_of_the_index(tensor_name: &str) -> bool {
 fn folded_pack_error(description: String) -> Qwen3_5ArtifactValidationError {
     ArtifactValidationError::InvalidFoldedTernaryPack { description }.into()
 }
+
+#[cfg(test)]
+#[path = "folded_ternary_artifact_tests.rs"]
+mod folded_ternary_artifact_tests;
