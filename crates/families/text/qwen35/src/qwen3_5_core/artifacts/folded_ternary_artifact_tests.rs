@@ -3,7 +3,7 @@
 
 use super::shared_core_config_bytes;
 
-fn translated(config_document: &serde_json::Value) -> serde_json::Value {
+fn shared_core_config_of(config_document: &serde_json::Value) -> serde_json::Value {
     let config_bytes = shared_core_config_bytes(config_document.to_string().as_bytes())
         .expect("a folded pack extending qwen3_5 should translate");
     serde_json::from_slice(&config_bytes).expect("the translated config is JSON")
@@ -11,7 +11,7 @@ fn translated(config_document: &serde_json::Value) -> serde_json::Value {
 
 #[test]
 fn should_hand_the_core_a_tied_pack_without_prisms_tied_output_marker() {
-    let shared_config = translated(&serde_json::json!({
+    let shared_config = shared_core_config_of(&serde_json::json!({
         "model_type": "prism_hadamard_qwen35",
         "base_model_type": "qwen3_5",
         "modules": [],

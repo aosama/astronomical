@@ -41,8 +41,8 @@ fn should_validate_a_folded_ternary_pack_as_a_shared_core_artifact() {
 }
 
 /// The layer count the pack's own `config.json` declares, so the journey
-/// serves every Bonsai size (24 layers for the 2B, 32 for the 9B, 64 for the
-/// 27B) instead of pinning one.
+/// serves every Bonsai size (24 layers for the 2B, 32 for the 4B and 9B, 64
+/// for the 27B) instead of pinning one.
 fn declared_layer_count() -> u32 {
     let config_document: serde_json::Value = serde_json::from_slice(
         &std::fs::read(pack_directory().join("config.json"))

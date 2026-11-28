@@ -20,19 +20,29 @@ fn should_give_the_composed_bits_at_every_block_a_pack_may_declare() {
     else {
         return;
     };
+    // Only a GPU whose worker probe refuses the kernel may skip: serving then
+    // never launches it. Once the probe passes, serving launches the kernel
+    // at whatever block the pack declares, so a block that fails to compile
+    // or run here would fail that pack's load.
+    if let Err(refusal) = PrismHadamardSignedRotationProbe::new(&runtime).probe() {
+        assert!(
+            !matches!(refusal, KernelCapabilityError::OutputMismatch { .. }),
+            "the worker probe's block changed bits: {refusal:?}"
+        );
+        println!("this GPU cannot run the kernel, so serving never launches it: {refusal:?}");
+        return;
+    }
     for block_size in SUPPORTED_BLOCK_SIZES {
         assert!(
             is_signed_rotation_eligible(block_size),
             "block {block_size}"
         );
-        match verify_signed_rotation_against_the_composed_route(&runtime, block_size) {
-            Ok(()) => {}
-            Err(KernelCapabilityError::OutputMismatch { description }) => {
-                panic!("block {block_size}: the kernel ran but changed bits: {description}");
-            }
-            Err(refusal) => {
-                println!("block {block_size}: this GPU cannot run the kernel: {refusal:?}");
-            }
+        if let Err(failure) =
+            verify_signed_rotation_against_the_composed_route(&runtime, block_size)
+        {
+            panic!(
+                "block {block_size}: the worker probe passed but this block failed: {failure:?}"
+            );
         }
     }
 }
