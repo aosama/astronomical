@@ -163,6 +163,10 @@ FetchContent_Declare(
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.5-cuda-jit-header-directories.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../../third-party/patches/mlx-0.32.5-cuda-graph-cache-before-pool-trim.patch"
+        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 # No mlx-c release pairs with MLX v0.32.5 yet, so the pinned mlx-c v0.8.0
 # carries two version-gap bridges, each deleted at the mlx-c release that makes
