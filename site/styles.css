@@ -1,53 +1,56 @@
-/* Nebula identity: a graphite ground, silver-print type, and nebula violet for
-   the brand, one lit colour against a dark sky. The ground is dark because the
-   product lives beside dark editors and terminals; it stays a cool graphite,
-   because a whole page of navy with white read as travel and banking, not as
-   instrumentation, and a muted blue brand sank into it and read as gloomy.
-   Violet is kept to the mark and small accents, and large fields use a dim
-   violet so the page stays quiet. */
-
-/* Newsreader is self-hosted so the public site makes no third-party font
-   request; the privacy page promises a product that keeps to itself. */
-@font-face {
-  font-family: "Newsreader";
-  font-style: normal;
-  font-weight: 300 700;
-  font-display: swap;
-  src: url("./assets/fonts/newsreader-roman.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Newsreader";
-  font-style: italic;
-  font-weight: 300 700;
-  font-display: swap;
-  src: url("./assets/fonts/newsreader-italic.woff2") format("woff2");
-}
+/* Paper identity: a warm off-white ground, near-black ink and nebula violet
+   for the brand. The ground is light because the first visitor is someone
+   deciding whether an app is friendly enough to install, and a page of dark
+   instrumentation read as a tool for engineers only. Dark is kept for one
+   place, the `.night` band, where the page shows Observatory, which is dark
+   in the app itself. Violet stays on the mark, links and the one primary
+   button, so it keeps meaning "Astronomical" and never "a status". */
 
 :root {
-  color-scheme: dark;
-  --ground: #141517;
-  --ground-raised: #1d1e21;
-  --nebula-dim: #241a3d;
-  /* Lighter than the mark's #6a3fc4, which is 2.7:1 on --ground and weak as a
-     thin line; this is 3.7:1 on --ground and 3.3:1 on --nebula-dim. */
-  --nebula-rim: #7d57d6;
-  /* 8:1 on --ground, so it is safe for link and accent text. */
-  --nebula-bright: #b79bff;
-  /* Data marks (experts in memory, hatching) stay achromatic so the brand colour
-     is never mistaken for a status in telemetry. */
-  --grain: #b9b4a9;
-  --silver: #e4e0d6;
-  --silver-dim: #cfcac0;
-  --mist: #9d988e;
-  --line: rgba(228, 224, 214, 0.16);
-  --line-strong: rgba(228, 224, 214, 0.3);
-  /* Headlines carry the voice; SF does the reading because every visitor
-     who can run the product is on a Mac. */
-  --display: "Newsreader", Georgia, serif;
+  color-scheme: light;
+  --ground: #f5f4f1;
+  --ground-raised: #ece9e3;
+  /* A pale violet field for large areas; the full accent there would shout. */
+  --accent-wash: #ebe6f6;
+  --accent-rim: #7d57d6;
+  /* The mark's own violet: 6.2:1 on --ground, so it is safe for link text. */
+  --accent: #6a3fc4;
+  /* Data marks (experts in memory, hatching) stay achromatic so the brand
+     colour is never mistaken for a status in telemetry. */
+  --data-mark: #8f8a80;
+  --ink: #1d1c1a;
+  --ink-soft: #4a4741;
+  /* 6.3:1 on --ground: the quietest text still passes for body copy. */
+  --muted: #5f5b54;
+  --line: rgba(29, 28, 26, 0.12);
+  --line-strong: rgba(29, 28, 26, 0.28);
+  /* One family for headlines and reading: every visitor who can run the
+     product is on a Mac, so the system face is both the fastest to load and
+     the one the app itself uses. No font is downloaded at all. */
+  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
   --body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
   --shell: min(1200px, calc(100vw - 64px));
+}
+
+/* The dark band: the same roles, relit, so everything inside it (links,
+   rules, buttons) follows without a second set of rules. */
+.night {
+  color-scheme: dark;
+  --ground: #181817;
+  --ground-raised: #201f1d;
+  --accent-wash: #2a2340;
+  --accent-rim: #7d57d6;
+  /* 8:1 on the night ground. */
+  --accent: #a68cff;
+  --data-mark: #cfcabe;
+  --ink: #f1efe9;
+  --ink-soft: #d8d4cb;
+  --muted: #b9b5ac;
+  --line: #2d2c29;
+  --line-strong: #3a3935;
+  background: var(--ground);
+  color: var(--ink);
 }
 
 * {
@@ -61,7 +64,7 @@ html {
 body {
   margin: 0;
   background: var(--ground);
-  color: var(--silver);
+  color: var(--ink);
   font-family: var(--body);
   font-size: 1.0625rem;
   line-height: 1.6;
@@ -96,7 +99,7 @@ code {
   left: 12px;
   padding: 10px 14px;
   border-radius: 8px;
-  background: var(--silver);
+  background: var(--ink);
   color: var(--ground);
   transform: translateY(-160%);
 }
@@ -106,7 +109,7 @@ code {
 }
 
 :focus-visible {
-  outline: 2px solid var(--nebula-bright);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
@@ -115,11 +118,15 @@ code {
   z-index: 20;
   display: flex;
   width: var(--shell);
-  min-height: 84px;
+  min-height: 72px;
   margin-inline: auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 16px 32px;
+}
+
+/* The menu takes the room between the brand and the download button. */
+.site-nav {
+  flex-grow: 1;
 }
 
 .brand {
@@ -127,17 +134,16 @@ code {
   align-items: center;
   gap: 12px;
   font-family: var(--display);
-  font-size: 1.625rem;
-  font-weight: 500;
-  letter-spacing: -0.025em;
-  font-variation-settings: "opsz" 72;
+  font-size: 1.1875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .site-nav {
   display: flex;
   align-items: center;
   gap: 28px;
-  color: var(--silver-dim);
+  color: var(--ink-soft);
   font-size: 0.9375rem;
 }
 
@@ -157,30 +163,29 @@ code {
 .site-nav a:hover,
 .site-footer a:hover,
 .text-link:hover {
-  color: var(--silver);
+  color: var(--ink);
 }
 
 /* The shared header marks the page you are on (aria-current="page") and,
    on a field note, its section (aria-current="true"); one rule serves both
    so the menu reads the same on every page. */
 .site-nav a[aria-current] {
-  color: var(--silver);
+  color: var(--ink);
 }
 
 .text-link {
-  color: var(--nebula-bright);
+  color: var(--accent);
   font-weight: 500;
 }
 
-/* Sentence-case italic serif replaces letter-spaced mono labels: a label
-   should read like a figure caption in a field notebook. */
+/* A section's label is the one small place the accent touches type, so a
+   visitor skimming the page can find where each part begins. */
 .eyebrow,
 .section-index {
   margin: 0 0 12px;
-  color: var(--mist);
-  font-family: var(--display);
-  font-size: 1.125rem;
-  font-style: italic;
+  color: var(--accent);
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
 .signal-dot {
@@ -189,14 +194,14 @@ code {
   height: 8px;
   margin-right: 8px;
   border-radius: 50%;
-  background: var(--nebula-bright);
+  background: var(--accent);
   vertical-align: 1px;
 }
 
 /* A release line is a fact, not activity, so its dot stays achromatic and
    the violet keeps meaning "the brand", not "something is happening". */
 .signal-dot-release {
-  background: var(--grain);
+  background: var(--data-mark);
 }
 
 .button {
@@ -207,31 +212,56 @@ code {
   gap: 10px;
   padding: 0 22px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  /* A full pill, as macOS draws its own prominent buttons. */
+  border-radius: 980px;
   font-size: 1rem;
   font-weight: 600;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
+/* The one filled violet thing on a page is the download: white on #6a3fc4
+   is 6.6:1. Inside `.night` the accent is light, so the label turns dark. */
 .button-primary {
-  border-color: var(--silver);
-  background: var(--silver);
-  color: var(--ground);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.night .button-primary {
+  color: #181817;
 }
 
 .button-primary:hover {
-  border-color: var(--silver-dim);
-  background: var(--silver-dim);
+  border-color: var(--accent-rim);
+  background: var(--accent-rim);
+}
+
+/* The header's download stays ink, not violet, so a page never shows two
+   violet buttons at once and the hero's keeps the eye. */
+.site-download {
+  min-height: 40px;
+  padding: 0 18px;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--ground);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.site-download:hover {
+  border-color: var(--ink-soft);
+  background: var(--ink-soft);
 }
 
 .button-secondary:hover {
-  border-color: var(--silver);
+  border-color: var(--ink);
 }
 
 .button-dark {
   border-color: var(--ground);
   background: var(--ground);
-  color: var(--silver);
+  color: var(--ink);
 }
 
 .button-dark:hover {
@@ -256,13 +286,13 @@ code {
   justify-content: space-between;
   gap: 16px 32px;
   border-top: 1px solid var(--line);
-  color: var(--mist);
+  color: var(--muted);
   font-size: 0.9375rem;
 }
 
 .site-footer .brand {
   font-size: 1.25rem;
-  color: var(--silver);
+  color: var(--ink);
 }
 
 .site-footer > p {
