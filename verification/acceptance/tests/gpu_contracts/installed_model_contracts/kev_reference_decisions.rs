@@ -15,10 +15,14 @@
 //!   merge into bfloat16 and a different runtime change.
 //!
 //! Run it with `cargo test-kev-reference-decisions --configuration PATH`,
-//! where the configuration's `model_directory` is a converted Kev folder. The
-//! fixture is chosen by the base model the folder's `kev_decision.json` names.
+//! where the configuration's `model_directory` is a converted Kev folder or
+//! a published build the catalog installs (`decision.json` beside
+//! `head.safetensors`). The fixture is chosen by the base model the folder's
+//! settings name.
 
 use std::path::Path;
+
+use decision_contract::kev_folder_layout::KevFolderLayout;
 
 use decision_contract::{
     HeadInputRequest, OrderedJsonValue, QuestionOutcome, parse_system_one_questions,
@@ -57,22 +61,34 @@ const REFERENCE_FIXTURES: [(&str, &str); 2] = [
     ),
 ];
 
-/// The fixture for the converted folder's base model.
+/// The fixture for the folder's base model, read from whichever Kev layout
+/// the folder uses.
 fn reference_for(model_directory: &Path) -> OrderedJsonValue {
-    let kev_settings: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(model_directory.join("kev_decision.json"))
-            .expect("a converted Kev folder has kev_decision.json"),
-    )
-    .expect("kev_decision.json is JSON");
-    let base_model = kev_settings["base_model"]
-        .as_str()
-        .expect("kev_decision.json names its base model");
+    let base_model = kev_base_model(model_directory);
     for (fixture_base_model, fixture_json) in REFERENCE_FIXTURES {
         if fixture_base_model == base_model {
             return serde_json::from_str(fixture_json).expect("the reference fixture should parse");
         }
     }
     panic!("no reference fixture describes a Kev trained on {base_model}");
+}
+
+/// The base model the folder's Kev settings name.
+fn kev_base_model(model_directory: &Path) -> String {
+    for layout in KevFolderLayout::ALL {
+        let Ok(settings_bytes) = std::fs::read(model_directory.join(layout.settings_file_name()))
+        else {
+            continue;
+        };
+        if layout.marks_kev(&settings_bytes) {
+            return layout
+                .read_settings(&settings_bytes)
+                .expect("the Kev settings should read")
+                .base_model
+                .expect("the Kev settings name their base model");
+        }
+    }
+    panic!("the folder has no Kev settings file");
 }
 
 fn assert_same_layout(

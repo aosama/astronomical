@@ -12,6 +12,7 @@ use decision_contract::head_tuning_file::{
     DECISION_HEAD_TUNING_FILE_NAME, HeadTuning, MAXIMUM_HEAD_TUNING_FILE_BYTES, TunableHeadFamily,
     parse_head_tuning,
 };
+use decision_contract::kev_folder_layout::KevFolderLayout;
 use thiserror::Error;
 
 use crate::clef_trainable::ClefTrainableHead;
@@ -23,7 +24,6 @@ use crate::safetensors_slices::{
 };
 use crate::trainable_head::TrainableHead;
 
-const KEV_HEAD_FILE_NAME: &str = "kev_head.safetensors";
 const LAYA_WEIGHTS_FILE_NAME: &str = "model.safetensors";
 const CLEF_HEAD_FILE_NAME: &str = "joint_head.safetensors";
 
@@ -88,9 +88,22 @@ pub fn read_shipped_head(
 
 type HeadAndTensors = (Box<dyn TrainableHead>, Vec<NamedFloatTensor>);
 
+/// The head file of the first Kev layout the folder holds one of
+/// (`kev_head.safetensors`, then `head.safetensors`); the converted name when
+/// neither exists, so the missing-file error names the usual one. The engine
+/// validated the folder's settings before training starts.
+fn kev_head_file_name(model_directory: &Path) -> &'static str {
+    for layout in KevFolderLayout::ALL {
+        if model_directory.join(layout.head_file_name()).is_file() {
+            return layout.head_file_name();
+        }
+    }
+    KevFolderLayout::Converted.head_file_name()
+}
+
 fn kev_head(model_directory: &Path) -> Result<HeadAndTensors, ShippedHeadError> {
     let shipped_tensors = read_named_float_tensors(
-        &model_directory.join(KEV_HEAD_FILE_NAME),
+        &model_directory.join(kev_head_file_name(model_directory)),
         TunableHeadFamily::Kev.tunable_tensor_names(),
     )?;
     let query_shape = &shipped_tensors[0].shape;

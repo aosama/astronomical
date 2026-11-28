@@ -81,7 +81,11 @@ impl DecisionFamily for KevDecisionFamily {
     ) -> Result<LoadedDecisionModel<LoadedKevState>, DecisionFailure> {
         let settings = KevSettings::read(model_directory)?;
         let calibration_override = read_calibration_override(model_directory)?;
-        let mut pointer_head = KevPointerHead::read(model_directory, settings.pointer_dimension)?;
+        let mut pointer_head = KevPointerHead::read(
+            model_directory,
+            settings.layout.head_file_name(),
+            settings.pointer_dimension,
+        )?;
         pointer_head.apply_tuning(&read_head_tuning(model_directory, TunableHeadFamily::Kev)?)?;
         let tokenizer = KevTokenizer::read(model_directory)?;
         let backbone = QwenDecisionBackbone::load(model_directory, memory_limits)?;

@@ -41,6 +41,7 @@ pub mod float32_safetensors;
 pub mod head_inputs;
 pub mod head_tuning_file;
 pub mod kev_answers;
+pub mod kev_folder_layout;
 pub mod kev_rendering;
 pub mod laya_rendering;
 pub mod laya_sequence;

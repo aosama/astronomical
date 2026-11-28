@@ -1387,6 +1387,7 @@ dependencies = [
  "runtime-integration",
  "safetensors",
  "serde_json",
+ "tempfile",
  "tokenizers",
 ]
 
@@ -1394,6 +1395,7 @@ dependencies = [
 name = "kev-recognition"
 version = "0.2.137"
 dependencies = [
+ "decision-contract",
  "model-discovery",
  "serde_json",
 ]
