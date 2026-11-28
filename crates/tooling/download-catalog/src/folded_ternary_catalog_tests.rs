@@ -29,38 +29,22 @@ fn should_offer_the_bonsai_2_5_package_with_vision_and_its_drafter() {
     assert!(package_entry.approximate_size_bytes() > FOLDED_TARGET_WEIGHTS_BYTES);
 }
 
-/// The community pack's drafter is served now, so its entry no longer says
-/// it goes unused; it has no vision tower, so it still says text only.
+/// Ternary Bonsai 2.5 supersedes Bonsai 2 at 27B, so the catalog offers the
+/// 2.5 package alone rather than two 27B Bonsai builds side by side.
 #[test]
-fn should_describe_the_community_bonsai_2_drafter_as_used_and_text_only() {
+fn should_offer_bonsai_2_5_as_the_only_27b_bonsai() {
     let download_catalog =
         DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    let drafter_bundle = shipped_entry(
-        &download_catalog,
-        "nathansutton/Qwen3.8-27B-Ternary-Bonsai-2-DFlash2-MLX",
-    );
-    let catalog_text = format!(
-        "{} {}",
-        drafter_bundle.summary().unwrap_or_default(),
-        drafter_bundle.description().unwrap_or_default()
-    );
-    assert!(!catalog_text.contains("does not use"), "{catalog_text}");
-    assert!(catalog_text.contains("Text only"), "{catalog_text}");
-    assert!(!drafter_bundle.capabilities().supports_vision);
-}
-
-/// Prism ML's own Bonsai 2 pack carries a vision tower, which the shared core
-/// serves, so its entry must not call it text only.
-#[test]
-fn should_offer_prism_mls_bonsai_2_pack_with_vision() {
-    let download_catalog =
-        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    let prism_pack = shipped_entry(&download_catalog, "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit");
-    assert!(prism_pack.capabilities().supports_vision);
-    assert!(
-        !prism_pack
-            .summary()
-            .unwrap_or_default()
-            .contains("Text only")
+    let bonsai_27b_ids: Vec<&str> = download_catalog
+        .entries()
+        .iter()
+        .map(crate::DownloadCatalogEntry::huggingface_id)
+        .filter(|huggingface_id| {
+            huggingface_id.contains("Bonsai") && huggingface_id.contains("27B")
+        })
+        .collect();
+    assert_eq!(
+        bonsai_27b_ids,
+        ["ahmedihamdy/Ternary-Bonsai-2.5-27B-MLX-2bit-vision-DFLASH2"]
     );
 }

@@ -544,20 +544,18 @@ fn should_ship_qwen3_8_27b_only_as_the_vision_dflash2_package() {
     );
 }
 
-/// The 2-bit ternary 27B builds stay beside the 4-bit package: at under 9 GB
-/// they are the only way an 8 GB Mac runs a 27B model, and no Mac is cut off
-/// from a model by its memory.
+/// The 2-bit ternary 27B build stays beside the 4-bit package: at under
+/// 10 GB it is the smallest way to run a 27B model, so no Mac is cut off from
+/// one by its memory.
 #[test]
-fn should_keep_the_ternary_qwen3_8_27b_builds_for_small_memory_macs() {
+fn should_keep_the_ternary_qwen3_8_27b_build_for_small_memory_macs() {
     let download_catalog =
         DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    for ternary_huggingface_id in [
-        "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
-        "nathansutton/Qwen3.8-27B-Ternary-Bonsai-2-DFlash2-MLX",
-    ] {
-        let ternary_entry = shipped_entry(&download_catalog, ternary_huggingface_id);
-        assert!(ternary_entry.approximate_memory_bytes() < 10 * 1024 * 1024 * 1024);
-    }
+    let ternary_entry = shipped_entry(
+        &download_catalog,
+        "ahmedihamdy/Ternary-Bonsai-2.5-27B-MLX-2bit-vision-DFLASH2",
+    );
+    assert!(ternary_entry.approximate_memory_bytes() < 10 * 1024 * 1024 * 1024);
 }
 
 /// A DFlash2 package is a plain catalog model with its DFlash2 drafter in a
