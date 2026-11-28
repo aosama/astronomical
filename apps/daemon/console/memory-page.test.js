@@ -1,5 +1,6 @@
-// Memory page tests: the headline, the Mac's memory bar and its wire limit,
-// the four facts, and the per-token strip.
+// Reply summary tests (Under the hood): the headline, the three plain facts,
+// the Mac's memory bar and its wire limit, the four developer counters, and
+// the per-token strip.
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -30,6 +31,7 @@ function streamingStatusDocument() {
         ready_model_id: "sparse-122b",
         ready_model_size_bytes: 37.8 * GIGABYTE,
         machine_mlx_memory_ceiling_bytes: 48 * GIGABYTE,
+        mlx_memory_ceiling_bytes: 10 * GIGABYTE,
         serving_session: { average_generation_tok_per_second: 36.4 },
         mlx_memory_snapshot: {
             active_memory_bytes: 30 * GIGABYTE,
@@ -57,11 +59,38 @@ function streamingExpertStatsDocument() {
     };
 }
 
-test("should_state_the_model_the_mac_and_the_speed_in_the_headline", () => {
+test("should_state_the_model_the_limit_and_the_speed_in_the_headline", () => {
     const presentation = presentationFor(streamingStatusDocument(), streamingExpertStatsDocument());
 
-    assert.equal(presentation.headline, "37.8 GB model, 48 GB Mac, 36 tokens per second");
+    assert.equal(presentation.headline, "37.8 GB model, 10 GB limit, 36 tokens a second");
     assert.equal(presentation.modelLine, "sparse-122b");
+});
+
+test("should_leave_out_the_speed_before_the_first_reply", () => {
+    const statusDocument = streamingStatusDocument();
+    statusDocument.serving_session = null;
+
+    assert.equal(presentationFor(statusDocument, null).headline, "37.8 GB model, 10 GB limit");
+});
+
+test("should_report_the_three_plain_facts", () => {
+    const presentation = presentationFor(streamingStatusDocument(), streamingExpertStatsDocument());
+
+    assert.deepEqual(presentation.plainFacts, {
+        kept: { value: "22.0 GB", detail: "69% of all its experts, the ones used most" },
+        read: { value: "13 of 384", detail: "experts for a typical token" },
+        limit: { value: "10 GB" }
+    });
+});
+
+test("should_say_when_each_plain_fact_appears_before_there_is_a_figure", () => {
+    const presentation = presentationFor({ ready_model_id: "dense-9b", ready_model_size_bytes: 5 * GIGABYTE }, null);
+
+    assert.deepEqual(presentation.plainFacts, {
+        kept: { value: "—", detail: "Appears for a model that streams experts" },
+        read: { value: "—", detail: "Appears after the first reply" },
+        limit: { value: "—" }
+    });
 });
 
 test("should_split_the_mac_memory_bar_and_mark_the_wire_limit", () => {
@@ -94,7 +123,7 @@ test("should_draw_each_token_to_the_scale_of_the_experts_it_routed_to", () => {
     assert.deepEqual(presentation.tokens.map((token) => token.storageSharePercent.toFixed(2)),
         ["10.42", "0.00", "0.00", "2.60"]);
     assert.equal(presentation.tokenNote,
-        "Each token used 384 experts. On average 97% of them were already in memory; the rest were read from the SSD.");
+        "Each token used 384 experts. On average 97% of them were already in memory; the rest were read from your SSD.");
 });
 
 test("should_scale_tokens_to_the_largest_read_when_the_routed_width_is_unknown", () => {
@@ -131,10 +160,10 @@ test("should_leave_out_the_wire_limit_marker_before_macos_was_read", () => {
 });
 
 test("should_show_an_invitation_and_no_bar_when_no_model_is_loaded", () => {
-    const presentation = presentationFor({ machine_mlx_memory_ceiling_bytes: 48 * GIGABYTE }, null);
+    const presentation = presentationFor({ machine_mlx_memory_ceiling_bytes: 48 * GIGABYTE, mlx_memory_ceiling_bytes: 8 * GIGABYTE }, null);
 
     assert.equal(presentation.modelLine, "No model loaded");
-    assert.equal(presentation.headline, "48 GB Mac");
+    assert.equal(presentation.headline, "Load a model to see how it fits in your memory limit");
     assert.equal(presentation.bar, null);
     assert.deepEqual(presentation.tokens, []);
     assert.deepEqual(presentation.facts.map((fact) => fact.value), ["—", "—", "—", "—"]);
@@ -143,6 +172,6 @@ test("should_show_an_invitation_and_no_bar_when_no_model_is_loaded", () => {
 test("should_survive_missing_documents", () => {
     const presentation = presentationFor(null, null);
 
-    assert.equal(presentation.headline, "Load a model to see how it fits in this Mac's memory");
+    assert.equal(presentation.headline, "Load a model to see how it fits in your memory limit");
     assert.equal(presentation.bar, null);
 });

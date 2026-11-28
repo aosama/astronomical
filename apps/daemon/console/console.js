@@ -12,7 +12,6 @@ const OBSERVATORY_PATH_MAP = {
     overview: "/overview",
     chat: "/chat",
     experts: "/experts",
-    memory: "/memory",
     "download-models": "/download-models",
     connect: "/connect",
     settings: "/settings",
@@ -20,12 +19,14 @@ const OBSERVATORY_PATH_MAP = {
 };
 
 // Retired addresses still open the page that replaced them: the Model page was
-// folded into Overview, the Library page was renamed Download Models and later Models (keeping its route), and the
-// Configuration page was split into Settings (the whole instance) and Tuning (one model).
+// folded into Overview, the Library page was renamed Download Models and later Models (keeping its route), the
+// Configuration page was split into Settings (the whole instance) and Tuning (one model), and the
+// Memory page was merged into Under the hood.
 const OBSERVATORY_RETIRED_PATH_DESTINATIONS = {
     "/model": "overview",
     "/library": "download-models",
-    "/configuration": "settings"
+    "/configuration": "settings",
+    "/memory": "experts"
 };
 
 const OBSERVATORY_PATH_TO_DESTINATION_MAP = Object.fromEntries(
@@ -52,6 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wireConnectMaterial();
     wireExpertObservatory();
     wireMemoryPage();
+    wireOverviewRightNow();
     wireConfigurationEditor();
     pollStatus();
     pollAstroSsdPromptCacheStats();
@@ -130,7 +132,7 @@ function activateObservatoryView(requestedViewIdentifier, navigationButtons, obs
 }
 
 // A section button stays current on every page of its section (Settings on
-// Tuning, Under the hood on Memory); any other button only on its own page.
+// Tuning); any other button only on its own page.
 function isObservatoryNavigationButtonCurrent(navigationButton, activeViewIdentifier) {
     const sectionViews = (navigationButton.dataset.observatoryGroup || "").split(" ");
     return navigationButton.dataset.observatoryDestination === activeViewIdentifier
