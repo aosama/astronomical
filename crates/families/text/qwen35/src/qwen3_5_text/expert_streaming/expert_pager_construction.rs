@@ -89,6 +89,7 @@ impl Qwen3_5ExpertPager {
             // Conservative until the model proves the fused kernel: every
             // page prices its decode peak.
             decode_tokens_multiply_packed_pages: std::cell::Cell::new(false),
+            reply_page_refusal_armed_for_tests: std::cell::Cell::new(false),
             session_counters: RefCell::new(ExpertStreamingSessionCounters::default()),
             session_read_metrics: RefCell::new(Arc::new(PositionalFileReadMetrics::default())),
             session_process_io_baseline: RefCell::new(None),

@@ -166,7 +166,7 @@ fn load_drafter_weights<Target: DraftRoundTarget>(
     // instead of the checkpoint's 3.6 GB of bf16, with no kept-token
     // loss measured against the bf16 drafter on the 27B.
     drafter_weights
-        .quantize_linears(runtime, true)
+        .prepare_for_serving(runtime, true)
         .map_err(Qwen3_5SpeculativeDraftLoadingError::Runtime)?;
     Ok(drafter_weights)
 }

@@ -6,6 +6,8 @@ mod session_stats;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod complete_page_multiplication_tests;
+#[cfg(test)]
+mod expert_page_admission_label_tests;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod expert_subset_tests;
 
@@ -92,6 +94,10 @@ pub struct Qwen3_5ExpertPager {
     /// Multi-token pages still decode a transient bfloat16 copy and keep the
     /// full decode peak. The model sets this after the capability verdict.
     pub(super) decode_tokens_multiply_packed_pages: Cell<bool>,
+    /// Set by a test to have the next page a reply streams refused for room
+    /// once, the way admission refuses it, so the reply's redo is exercised
+    /// on any Mac instead of only when memory happens to run short.
+    pub(super) reply_page_refusal_armed_for_tests: Cell<bool>,
     /// Always-on observatory counters for this engine load. Distinct from
     /// the opt-in diagnostics attribution: plain saturating increments, no
     /// clocks, so the expert page never depends on diagnostics being enabled.
@@ -257,6 +263,11 @@ impl Qwen3_5ExpertPager {
 
     pub fn remove_resident_expert_source_files_for_tests(&mut self) {
         self.resident_expert_source_files.clear();
+    }
+
+    /// Has the next page a reply streams refused for room once.
+    pub fn refuse_next_reply_page_once_for_tests(&self) {
+        self.reply_page_refusal_armed_for_tests.set(true);
     }
 
     pub fn layer_plan(

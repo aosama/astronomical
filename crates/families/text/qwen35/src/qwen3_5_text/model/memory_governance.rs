@@ -12,11 +12,8 @@ use memory_policy::ledger::{
 };
 
 use super::Qwen3_5Model;
-use crate::{MemoryPhase, ModelMemoryGeometry};
-
-/// Layers in flight while a sparse model's prompt is read: the one being
-/// multiplied and the one read ahead of it.
-const SPARSE_READING_STREAM_SLOT_COUNT: u64 = 2;
+use super::model_memory_shape::{dense_model_memory_shape, sparse_model_memory_shape};
+use crate::MemoryPhase;
 
 /// One completed forward's memory readings, in bytes.
 #[derive(Clone, Copy, Debug)]
@@ -90,8 +87,19 @@ impl Qwen3_5Model {
                 dense_layer_streamer.layer_payload_bytes(),
                 dense_layer_streamer.streaming_slot_bytes(),
             ),
-            None => sparse_model_memory_shape(model_geometry),
+            None => sparse_model_memory_shape(model_geometry, self.reply_forward_row_count()),
         }
+    }
+
+    /// Rows one reply forward routes: one token, or a drafted block checked
+    /// together (a draft tree's nodes and its anchor, or the prediction
+    /// head's drafts and the token before them).
+    fn reply_forward_row_count(&self) -> u64 {
+        let drafted_row_count = match self.optional_accelerators.draft_runtime.as_deref() {
+            Some(draft_runtime) => draft_runtime.tree_options.node_budget as u64,
+            None => u64::from(self.mtp_draft_token_count()),
+        };
+        drafted_row_count.saturating_add(1)
     }
 
     /// Opens the governor once loading has measured what it can, and gives
@@ -466,7 +474,7 @@ impl Qwen3_5Model {
 
     /// The phase the governor is in, when it matches what the engine says
     /// it was doing.
-    fn current_ledger_phase(&self, memory_phase: MemoryPhase) -> Option<LedgerPhase> {
+    pub(super) fn current_ledger_phase(&self, memory_phase: MemoryPhase) -> Option<LedgerPhase> {
         let memory_governor = self.governed_memory.governor.borrow();
         let ledger_phase = memory_governor.as_ref()?.phase();
         match (memory_phase, ledger_phase) {
@@ -615,39 +623,6 @@ const fn larger_of_what_was_measured(
         }),
         (Some(only_bytes), None) | (None, Some(only_bytes)) => Some(only_bytes),
         (None, None) => None,
-    }
-}
-
-/// A sparse model's shape: its experts are what may be kept or streamed.
-/// Reading a prompt holds whole layers in flight; writing a reply holds only
-/// the experts one token chose.
-fn sparse_model_memory_shape(model_geometry: ModelMemoryGeometry) -> ModelMemoryShape {
-    ModelMemoryShape {
-        core_weight_bytes: model_geometry.model_core_payload_bytes,
-        streamable_weight_bytes: model_geometry.complete_expert_payload_bytes,
-        reading_prompt_stream_slot_bytes: model_geometry
-            .largest_complete_expert_layer_bytes
-            .saturating_mul(SPARSE_READING_STREAM_SLOT_COUNT),
-        writing_reply_stream_slot_bytes: model_geometry.largest_routed_expert_page_bytes,
-    }
-}
-
-/// A dense model's shape: the decoder layers its streamer owns are what may
-/// be kept or streamed, through the same layer slots in both phases.
-fn dense_model_memory_shape(
-    core_weight_bytes: u64,
-    decoder_layer_payload_bytes: &[u64],
-    streaming_slot_bytes: u64,
-) -> ModelMemoryShape {
-    let mut streamable_weight_bytes = 0_u64;
-    for layer_payload_bytes in decoder_layer_payload_bytes {
-        streamable_weight_bytes = streamable_weight_bytes.saturating_add(*layer_payload_bytes);
-    }
-    ModelMemoryShape {
-        core_weight_bytes,
-        streamable_weight_bytes,
-        reading_prompt_stream_slot_bytes: streaming_slot_bytes,
-        writing_reply_stream_slot_bytes: streaming_slot_bytes,
     }
 }
 

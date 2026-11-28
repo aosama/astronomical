@@ -433,6 +433,15 @@ impl AstroExpertCache {
         expert_capacity > 0 && table.occupied_slot_count == expert_capacity
     }
 
+    /// Lets go of every page queued for a table by a forward that did not
+    /// finish, and says how many there were. Each queued insert holds its
+    /// streamed page until the flush after evaluation; a forward that fails
+    /// never reaches that flush, so run again it would hold both attempts'
+    /// pages.
+    pub fn discard_pending_inserts(&mut self) -> usize {
+        std::mem::take(&mut self.pending_inserts).len()
+    }
+
     /// Queues the streamed routed experts of one decode forward for hot-expert
     /// retention. The queue drains after the forward's arrays are evaluated, so
     /// warming never stalls the token that produced the experts. Whole routed
