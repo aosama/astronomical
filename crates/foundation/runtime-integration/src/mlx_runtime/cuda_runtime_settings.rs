@@ -1,18 +1,19 @@
-//! The MLX setting a Linux CUDA build applies once, before the bindings
+//! The two MLX settings a Linux CUDA build applies once, before the bindings
 //! context exists (issue #2699).
 //!
-//! # Why it is needed
+//! # Why they are needed
 //!
-//! **Header folders.** MLX compiles some CUDA kernels at run time (its
-//! quantized matrix multiplies among them) and looks for their CUTLASS,
-//! CuTe and CCCL headers beside the binary MLX lives in. Astronomical links
-//! MLX statically, so that binary is the worker, and nothing is there. The
-//! native build publishes the headers into its store entry and hands their
-//! folder, with the CUDA toolkit's own headers, to this crate as
-//! compile-time values, which this module checks and passes to MLX.
-//!
-//! TF32, which MLX's CUDA backend would use for float32 matrix multiplies, is
-//! forbidden on every backend by `float32_matrix_precision`.
+//! - **Header folders.** MLX compiles some CUDA kernels at run time (its
+//!   quantized matrix multiplies among them) and looks for their CUTLASS,
+//!   CuTe and CCCL headers beside the binary MLX lives in. Astronomical links
+//!   MLX statically, so that binary is the worker, and nothing is there. The
+//!   native build publishes the headers into its store entry and hands their
+//!   folder, with the CUDA toolkit's own headers, to this crate as
+//!   compile-time values, which this module checks and passes to MLX.
+//! - **TF32 off.** MLX's CUDA backend runs float32 matrix multiplies on TF32
+//!   tensor cores by default, which keep a 10-bit mantissa. Astronomical
+//!   never lowers a model's precision, and every float32 reference journey
+//!   assumes float32 arithmetic, so TF32 is forbidden.
 //!
 //! On macOS and on a Linux CPU build the compile-time values are absent and
 //! nothing is changed.
@@ -38,9 +39,8 @@ pub(crate) struct CudaJitHeaderDirectories {
     pub(crate) cuda_toolkit_include_directory: CString,
 }
 
-/// Names MLX's run-time CUDA compiler header folders once per process; later
-/// calls repeat the first result. Does nothing on a build without the CUDA
-/// backend.
+/// Applies the CUDA settings once per process; later calls repeat the first
+/// result. Does nothing on a build without the CUDA backend.
 ///
 /// # Errors
 ///
@@ -66,7 +66,8 @@ fn apply_cuda_runtime_settings() -> Result<(), String> {
         &jit_header_directories.bundled_headers_directory,
         &jit_header_directories.cuda_toolkit_include_directory,
     )
-    .map_err(describe_mlx_error)
+    .map_err(describe_mlx_error)?;
+    mlx_c_fork::set_tf32_enabled(false).map_err(describe_mlx_error)
 }
 
 fn describe_mlx_error(mlx_error: mlx_bridge::MlxCError) -> String {
